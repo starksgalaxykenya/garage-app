@@ -1,0 +1,1165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Garage Manager PRO</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
+    
+    <style>
+        /* Custom scrollbar for better look */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 8px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #a0a0a0;
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+        /* Style for the printable job card (modal visibility) */
+        @media print {
+            body * {
+                visibility: hidden;
+            }
+            #jobCardModal, #jobCardModal * {
+                visibility: visible;
+            }
+            #jobCardModal {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+            }
+        }
+        /* Style for the checklist tables */
+        .service-table th {
+            text-align: left;
+            padding: 8px 12px;
+            background-color: #eef2ff;
+        }
+        .service-table td {
+            padding: 8px 12px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 font-sans">
+
+    <header class="bg-blue-800 shadow-lg sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex justify-between items-center">
+            <div>
+                <h1 class="text-3xl font-extrabold text-white">Garage Manager PRO</h1>
+                <p class="text-sm text-blue-200">The Ultimate Auto Service Tool</p>
+            </div>
+            <nav class="flex space-x-4">
+                <button onclick="showSection('car-entry')" class="text-white hover:text-blue-200 font-medium transition duration-150">New Car Entry</button>
+                <button onclick="showSection('general-service')" class="text-white hover:text-blue-200 font-medium transition duration-150">General Service</button>
+                <button onclick="showSection('car-list')" class="text-white hover:text-blue-200 font-medium transition duration-150">Active Jobs</button>
+                <button onclick="showSection('completed-list')" class="text-white hover:text-blue-200 font-medium transition duration-150">Completed Jobs</button>
+                <button id="logoutBtn" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded transition duration-150" style="display:none;">Logout</button>
+            </nav>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+        <section id="subscription-warning" class="text-center py-16 bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 rounded-lg shadow-lg" style="display:block;">
+            <h2 class="text-3xl font-bold mb-4">🚨 Subscription Required! 🚨</h2>
+            <p class="text-xl">Your subscription is expired or inactive. Please renew to access **Garage Manager PRO** features.</p>
+            <div class="mt-6 flex justify-center space-x-4">
+                <button onclick="alert('Proceeding to renewal page... (Functionality to be implemented)')" class="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-3 px-6 rounded-lg transition duration-150">Renew Subscription Now</button>
+                <button onclick="activateSubscriptionForTesting()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-lg transition duration-150" id="test-activate-btn">Test: Activate Subscription</button>
+            </div>
+        </section>
+        
+        <section id="auth-section" class="flex justify-center items-center py-16" style="display:none;">
+            <div class="bg-white p-8 rounded-xl shadow-2xl w-full max-w-md">
+                <h2 class="text-2xl font-bold mb-6 text-center text-blue-800">Welcome to Garage Manager PRO</h2>
+                <input id="auth-email" type="email" placeholder="Email" class="w-full p-3 mb-4 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" />
+                <input id="auth-password" type="password" placeholder="Password" class="w-full p-3 mb-6 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" />
+                <button id="loginBtn" onclick="handleLoginSignup(true)" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition duration-150 mb-3">Login</button>
+                <button id="signupBtn" onclick="handleLoginSignup(false)" class="w-full bg-gray-500 hover:bg-gray-600 text-white font-bold py-3 rounded-lg transition duration-150">Sign Up (Admin Only)</button>
+                <p id="auth-message" class="text-red-500 text-sm mt-3 text-center"></p>
+            </div>
+        </section>
+
+        <section id="car-entry" class="space-y-8" style="display:none;">
+            <h2 class="text-3xl font-bold text-gray-800 border-b pb-2">🚗 New Vehicle Check-in</h2>
+            <form id="car-entry-form" class="space-y-6 bg-white p-6 rounded-xl shadow-lg">
+                <fieldset class="border-2 border-orange-200 p-4 rounded-lg">
+                    <legend class="text-xl font-semibold text-orange-700 px-2">Client Contact Details</legend>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-4">
+                        <input id="client-name" type="text" placeholder="Client Full Name" required class="p-3 border rounded-lg" />
+                        <input id="client-phone" type="tel" placeholder="Phone Number (e.g., +2547...)" required class="p-3 border rounded-lg" />
+                        <input id="client-email" type="email" placeholder="Email (Optional)" class="p-3 border rounded-lg" />
+                    </div>
+                </fieldset>
+
+                <fieldset class="border-2 border-blue-200 p-4 rounded-lg">
+                    <legend class="text-xl font-semibold text-blue-700 px-2">Vehicle Core Details</legend>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-4">
+                        <input id="vin" type="text" placeholder="VIN / Chassis No." required class="p-3 border rounded-lg" />
+                        <input id="make" type="text" placeholder="Make (e.g., Toyota)" required class="p-3 border rounded-lg" />
+                        <input id="model" type="text" placeholder="Model (e.g., Corolla)" required class="p-3 border rounded-lg" />
+                        <input id="year" type="number" placeholder="Year of Manuf." required class="p-3 border rounded-lg" />
+                        <input id="color" type="text" placeholder="Color" class="p-3 border rounded-lg" />
+                        <input id="engine-cc" type="text" placeholder="Engine CC (e.g., 1800)" class="p-3 border rounded-lg" />
+                        <input id="trim" type="text" placeholder="Trim (e.g., SE)" class="p-3 border rounded-lg" />
+                        <input id="engine-name" type="text" placeholder="Engine Name (e.g., 2ZR-FE)" class="p-3 border rounded-lg" />
+                        
+                        <div>
+                            <label for="transmission" class="block text-sm font-medium text-gray-700 mb-1">Transmission Type</label>
+                            <select id="transmission" class="w-full p-3 border rounded-lg">
+                                <option value="Automatic">Automatic</option>
+                                <option value="Manual">Manual</option>
+                                <option value="AutoManualClutch">Auto Manual (with clutch)</option>
+                                <option value="AutoManualNoClutch">Auto Manual (without clutch)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="drive" class="block text-sm font-medium text-gray-700 mb-1">Drive Type</label>
+                            <select id="drive" class="w-full p-3 border rounded-lg">
+                                <option value="FWD">Front Wheel Drive</option>
+                                <option value="RWD">Rear Wheel Drive</option>
+                                <option value="4WD">Four Wheel Drive (4x4)</option>
+                                <option value="AWD">All Wheel Drive</option>
+                            </select>
+                        </div>
+                    </div>
+                </fieldset>
+
+                <fieldset class="border-2 border-green-200 p-4 rounded-lg">
+                    <legend class="text-xl font-semibold text-green-700 px-2">Service and Job Details</legend>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+                        <textarea id="reported-problems" rows="3" placeholder="Client Reported Problems" required class="p-3 border rounded-lg"></textarea>
+                        <textarea id="diagnostic-notes" rows="3" placeholder="Mechanic's Diagnostic Notes" class="p-3 border rounded-lg"></textarea>
+                        
+                        <div>
+                            <label for="assigned-mechanic" class="block text-sm font-medium text-gray-700 mb-1">Assigned Mechanic</label>
+                            <select id="assigned-mechanic" class="w-full p-3 border rounded-lg">
+                                <option value="">Select Mechanic</option>
+                                <option value="JohnDoe">John Doe (Mock)</option>
+                                <option value="JaneSmith">Jane Smith (Mock)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="due-date" class="block text-sm font-medium text-gray-700 mb-1">Service Due Date</label>
+                            <input id="due-date" type="date" class="w-full p-3 border rounded-lg" />
+                        </div>
+                        <div>
+                            <label for="delivery-date" class="block text-sm font-medium text-gray-700 mb-1">Estimated Delivery Date</label>
+                            <input id="delivery-date" type="date" class="w-full p-3 border rounded-lg" />
+                        </div>
+                    </div>
+                </fieldset>
+                
+                <fieldset class="border-2 border-red-200 p-4 rounded-lg">
+                    <legend class="text-xl font-semibold text-red-700 px-2">Error Codes & Repair Plan</legend>
+                    <div id="error-codes-container" class="space-y-4">
+                        </div>
+                    <button type="button" onclick="addErrorCodeInput()" class="mt-4 bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg transition duration-150">Add Another Error Code</button>
+                    
+                    <textarea id="repair-notes" rows="3" placeholder="Detailed Repair Notes / Action Taken" class="w-full p-3 border rounded-lg mt-6"></textarea>
+                    <textarea id="replacement-parts" rows="3" placeholder="Replacement Parts Needed (e.g., Oil Filter - Qty 1, Spark Plugs - Qty 4)" class="w-full p-3 border rounded-lg mt-4"></textarea>
+                </fieldset>
+
+                <div class="flex justify-end space-x-4 pt-4">
+                    <button type="button" onclick="createJobCard()" class="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-3 px-6 rounded-lg transition duration-150">Generate Job Card</button>
+                    <button type="button" onclick="generateAnalysisReportPDF()" class="bg-teal-500 hover:bg-teal-600 text-white font-bold py-3 px-6 rounded-lg transition duration-150">Generate Analysis Report (PDF)</button>
+                    <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-lg transition duration-150">Save Vehicle Entry</button>
+                </div>
+            </form>
+        </section>
+        
+        <section id="general-service" class="space-y-8" style="display:none;">
+            <h2 class="text-3xl font-bold text-gray-800 border-b pb-2">🛠️ Vehicle General Service Checklist</h2>
+            <form id="general-service-form" class="space-y-6 bg-white p-6 rounded-xl shadow-lg">
+                <fieldset class="border-2 border-orange-200 p-4 rounded-lg">
+                    <legend class="text-xl font-semibold text-orange-700 px-2">Client & Vehicle Core Details</legend>
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mt-4">
+                        <input id="service-client-name" type="text" placeholder="Client Name" required class="p-3 border rounded-lg md:col-span-2" />
+                        <input id="service-client-phone" type="tel" placeholder="Phone Number" class="p-3 border rounded-lg md:col-span-2" />
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mt-4 pt-4 border-t border-gray-200">
+                        <input id="service-make" type="text" placeholder="Make" required class="p-3 border rounded-lg" />
+                        <input id="service-model" type="text" placeholder="Model" required class="p-3 border rounded-lg" />
+                        <input id="service-year" type="number" placeholder="Car Year" required class="p-3 border rounded-lg" />
+                        <input id="service-vin" type="text" placeholder="VIN / Chassis No." required class="p-3 border rounded-lg" />
+                    </div>
+                </fieldset>
+                
+                <fieldset class="border-2 border-purple-200 p-4 rounded-lg">
+                    <legend class="text-xl font-semibold text-purple-700 px-2">Tires & Wipers Inspection</legend>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mt-4">
+                        <div>
+                            <h3 class="font-medium text-gray-700 mb-2">Tire Condition (Tread/Wear)</h3>
+                            <table class="w-full service-table text-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Position</th>
+                                        <th>Condition</th>
+                                        <th>Notes (Depth/Brand)</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tires-body">
+                                    </tbody>
+                            </table>
+                        </div>
+                        <div>
+                            <h3 class="font-medium text-gray-700 mb-2">Wipers Inspection</h3>
+                            <table class="w-full service-table text-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Position</th>
+                                        <th>Condition (OK/Replace)</th>
+                                        <th>Changed</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="wipers-body">
+                                    </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </fieldset>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <fieldset class="border-2 border-green-200 p-4 rounded-lg">
+                        <legend class="text-xl font-semibold text-green-700 px-2">Fluids & Filters</legend>
+                        <table class="w-full service-table text-sm">
+                            <thead>
+                                <tr>
+                                    <th>Item</th>
+                                    <th>Faulty</th>
+                                    <th>Checked</th>
+                                    <th>Changed</th>
+                                </tr>
+                            </thead>
+                            <tbody id="fluids-filters-body">
+                                </tbody>
+                        </table>
+                    </fieldset>
+
+                    <fieldset class="border-2 border-yellow-200 p-4 rounded-lg">
+                        <legend class="text-xl font-semibold text-yellow-700 px-2">Lights & Electrical</legend>
+                        <table class="w-full service-table text-sm">
+                            <thead>
+                                <tr>
+                                    <th>Light</th>
+                                    <th>L/H Working</th>
+                                    <th>R/H Working</th>
+                                    <th>Notes</th>
+                                </tr>
+                            </thead>
+                            <tbody id="lights-body">
+                                </tbody>
+                        </table>
+                    </fieldset>
+                    
+                    <fieldset class="border-2 border-red-200 p-4 rounded-lg col-span-1 lg:col-span-2">
+                        <legend class="text-xl font-semibold text-red-700 px-2">Brakes & Other Critical Checks</legend>
+                        <table class="w-full service-table text-sm">
+                            <thead>
+                                <tr>
+                                    <th>Item</th>
+                                    <th>Faulty</th>
+                                    <th>Checked</th>
+                                    <th>Changed</th>
+                                    <th>Notes</th>
+                                </tr>
+                            </thead>
+                            <tbody id="other-checks-body">
+                                </tbody>
+                        </table>
+                    </fieldset>
+                </div>
+                
+                <fieldset class="border-2 border-indigo-200 p-4 rounded-lg">
+                    <legend class="text-xl font-semibold text-indigo-700 px-2">Mileage & Service Handover</legend>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-4">
+                        <input id="current-mileage" type="number" placeholder="Current Mileage (KM)" required class="p-3 border rounded-lg" />
+                        <input id="next-service-mileage" type="number" placeholder="Next Service Est. Mileage (KM)" required class="p-3 border rounded-lg" />
+                        <input id="service-person" type="text" placeholder="Service Person Name" required class="p-3 border rounded-lg" />
+                    </div>
+                </fieldset>
+
+                <div class="flex justify-end pt-4">
+                    <button type="button" onclick="generateServiceReportPDF()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-lg transition duration-150">Generate Service Report (PDF)</button>
+                </div>
+            </form>
+        </section>
+        
+        <section id="car-list" style="display:none;">
+            <h2 class="text-3xl font-bold text-gray-800 border-b pb-2 mb-6">📋 Active Jobs & Work in Progress</h2>
+            <div class="mb-6 flex space-x-2">
+                <input type="text" id="active-search" placeholder="Search by Client Name or Vehicle (Make/Model)" oninput="fetchCars('Active', this.value)" class="flex-grow p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" />
+                <button onclick="fetchCars('Active', document.getElementById('active-search').value)" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-6 rounded-lg transition duration-150">Search</button>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="car-list-container">
+                </div>
+        </section>
+        
+        <section id="completed-list" style="display:none;">
+            <h2 class="text-3xl font-bold text-gray-800 border-b pb-2 mb-6">✅ Completed Jobs (History)</h2>
+            <div class="mb-6 flex space-x-2">
+                <input type="text" id="completed-search" placeholder="Search by Client Name or Vehicle (Make/Model)" oninput="fetchCars('Completed', this.value)" class="flex-grow p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" />
+                <button onclick="fetchCars('Completed', document.getElementById('completed-search').value)" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-6 rounded-lg transition duration-150">Search</button>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="completed-list-container">
+                </div>
+        </section>
+
+        <div id="jobCardModal" class="fixed inset-0 bg-gray-600 bg-opacity-75 flex items-center justify-center p-4 z-[100]" style="display:none;">
+            <div class="bg-white p-8 rounded-lg shadow-xl w-full max-w-3xl custom-scrollbar max-h-[90vh] overflow-y-auto">
+                <div class="text-center border-b pb-4 mb-4">
+                    <h2 class="text-3xl font-bold text-blue-800">Vehicle Job Detail Report</h2>
+                    <p class="text-sm text-gray-600">Garage Manager PRO - The Ultimate Auto Service Tool</p>
+                </div>
+                <div id="job-card-content" class="space-y-4 text-gray-700">
+                    </div>
+                <div class="flex justify-end space-x-4 mt-6" id="job-card-actions">
+                    <button onclick="document.getElementById('jobCardModal').style.display = 'none'" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded transition duration-150 print:hidden">Close</button>
+                    <button id="whatsapp-btn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded transition duration-150 print:hidden">Send via WhatsApp</button>
+                    <button onclick="window.print()" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded transition duration-150 print:hidden">Print Job Card</button>
+                </div>
+            </div>
+        </div>
+        
+    </main>
+
+    <footer class="bg-gray-800 text-white text-center py-4 mt-8">
+        <p class="text-sm">© 2025 Garage Manager PRO | Powered by Tailwind & Firebase</p>
+    </footer>
+
+<script type="module">
+    // ----------------------------------------------------------------------
+    // 1. FIREBASE INITIALIZATION & CONFIGURATION (MODULAR)
+    // ----------------------------------------------------------------------
+
+    // Import the functions you need from the SDKs
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
+    import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-auth.js";
+    // UPDATED: Added 'enablePersistence' to the import list for offline support
+    import { getFirestore, collection, addDoc, doc, updateDoc, deleteDoc, query, where, orderBy, onSnapshot, getDoc, serverTimestamp, setDoc, enablePersistence } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js";
+
+    // Your web app's Firebase configuration
+    const firebaseConfig = {
+        apiKey: "AIzaSyBCvFltNyGj3SYR-ADUocWD5EVjljoCEp8",
+        authDomain: "garage-manager-1ac7c.firebaseapp.com",
+        projectId: "garage-manager-1ac7c",
+        storageBucket: "garage-manager-1ac7c.firebasestorage.app",
+        messagingSenderId: "226684256206",
+        appId: "1:226684256206:web:13d600d6db4c603506759f"
+    };
+
+    // Initialize Firebase Services
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+    const carsCollection = collection(db, 'cars'); 
+    const userStatusCollection = collection(db, 'user_status');
+    
+    let currentUserRole = null; 
+    let isSubscribed = false; 
+    
+    // Global variable to hold current job card data for WhatsApp sending
+    let currentJobCardData = null; 
+
+    // NEW: Enable Firebase Persistence for offline storage of reports
+    async function setupPersistence() {
+        try {
+            await enablePersistence(db); 
+            console.log("Firestore persistence enabled successfully.");
+        } catch (err) {
+            if (err.code === 'failed-precondition') {
+                console.warn("Firestore persistence failed: Multiple tabs open or environment not supported.");
+            } else if (err.code === 'unimplemented') {
+                console.warn("Firestore persistence failed: Browser does not support offline mode.");
+            } else {
+                console.error("Error enabling Firestore persistence:", err);
+            }
+        }
+    }
+    setupPersistence();
+
+    // ----------------------------------------------------------------------
+    // 2. VIEW MANAGEMENT & AUTH
+    // ----------------------------------------------------------------------
+
+    /**
+     * Checks the user's subscription status from Firestore.
+     * @param {Object} user - The Firebase User object.
+     */
+    async function checkSubscription(user) {
+        if (!user) {
+            isSubscribed = false;
+            return false;
+        }
+
+        const userStatusRef = doc(userStatusCollection, user.uid);
+        try {
+            const docSnap = await getDoc(userStatusRef);
+            
+            if (docSnap.exists() && docSnap.data().subscribed === true) {
+                isSubscribed = true;
+                return true;
+            } else {
+                isSubscribed = false;
+                return false;
+            }
+        } catch (error) {
+            console.error("Error fetching subscription status:", error);
+            isSubscribed = false;
+            return false;
+        }
+    }
+    
+    // Handles the flow after Firebase Auth state changes
+    onAuthStateChanged(auth, async (user) => {
+        document.getElementById('logoutBtn').style.display = 'none';
+        
+        if (user) {
+            // Logged in: Check subscription status
+            const subscribed = await checkSubscription(user);
+            currentUserRole = getMockRole(user.email);
+            document.getElementById('logoutBtn').style.display = 'block';
+
+            // Show or hide the test button based on current status
+            document.getElementById('test-activate-btn').style.display = subscribed ? 'none' : 'inline-block';
+
+            if (subscribed) {
+                // Ensure search inputs are reset and we load the active list on successful login/subscription
+                document.getElementById('active-search').value = '';
+                document.getElementById('completed-search').value = '';
+                showSection('car-list'); // Access granted
+            } else {
+                showSection('subscription-warning'); // Access denied
+            }
+        } else {
+            // Logged out
+            isSubscribed = false;
+            // Hide the test button if logged out
+            document.getElementById('test-activate-btn').style.display = 'none';
+            showSection('auth-section');
+        }
+    });
+
+    // Function to manually activate subscription for testing purposes
+    async function activateSubscriptionForTesting() {
+        const user = auth.currentUser;
+        
+        if (!user) {
+            alert('Please log in first before activating the subscription.');
+            // Force redirection back to login if somehow clicked while logged out
+            showSection('auth-section'); 
+            return;
+        }
+
+        try {
+            const userStatusRef = doc(userStatusCollection, user.uid);
+            
+            // Set subscription status to active
+            await setDoc(userStatusRef, {
+                subscribed: true,
+                startDate: serverTimestamp(),
+                plan: 'PRO_TEST' 
+            }, { merge: true });
+
+            alert('Subscription activated successfully! You now have access.');
+            
+            // Re-run the auth check to refresh the UI and grant access
+            onAuthStateChanged(auth, () => {}); 
+
+        } catch (error) {
+            console.error("Error setting subscription status: ", error);
+            alert(`Failed to activate subscription. Check your Firebase permissions (Rules): ${error.message}`);
+        }
+    }
+
+    function showSection(sectionId) {
+        const sections = ['subscription-warning', 'auth-section', 'car-entry', 'general-service', 'car-list', 'completed-list'];
+        sections.forEach(id => {
+            document.getElementById(id).style.display = 'none';
+        });
+
+        document.getElementById(sectionId).style.display = 'block';
+
+        // When switching sections, pass any existing search term to fetchCars
+        if (sectionId === 'car-list') {
+            const searchTerm = document.getElementById('active-search').value;
+            fetchCars('Active', searchTerm);
+        }
+        if (sectionId === 'completed-list') {
+            const searchTerm = document.getElementById('completed-search').value;
+            fetchCars('Completed', searchTerm);
+        }
+        if (sectionId === 'general-service') initializeGeneralService();
+    }
+
+    function getMockRole(email) {
+        return email && email.toLowerCase().includes('admin') ? 'admin' : 'mechanic';
+    }
+    
+    async function handleLoginSignup(isLogin) {
+        const email = document.getElementById('auth-email').value;
+        const password = document.getElementById('auth-password').value;
+        const messageEl = document.getElementById('auth-message');
+        
+        messageEl.textContent = '';
+
+        try {
+            if (isLogin) {
+                await signInWithEmailAndPassword(auth, email, password);
+            } else {
+                await createUserWithEmailAndPassword(auth, email, password);
+            }
+        } catch (error) {
+            messageEl.textContent = `Error: ${error.message}`;
+        }
+    }
+    
+    document.getElementById('logoutBtn').onclick = () => {
+        signOut(auth).then(() => {
+            currentUserRole = null;
+        });
+    };
+
+    // ----------------------------------------------------------------------
+    // 3. DYNAMIC ERROR CODE INPUTS & LOOKUP
+    // ----------------------------------------------------------------------
+    
+    function addErrorCodeInput() {
+        const container = document.getElementById('error-codes-container');
+        const newGroup = document.createElement('div');
+        newGroup.className = 'error-code-group space-y-2 mb-4 p-3 border border-gray-100 rounded-lg';
+        newGroup.innerHTML = `
+            <div class="flex space-x-2">
+                <input type="text" placeholder="Enter Error Code (e.g., P0300)" class="flex-grow p-3 border rounded-lg uppercase error-code-input" />
+                <button type="button" onclick="lookupErrorCode(this)" class="bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-3 px-6 rounded-lg transition duration-150 text-sm whitespace-nowrap">Lookup Code</button>
+                <button type="button" onclick="removeErrorCode(this)" class="bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-6 rounded-lg transition duration-150 text-sm remove-btn" style="display:none;">Remove</button>
+            </div>
+            <p class="error-code-explanation text-sm p-2 bg-gray-50 text-gray-700 rounded" style="display:none;"></p>
+            <input type="hidden" class="error-code-meaning" value="" />
+        `;
+        container.appendChild(newGroup);
+        updateRemoveButtonVisibility();
+    }
+    
+    function removeErrorCode(button) {
+        button.closest('.error-code-group').remove();
+        updateRemoveButtonVisibility();
+    }
+
+    function updateRemoveButtonVisibility() {
+        const groups = document.querySelectorAll('.error-code-group');
+        const groupsArray = Array.from(groups);
+        groupsArray.forEach(group => {
+            const removeBtn = group.querySelector('.remove-btn');
+            if (removeBtn) {
+                removeBtn.style.display = groupsArray.length > 1 ? 'block' : 'none';
+            }
+        });
+    }
+
+    // Mock Lookup Table
+    const ERROR_CODE_LOOKUP = {
+        'P0300': { issuer: 'Powertrain (Generic)', meaning: 'Random/Multiple Cylinder Misfire Detected' },
+        'P0420': { issuer: 'Powertrain (Generic)', meaning: 'Catalyst System Efficiency Below Threshold (Bank 1)' },
+        'B1015': { issuer: 'Body (Specific)', meaning: 'Control Unit Fault/Component Failure' },
+        'C0035': { issuer: 'Chassis (Specific)', meaning: 'Front Left Wheel Speed Sensor Circuit' }
+    };
+
+    function lookupErrorCode(button) {
+        const group = button.closest('.error-code-group');
+        const inputElement = group.querySelector('.error-code-input');
+        const explanationEl = group.querySelector('.error-code-explanation');
+        const hiddenMeaningEl = group.querySelector('.error-code-meaning');
+        const code = inputElement.value.toUpperCase().trim();
+        
+        explanationEl.style.display = 'none';
+        hiddenMeaningEl.value = '';
+
+        if (!code) {
+            explanationEl.innerHTML = 'Please enter a code.';
+            explanationEl.style.display = 'block';
+            return;
+        }
+
+        const details = ERROR_CODE_LOOKUP[code];
+
+        if (details) {
+            const fullMeaning = `${code} (${details.issuer}): ${details.meaning}`;
+            explanationEl.innerHTML = `**${details.issuer}:** ${details.meaning}`;
+            explanationEl.className = 'error-code-explanation text-sm p-2 bg-indigo-50 text-indigo-800 rounded';
+            explanationEl.style.display = 'block';
+            hiddenMeaningEl.value = fullMeaning;
+        } else {
+            explanationEl.innerHTML = `**Code ${code}**: No definition found.`;
+            explanationEl.className = 'error-code-explanation text-sm p-2 bg-red-50 text-red-800 rounded';
+            explanationEl.style.display = 'block';
+            hiddenMeaningEl.value = `${code}: No definition found.`;
+        }
+    }
+
+    function getAllErrorCodesWithMeaning() {
+        const groups = document.querySelectorAll('.error-code-group');
+        const codesAndMeanings = [];
+        groups.forEach(group => {
+            const codeInput = group.querySelector('.error-code-input').value.toUpperCase().trim();
+            const meaningInput = group.querySelector('.error-code-meaning').value.trim();
+            
+            if (codeInput.length > 0) {
+                codesAndMeanings.push({ 
+                    code: codeInput, 
+                    meaning: meaningInput || `${codeInput}: Not looked up/No data.` 
+                });
+            }
+        });
+        return codesAndMeanings;
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        addErrorCodeInput();
+        updateRemoveButtonVisibility();
+    });
+
+    // ----------------------------------------------------------------------
+    // 4. CAR ENTRY & FIRESTORE LOGIC
+    // ----------------------------------------------------------------------
+
+    document.getElementById('car-entry-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        if (currentUserRole !== 'admin') {
+            alert('Only Admins can create new car entries.');
+            return;
+        }
+
+        const errorData = getAllErrorCodesWithMeaning();
+        const rawErrorCodes = errorData.map(e => e.code).join(', ');
+        const fullErrorMeanings = errorData.map(e => e.meaning).join('; ');
+
+        const carData = {
+            // Client Info
+            clientName: document.getElementById('client-name').value,
+            clientPhone: document.getElementById('client-phone').value,
+            clientEmail: document.getElementById('client-email').value,
+            // Vehicle Info
+            vin: document.getElementById('vin').value,
+            make: document.getElementById('make').value,
+            model: document.getElementById('model').value,
+            year: parseInt(document.getElementById('year').value),
+            color: document.getElementById('color').value,
+            engineCC: document.getElementById('engine-cc').value,
+            trim: document.getElementById('trim').value,
+            engineName: document.getElementById('engine-name').value,
+            transmission: document.getElementById('transmission').value,
+            driveType: document.getElementById('drive').value,
+            // Job Details
+            reportedProblems: document.getElementById('reported-problems').value,
+            diagnosticNotes: document.getElementById('diagnostic-notes').value,
+            errorCodes: rawErrorCodes,
+            errorMeanings: fullErrorMeanings,
+            repairNotes: document.getElementById('repair-notes').value,
+            replacementParts: document.getElementById('replacement-parts').value,
+            assignedMechanic: document.getElementById('assigned-mechanic').value,
+            dueDate: document.getElementById('due-date').value,
+            deliveryDate: document.getElementById('delivery-date').value,
+            status: 'Active',
+            createdAt: serverTimestamp()
+        };
+
+        try {
+            await addDoc(carsCollection, carData);
+            alert('Vehicle entry saved successfully! Status: Active');
+            document.getElementById('car-entry-form').reset();
+            // Reset error code inputs
+            document.getElementById('error-codes-container').innerHTML = '';
+            addErrorCodeInput();
+            fetchCars('Active');
+        } catch (error) {
+            console.error('Error adding document: ', error);
+            alert(`Error saving entry: ${error.message}`);
+        }
+    });
+
+    // UPDATED: Fetch and Display Cars with Client-Side Search Filtering
+    function fetchCars(status, searchTerm = '') {
+        if (!auth.currentUser || !isSubscribed) return;
+
+        const containerId = status === 'Active' ? 'car-list-container' : 'completed-list-container';
+        const container = document.getElementById(containerId);
+        container.innerHTML = '<p class="text-center text-gray-500">Loading cars...</p>';
+
+        const carsQuery = query(
+            carsCollection,
+            where('status', '==', status),
+            orderBy('createdAt', 'desc')
+        );
+
+        // onSnapshot listens for real-time updates
+        onSnapshot(carsQuery, (snapshot) => {
+            let filteredDocs = snapshot.docs;
+            const term = searchTerm.toLowerCase().trim();
+
+            if (term) {
+                // Client-side filtering for partial text match on multiple fields
+                filteredDocs = snapshot.docs.filter(doc => {
+                    const car = doc.data();
+                    return (
+                        (car.clientName && car.clientName.toLowerCase().includes(term)) ||
+                        (car.make && car.make.toLowerCase().includes(term)) ||
+                        (car.model && car.model.toLowerCase().includes(term))
+                    );
+                });
+            }
+            
+            container.innerHTML = '';
+            
+            if (filteredDocs.length === 0) {
+                container.innerHTML = `<p class="text-center text-xl text-gray-400 p-8">No ${status} jobs currently matching "${searchTerm || 'your search'}".</p>`;
+                return;
+            }
+
+            filteredDocs.forEach(doc => {
+                const car = doc.data();
+                car.id = doc.id;
+                
+                const color = status === 'Active' ? 'bg-indigo-100 border-indigo-500' : 'bg-green-100 border-green-500';
+                
+                // Card rendering logic
+                const cardHtml = `
+                    <div class="${color} border-l-4 p-5 rounded-lg shadow-md flex flex-col justify-between">
+                        <div>
+                            <p class="text-xs text-gray-500">${car.make} ${car.model} (${car.year})</p>
+                            <h3 class="text-xl font-bold text-gray-900 mb-2">${car.vin}</h3>
+                            <p class="text-sm font-semibold text-gray-700 mb-1">Client: ${car.clientName || 'N/A'}</p>
+                            <p class="text-sm text-gray-600 mb-3">Mechanic: ${car.assignedMechanic || 'Unassigned'}</p>
+                            <p class="text-xs text-gray-500 mb-2">Logged: ${car.createdAt ? new Date(car.createdAt.toDate()).toLocaleString() : 'N/A'}</p>
+                        </div>
+                        <div class="mt-4 flex flex-wrap gap-2">
+                            <button onclick="openDetailedReport('${car.id}')" class="bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded-lg text-sm transition duration-150">View Details</button>
+                            ${status === 'Active' ? 
+                                `<button onclick="markCarAsCompleted('${car.id}')" class="bg-green-500 hover:bg-green-600 text-white font-medium py-2 px-4 rounded-lg text-sm transition duration-150">Mark Complete</button>` : 
+                                `<button onclick="deleteCompletedCar('${car.id}')" class="bg-red-500 hover:bg-red-600 text-white font-medium py-2 px-4 rounded-lg text-sm transition duration-150">Delete Entry</button>`
+                            }
+                        </div>
+                    </div>
+                `;
+                container.innerHTML += cardHtml;
+            });
+        }, (error) => {
+            console.error("Error fetching cars:", error);
+            container.innerHTML = '<p class="text-center text-red-500">Error loading data. Check console for details.</p>';
+        });
+    }
+
+
+    // ----------------------------------------------------------------------
+    // 5. JOB CARD & REPORT GENERATION FUNCTIONS (Partial)
+    // ----------------------------------------------------------------------
+
+    function openDetailedReport(docId) {
+        // ... (existing logic for openDetailedReport remains the same)
+        // I'm omitting the full function body for brevity, but it should remain
+        // in your working code. Ensure it fetches the car data by docId.
+    }
+
+    async function markCarAsCompleted(docId) {
+        if (!confirm("Are you sure you want to mark this vehicle as completed and move it to history?")) return;
+        const carRef = doc(db, 'cars', docId);
+        try {
+            await updateDoc(carRef, {
+                status: 'Completed',
+                completedAt: serverTimestamp()
+            });
+            alert('Vehicle marked as completed!');
+            fetchCars('Active'); // Refresh the active list
+        } catch (error) {
+            console.error('Error marking as completed: ', error);
+            alert(`Error updating status: ${error.message}`);
+        }
+    }
+
+    async function deleteCompletedCar(docId) {
+        if (currentUserRole !== 'admin') {
+            alert('Only Admins can delete completed car entries.');
+            return;
+        }
+        if (!confirm("Are you sure you want to permanently delete this completed job entry? This cannot be undone.")) return;
+        const carRef = doc(db, 'cars', docId);
+        try {
+            await deleteDoc(carRef);
+            alert('Completed entry deleted successfully!');
+            fetchCars('Completed'); // Refresh the completed list
+        } catch (error) {
+            console.error('Error deleting document: ', error);
+            alert(`Error deleting entry: ${error.message}`);
+        }
+    }
+
+    // ----------------------------------------------------------------------
+    // 6. GENERAL SERVICE CHECKLIST (Setup and PDF Generation)
+    // ----------------------------------------------------------------------
+    
+    // Checklists Definitions
+    const FLUIDS_FILTERS_CHECKS = [
+        { id: 'engine-oil', item: 'Engine Oil Level/Condition' },
+        { id: 'oil-filter', item: 'Oil Filter' },
+        { id: 'air-filter', item: 'Air Filter' },
+        { id: 'fuel-filter', item: 'Fuel Filter' },
+        { id: 'coolant-level', item: 'Coolant Level/Condition' },
+        { id: 'brake-fluid', item: 'Brake Fluid Level/Condition' },
+        { id: 'pwr-steering-fluid', item: 'Power Steering Fluid' },
+        { id: 'transmission-fluid', item: 'Transmission Fluid' }
+    ];
+
+    const LIGHTS_CHECKS = [
+        { id: 'headlights', item: 'Headlights (Low/High)' },
+        { id: 'indicators', item: 'Indicators/Hazard' },
+        { id: 'brake-lights', item: 'Brake Lights' },
+        { id: 'reverse-lights', item: 'Reverse Lights' },
+        { id: 'number-plate-lights', item: 'Number Plate Lights' },
+        { id: 'interior-lights', item: 'Interior Lights' }
+    ];
+
+    const OTHER_CHECKS = [
+        { id: 'brake-pads', item: 'Brake Pads (Front/Rear)' },
+        { id: 'brake-rotors', item: 'Brake Rotors/Drums' },
+        { id: 'suspension', item: 'Suspension & Shocks' },
+        { id: 'battery', item: 'Battery Terminal/Charge' },
+        { id: 'belts-hoses', item: 'Belts & Hoses Condition' },
+        { id: 'exhaust', item: 'Exhaust System' }
+    ];
+    
+    // NEW Checklists for General Service
+    const TIRE_CHECKS = [
+        { id: 'tire-front-left', item: 'Front Left' },
+        { id: 'tire-front-right', item: 'Front Right' },
+        { id: 'tire-rear-left', item: 'Rear Left' },
+        { id: 'tire-rear-right', item: 'Rear Right' },
+    ];
+    const WIPER_CHECKS = [
+        { id: 'wiper-front', item: 'Front Wipers' },
+        { id: 'wiper-rear', item: 'Rear Wiper' },
+    ];
+    
+    function populateChecklistTable(containerId, items, hasNotes = false) {
+        const body = document.getElementById(containerId);
+        if (!body) return;
+
+        let html = '';
+        items.forEach(item => {
+            html += `
+                <tr>
+                    <td>${item.item}</td>
+                    <td><input id="${item.id}-faulty" type="checkbox" class="form-checkbox h-5 w-5 text-red-600" /></td>
+                    <td><input id="${item.id}-checked" type="checkbox" class="form-checkbox h-5 w-5 text-green-600" checked /></td>
+                    <td><input id="${item.id}-changed" type="checkbox" class="form-checkbox h-5 w-5 text-blue-600" /></td>
+                    ${hasNotes ? `<td><input id="${item.id}-notes" type="text" placeholder="Notes" class="p-1 border rounded text-xs w-full" /></td>` : ''}
+                </tr>
+            `;
+        });
+        body.innerHTML = html;
+    }
+    
+    // NEW: Populate Tires/Wipers
+    function populateTireWiperTables() {
+        // Tires Table
+        const tiresBody = document.getElementById('tires-body');
+        tiresBody.innerHTML = TIRE_CHECKS.map(item => `
+            <tr>
+                <td>${item.item}</td>
+                <td>
+                    <select id="${item.id}-condition" class="p-1 border rounded text-xs">
+                        <option value="Good">Good</option>
+                        <option value="Fair">Fair</option>
+                        <option value="Needs Replacement">Needs Replacement</option>
+                    </select>
+                </td>
+                <td><input id="${item.id}-notes" type="text" placeholder="Tread depth, brand..." class="p-1 border rounded text-xs w-full" /></td>
+            </tr>
+        `).join('');
+
+        // Wipers Table
+        const wipersBody = document.getElementById('wipers-body');
+        wipersBody.innerHTML = WIPER_CHECKS.map(item => `
+            <tr>
+                <td>${item.item}</td>
+                <td>
+                    <select id="${item.id}-condition" class="p-1 border rounded text-xs">
+                        <option value="OK">OK</option>
+                        <option value="Replace">Replace</option>
+                    </select>
+                </td>
+                <td><input id="${item.id}-changed" type="checkbox" class="form-checkbox h-5 w-5 text-blue-600" /></td>
+            </tr>
+        `).join('');
+    }
+
+    function initializeGeneralService() {
+        populateChecklistTable('fluids-filters-body', FLUIDS_FILTERS_CHECKS);
+        populateChecklistTable('other-checks-body', OTHER_CHECKS, true); 
+        populateTireWiperTables(); // NEW
+        
+        // Lights are special since they have L/H and R/H columns
+        const lightsBody = document.getElementById('lights-body');
+        lightsBody.innerHTML = LIGHTS_CHECKS.map(item => `
+            <tr>
+                <td>${item.item}</td>
+                <td><input id="${item.id}-lh" type="checkbox" class="form-checkbox h-5 w-5 text-green-600" checked /></td>
+                <td><input id="${item.id}-rh" type="checkbox" class="form-checkbox h-5 w-5 text-green-600" checked /></td>
+                <td><input id="${item.id}-notes" type="text" placeholder="Notes" class="p-1 border rounded text-xs w-full" /></td>
+            </tr>
+        `).join('');
+    }
+
+    // Helper to extract common service checks data
+    function getServiceChecksData(items) {
+        return items.map(item => {
+            const faulty = document.getElementById(`${item.id}-faulty`)?.checked ? 'Faulty' : 'OK';
+            const checked = document.getElementById(`${item.id}-checked`)?.checked ? 'Checked' : 'N/A';
+            const changed = document.getElementById(`${item.id}-changed`)?.checked ? 'Changed' : 'No';
+            const notes = document.getElementById(`${item.id}-notes`)?.value || '';
+            return { item: item.item, status: `${faulty} (${checked}/${changed})`, notes };
+        });
+    }
+
+    // Helper to extract light checks data
+    function getLightChecksData() {
+        return LIGHTS_CHECKS.map(item => {
+            const left = document.getElementById(`${item.id}-lh`)?.checked ? 'Working' : 'Faulty';
+            const right = document.getElementById(`${item.id}-rh`)?.checked ? 'Working' : 'Faulty';
+            const notes = document.getElementById(`${item.id}-notes`)?.value || '';
+            return { light: item.item, left, right, notes };
+        });
+    }
+    
+    // NEW: Helper to extract Tire Checks data
+    function getTireChecksData() {
+        return TIRE_CHECKS.map(item => {
+            const condition = document.getElementById(`${item.id}-condition`)?.value;
+            const notes = document.getElementById(`${item.id}-notes`)?.value || '';
+            return { position: item.item, condition, notes };
+        });
+    }
+
+    // NEW: Helper to extract Wiper Checks data
+    function getWiperChecksData() {
+        return WIPER_CHECKS.map(item => {
+            const condition = document.getElementById(`${item.id}-condition`)?.value;
+            const changed = document.getElementById(`${item.id}-changed`)?.checked ? 'Yes' : 'No';
+            return { position: item.item, condition, changed };
+        });
+    }
+
+
+    function generateServiceReportPDF() {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+
+        // 1. Gather all data
+        const data = {
+            clientName: document.getElementById('service-client-name').value, // NEW
+            clientPhone: document.getElementById('service-client-phone').value, // NEW
+            make: document.getElementById('service-make').value,
+            model: document.getElementById('service-model').value,
+            year: document.getElementById('service-year').value, // NEW
+            vin: document.getElementById('service-vin').value,
+            mileage: document.getElementById('current-mileage').value,
+            nextServiceMileage: document.getElementById('next-service-mileage').value,
+            servicePerson: document.getElementById('service-person').value,
+            
+            tireChecks: getTireChecksData(), // NEW
+            wiperChecks: getWiperChecksData(), // NEW
+            
+            fluidsFiltersChecks: getServiceChecksData(FLUIDS_FILTERS_CHECKS),
+            otherChecks: getServiceChecksData(OTHER_CHECKS),
+            lightChecks: getLightChecksData()
+        };
+        
+        // --- PDF Generation Start ---
+        let y = 10;
+        
+        // Title
+        doc.setFontSize(20);
+        doc.text("Vehicle General Service Report", 105, y, null, null, "center");
+        y += 7;
+        
+        doc.setFontSize(10);
+        doc.text(`Date: ${new Date().toLocaleDateString()}`, 105, y, null, null, "center");
+        y += 10;
+
+        // NEW: Client & Vehicle Core Details Table
+        doc.setFontSize(14);
+        doc.text("Client & Vehicle Details", 14, y);
+        y += 5;
+
+        const detailsTableData = [
+            ['Client Name:', data.clientName, 'Vehicle Make:', data.make],
+            ['Client Phone:', data.clientPhone, 'Vehicle Model:', data.model],
+            ['VIN / Chassis No:', data.vin, 'Year of Manuf:', data.year],
+            ['Current Mileage (KM):', data.mileage, 'Next Service Est. (KM):', data.nextServiceMileage]
+        ];
+
+        doc.autoTable({
+            startY: y + 2,
+            head: [], // No header row
+            body: detailsTableData,
+            theme: 'plain',
+            styles: { fontSize: 10, cellPadding: 2, lineWidth: 0.1, lineColor: 200 },
+            columnStyles: { 0: { fontStyle: 'bold', cellWidth: 40 }, 2: { fontStyle: 'bold', cellWidth: 40 } },
+            margin: { left: 14 }
+        });
+        
+        y = doc.autoTable.previous.finalY + 10;
+        
+        // NEW: Tires Check Table
+        doc.setFontSize(14);
+        doc.text("Tires Condition Report", 14, y);
+        y += 5;
+
+        const tireTableData = data.tireChecks.map(item => [item.position, item.condition, item.notes]);
+
+        doc.autoTable({
+            startY: y + 2,
+            head: [['Position', 'Condition', 'Notes (Tread Depth/Brand)']],
+            body: tireTableData,
+            theme: 'grid',
+            styles: { fontSize: 10, cellPadding: 2 },
+            columnStyles: { 0: { fontStyle: 'bold', cellWidth: 40 }, 1: { cellWidth: 40 }, 2: { cellWidth: 100 } }
+        });
+        
+        y = doc.autoTable.previous.finalY + 10;
+        
+        // NEW: Wipers Check Table
+        doc.setFontSize(14);
+        doc.text("Wipers Inspection", 14, y);
+        y += 5;
+
+        const wiperTableData = data.wiperChecks.map(item => [item.position, item.condition, item.changed]);
+
+        doc.autoTable({
+            startY: y + 2,
+            head: [['Position', 'Condition (OK/Replace)', 'Changed?']],
+            body: wiperTableData,
+            theme: 'grid',
+            styles: { fontSize: 10, cellPadding: 2 },
+            columnStyles: { 0: { fontStyle: 'bold', cellWidth: 40 }, 1: { cellWidth: 50 }, 2: { cellWidth: 50 } }
+        });
+        
+        y = doc.autoTable.previous.finalY + 10;
+
+        // Fluids & Filters Table (Need to check if a new page is required)
+        if (y > 270) { doc.addPage(); y = 14; }
+
+        doc.setFontSize(14);
+        doc.text("Fluids & Filters Checklist", 14, y);
+        y += 5;
+        
+        const fluidsTableData = data.fluidsFiltersChecks.map(item => [item.item, item.status, item.notes]);
+        
+        doc.autoTable({
+            startY: y + 2,
+            head: [['Item', 'Status', 'Notes']],
+            body: fluidsTableData,
+            theme: 'striped',
+            styles: { fontSize: 10, cellPadding: 2 },
+            columnStyles: { 0: { fontStyle: 'bold', cellWidth: 60 }, 1: { cellWidth: 60 }, 2: { cellWidth: 60 } }
+        });
+
+        y = doc.autoTable.previous.finalY + 10;
+        
+        // Lights Check Table (Check if a new page is required)
+        if (y > 270) { doc.addPage(); y = 14; }
+
+        doc.setFontSize(14);
+        doc.text("Lights & Electrical Check", 14, y);
+        y += 5;
+        
+        const lightsTableData = data.lightChecks.map(item => [item.light, item.left, item.right, item.notes]);
+
+        doc.autoTable({
+            startY: y + 2,
+            head: [['Light', 'Left Side', 'Right Side', 'Notes']],
+            body: lightsTableData,
+            theme: 'grid',
+            styles: { fontSize: 10, cellPadding: 2 },
+            columnStyles: { 0: { fontStyle: 'bold', cellWidth: 50 }, 1: { cellWidth: 35 }, 2: { cellWidth: 35 }, 3: { cellWidth: 60 } }
+        });
+
+        y = doc.autoTable.previous.finalY + 10;
+        
+        // Brakes & Other Critical Checks Table (Check if a new page is required)
+        if (y > 270) { doc.addPage(); y = 14; }
+
+        doc.setFontSize(14);
+        doc.text("Brakes & Other Critical Checks", 14, y);
+        y += 5;
+        
+        const otherChecksTableData = data.otherChecks.map(item => [item.item, item.status, item.notes]);
+        
+        doc.autoTable({
+            startY: y + 2,
+            head: [['Item', 'Status', 'Notes']],
+            body: otherChecksTableData,
+            theme: 'striped',
+            styles: { fontSize: 10, cellPadding: 2 },
+            columnStyles: { 0: { fontStyle: 'bold', cellWidth: 60 }, 1: { cellWidth: 60 }, 2: { cellWidth: 60 } }
+        });
+
+        y = doc.autoTable.previous.finalY + 10;
+
+        // Service Handover Footer (Check if a new page is required)
+        if (y > 270) { doc.addPage(); y = 14; }
+
+        doc.setFontSize(12);
+        doc.text(`Service Completed By: ${data.servicePerson}`, 14, y);
+        y += 6;
+        doc.text('Mechanic Signature: _________________________', 14, y);
+        y += 6;
+        doc.text('Client Signature: ___________________________', 14, y);
+
+        doc.save(`Service_Report_${data.make}_${data.model}_${data.vin}.pdf`);
+    }
+    
+    // The createJobCard and generateAnalysisReportPDF functions remain as they were, 
+    // as they were previously working on the 'car-entry' data structure. 
+    // I am omitting them here for brevity but they should be present in your file.
+
+    function createJobCard() {
+        // ... (existing logic for createJobCard remains the same)
+        alert('Job Card Generation triggered. Ensure your original function is present.');
+    }
+    
+    function generateAnalysisReportPDF() {
+        // ... (existing logic for generateAnalysisReportPDF remains the same)
+        alert('Analysis Report Generation triggered. Ensure your original function is present.');
+    }
+
+    // ----------------------------------------------------------------------
+    // 99. GLOBAL WINDOW ASSIGNMENT (Moved to the end for Modular Script compatibility)
+    // ----------------------------------------------------------------------
+    // Helper to attach global functions to the window object (necessary for HTML onclick)
+    window.showSection = showSection;
+    window.handleLoginSignup = handleLoginSignup;
+    window.addErrorCodeInput = addErrorCodeInput;
+    window.removeErrorCode = removeErrorCode;
+    window.lookupErrorCode = lookupErrorCode;
+    window.createJobCard = createJobCard; 
+    window.generateAnalysisReportPDF = generateAnalysisReportPDF;
+    window.generateServiceReportPDF = generateServiceReportPDF;
+    window.markCarAsCompleted = markCarAsCompleted;
+    window.deleteCompletedCar = deleteCompletedCar;
+    window.openDetailedReport = openDetailedReport;
+    window.activateSubscriptionForTesting = activateSubscriptionForTesting; 
+    
+</script>
+</body>
+</html>
