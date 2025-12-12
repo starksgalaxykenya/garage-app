@@ -1548,7 +1548,7 @@ export const ERROR_CODE_LOOKUP = {
     "P0C7C": { issuer: "[GENERIC]", meaning: 'Hybrid/EV Powertrain - Reserved/Manufacturer Sub-Code' },
     "P0C7D": { issuer: "[GENERIC]", meaning: 'Hybrid/EV Powertrain - Reserved/Manufacturer Sub-Code' },
     "P0C7E": { issuer: "[GENERIC]", meaning: 'Hybrid/EV Powertrain - Reserved/Manufacturer Sub-Code' },
-    "P0C7F": { issuer: "[GENERIC]", meaning: 'Hybrid/EV Powertrain - Reserved/Manufacturer Sub-Code' }
+    "P0C7F": { issuer: "[GENERIC]", meaning: 'Hybrid/EV Powertrain - Reserved/Manufacturer Sub-Code' },
     "P0C80": { issuer: "Hybrid/EV", meaning: "Traction Motor/Inverter/Cooling System Fault. (Refine meaning for specific P0Axx-P0Cxx codes)" },
     "P0C81": { issuer: "Hybrid/EV", meaning: "Traction Motor/Inverter/Cooling System Fault. (Refine meaning for specific P0Axx-P0Cxx codes)" },
     "P0C82": { issuer: "Hybrid/EV", meaning: "Traction Motor/Inverter/Cooling System Fault. (Refine meaning for specific P0Axx-P0Cxx codes)" },
