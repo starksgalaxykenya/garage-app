@@ -59,11 +59,11 @@
                 <p class="text-sm text-blue-200">The Ultimate Auto Service Tool</p>
             </div>
             <nav class="flex space-x-4">
-                <button onclick="showSection('car-entry')" class="text-white hover:text-blue-200 font-medium transition duration-150">New Car Entry</button>
-                <button onclick="showSection('general-service')" class="text-white hover:text-blue-200 font-medium transition duration-150">General Service</button>
-                <button onclick="showSection('car-list')" class="text-white hover:text-blue-200 font-medium transition duration-150">Active Jobs</button>
-                <button onclick="showSection('completed-list')" class="text-white hover:text-blue-200 font-medium transition duration-150">Completed Jobs</button>
-                <button onclick="showSection('reports-section')" class="text-white hover:text-blue-200 font-bold py-2 px-4 rounded-lg bg-yellow-600 hover:bg-yellow-700 transition duration-150">Reports</button>
+                <button id="nav-car-entry" class="text-white hover:text-blue-200 font-medium transition duration-150">New Car Entry</button>
+                <button id="nav-general-service" class="text-white hover:text-blue-200 font-medium transition duration-150">General Service</button>
+                <button id="nav-car-list" class="text-white hover:text-blue-200 font-medium transition duration-150">Active Jobs</button>
+                <button id="nav-completed-list" class="text-white hover:text-blue-200 font-medium transition duration-150">Completed Jobs</button>
+                <button id="nav-reports-section" class="text-white hover:text-blue-200 font-bold py-2 px-4 rounded-lg bg-yellow-600 hover:bg-yellow-700 transition duration-150">Reports</button>
                 <button id="logoutBtn" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded transition duration-150" style="display:none;">Logout</button>
             </nav>
         </div>
@@ -372,8 +372,9 @@
     const carsCollection = collection(db, 'cars');
     let currentUserRole = null; // 'admin' or 'mechanic'
 
-    // MODIFICATION 4: Global variable to hold current job card data for modal and WhatsApp
-    let currentJobCardData = null;
+    // FIX: Global variable to hold current job card data for modal and WhatsApp
+    // It is now explicitly attached to window to be accessible by inline onclick handlers.
+    window.currentJobCardData = null;
     
     // NEW: Global cache for completed jobs to power the daily report
     let completedJobsCache = [];
@@ -385,7 +386,7 @@
     let currentReportDateRange = "";
 
     // Expose functions globally for HTML onclick attributes
-    window.showSection = showSection;
+    // NOTE: showSection is *not* exposed here; its handlers are attached via DOMContentLoaded
     window.handleLoginSignup = handleLoginSignup;
     window.addErrorCodeInput = addErrorCodeInput;
     window.removeErrorCodeInput = removeErrorCodeInput;
@@ -882,8 +883,8 @@
         
         // MODIFICATION 5: Handle General Service Job Type
         if (data.jobType === 'GeneralService') {
-            // Set the global data for PDF generation via button click
-            currentJobCardData = data; 
+            // FIX: Set the global data on the window object for PDF generation via button click
+            window.currentJobCardData = data; 
             // Adjust modal size for service report
             document.getElementById('jobCardModal').querySelector('.max-w-3xl').classList.remove('max-w-3xl');
             document.getElementById('jobCardModal').querySelector('.w-full').classList.add('max-w-xl');
@@ -912,7 +913,7 @@
                 <p class="whitespace-pre-wrap text-sm">${data.diagnosticNotes}</p>
                 
                 <div class="flex justify-center mt-6">
-                    <button onclick="generateServiceReportPDF(currentJobCardData)" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-lg transition duration-150 print:hidden">Generate Full Service Checklist PDF</button>
+                    <button onclick="generateServiceReportPDF(window.currentJobCardData)" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-lg transition duration-150 print:hidden">Generate Full Service Checklist PDF</button>
                 </div>
             `;
             // Hide WhatsApp button for this specialized report
@@ -925,7 +926,7 @@
         document.getElementById('jobCardModal').querySelector('.w-full').classList.add('max-w-3xl');
         
         // MODIFICATION 4: Set the global data for WhatsApp function
-        currentJobCardData = data; 
+        window.currentJobCardData = data; 
         document.getElementById('whatsapp-btn').style.display = 'block';
 
         const errorCodesHtml = data.errorCodes && data.errorCodes.length > 0 ? 
@@ -988,12 +989,12 @@
 
     // MODIFICATION 4: WhatsApp button functionality (MODIFIED: Added Plate)
     function sendJobCardViaWhatsApp() {
-        if (!currentJobCardData) {
+        if (!window.currentJobCardData) { // FIX: Use window.currentJobCardData
             alert("No job card data available to send.");
             return;
         }
 
-        const data = currentJobCardData;
+        const data = window.currentJobCardData; // FIX: Use window.currentJobCardData
         
         // Format the message content
         let message = `*Garage Manager PRO - Vehicle Job Report*\n\n`;
@@ -1753,6 +1754,28 @@
 
 
     document.addEventListener('DOMContentLoaded', () => {
+        
+        // FIX: Attach event listeners to navigation buttons to avoid 'showSection is not defined' error
+        function attachNavHandlers() {
+            const navButtons = [
+                { id: 'nav-car-entry', section: 'car-entry' },
+                { id: 'nav-general-service', section: 'general-service' },
+                { id: 'nav-car-list', section: 'car-list' },
+                { id: 'nav-completed-list', section: 'completed-list' },
+                { id: 'nav-reports-section', section: 'reports-section' }
+            ];
+
+            navButtons.forEach(({ id, section }) => {
+                const button = document.getElementById(id);
+                if (button) {
+                    // Use a proper event listener instead of inline onclick
+                    button.addEventListener('click', () => showSection(section));
+                }
+            });
+        }
+        
+        attachNavHandlers();
+        
         // Initialize the first error code input field
         addErrorCodeInput(); 
         // MODIFICATION 3: Initialize the first repair plan card
