@@ -96,6 +96,7 @@
                 <fieldset class="border-2 border-blue-200 p-4 rounded-lg">
                     <legend class="text-xl font-semibold text-blue-700 px-2">Vehicle Core Details</legend>
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-4">
+                        <input id="number-plate" type="text" placeholder="Vehicle Number Plate" required class="p-3 border rounded-lg" />
                         <input id="vin" type="text" placeholder="VIN / Chassis No." required class="p-3 border rounded-lg" />
                         <input id="make" type="text" placeholder="Make (e.g., Toyota)" required class="p-3 border rounded-lg" />
                         <input id="model" type="text" placeholder="Model (e.g., Corolla)" required class="p-3 border rounded-lg" />
@@ -140,6 +141,7 @@
                                 <option value="Jane Smith (Mock)">
                             </datalist>
                         </div>
+
                         <div>
                             <label for="due-date" class="block text-sm font-medium text-gray-700 mb-1">Service Due Date</label>
                             <input id="due-date" type="date" class="w-full p-3 border rounded-lg" />
@@ -164,6 +166,7 @@
                         </div>
                     <button type="button" onclick="addRepairPlanCard()" class="mt-4 bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition duration-150">Add Repair Plan Item</button>
                 </fieldset>
+
                 <div class="flex justify-end space-x-4 pt-4">
                     <button type="button" onclick="createJobCard()" class="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-3 px-6 rounded-lg transition duration-150">Generate Job Card</button>
                     <button type="button" onclick="generateAnalysisReportPDF()" class="bg-teal-500 hover:bg-teal-600 text-white font-bold py-3 px-6 rounded-lg transition duration-150">Generate Analysis Report (PDF)</button>
@@ -185,6 +188,7 @@
                 <fieldset class="border-2 border-blue-200 p-4 rounded-lg">
                     <legend class="text-xl font-semibold text-blue-700 px-2">Vehicle ID for Service</legend>
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-4">
+                        <input id="service-plate" type="text" placeholder="Vehicle Number Plate" required class="p-3 border rounded-lg" />
                         <input id="service-make" type="text" placeholder="Make" required class="p-3 border rounded-lg" />
                         <input id="service-model" type="text" placeholder="Model" required class="p-3 border rounded-lg" />
                         <input id="service-vin" type="text" placeholder="VIN / Chassis No." required class="p-3 border rounded-lg" />
@@ -467,7 +471,8 @@
             clientPhone: document.getElementById('client-phone').value,
             clientEmail: document.getElementById('client-email').value,
 
-            // VEHICLE CORE INFO
+            // VEHICLE CORE INFO (MODIFIED: Added Plate)
+            plate: document.getElementById('number-plate').value,
             vin: document.getElementById('vin').value,
             make: document.getElementById('make').value,
             model: document.getElementById('model').value,
@@ -557,7 +562,7 @@
         });
     }
 
-    // Creates the HTML card for a car entry
+    // Creates the HTML card for a car entry (MODIFIED: Added Plate to card)
     function createCarCard(car, status) {
         const card = document.createElement('div');
         card.className = 'bg-white p-6 rounded-xl shadow-lg border-t-4 border-blue-500 hover:shadow-xl transition duration-200';
@@ -568,7 +573,7 @@
         
         card.innerHTML = `
             <h3 class="text-xl font-bold text-gray-800 mb-2">${car.make} ${car.model} (${car.year})</h3>
-            <p class="text-sm text-gray-600 mb-4">VIN: <span class="font-mono text-xs text-blue-700">${car.vin}</span></p>
+            <p class="text-sm text-gray-600 mb-4">Plate: <span class="font-mono text-xs text-orange-700">${car.plate || 'N/A'}</span> | VIN: <span class="font-mono text-xs text-blue-700">${car.vin}</span></p>
             
             <div class="space-y-1 text-sm mb-4">
                 <p><span class="font-semibold">Client:</span> ${car.clientName}</p>
@@ -745,7 +750,7 @@
 
 
     // ----------------------------------------------------------------------
-    // 6. JOB CARD & REPORT GENERATION LOGIC (PDF/Modal) (MODIFIED for cards and whatsapp)
+    // 6. JOB CARD & REPORT GENERATION LOGIC (PDF/Modal) (MODIFIED: Added Plate)
     // ----------------------------------------------------------------------
 
     // Generates a mock job card/report data object from the car entry form
@@ -762,14 +767,15 @@
         const actionItems = repairPlan.map(item => item.action).join('\n---\n');
         const partsList = repairPlan.map(item => item.parts).filter(p => p).join('\n');
 
-        // Collate data for the modal
+        // Collate data for the modal (MODIFIED: Added Plate)
         const data = {
             // CLIENT INFO
             clientName: document.getElementById('client-name').value || 'N/A',
             clientPhone: document.getElementById('client-phone').value || 'N/A',
             clientEmail: document.getElementById('client-email').value || 'N/A',
 
-            // VEHICLE CORE INFO
+            // VEHICLE CORE INFO (MODIFIED: Added Plate)
+            plate: document.getElementById('number-plate').value || 'N/A',
             make: document.getElementById('make').value || 'N/A',
             model: document.getElementById('model').value || 'N/A',
             year: document.getElementById('year').value || 'N/A',
@@ -835,6 +841,7 @@
 
             <h3 class="text-xl font-bold text-blue-700 mt-4 border-b-2 pb-1">Vehicle Details</h3>
             <div class="grid grid-cols-3 gap-4">
+                <p><span class="font-bold">Plate No:</span> ${data.plate}</p>
                 <p><span class="font-bold">Make:</span> ${data.make}</p>
                 <p><span class="font-bold">Model:</span> ${data.model}</p>
                 <p><span class="font-bold">Year:</span> ${data.year}</p>
@@ -865,7 +872,7 @@
         `;
     }
 
-    // MODIFICATION 4: WhatsApp button functionality
+    // MODIFICATION 4: WhatsApp button functionality (MODIFIED: Added Plate)
     function sendJobCardViaWhatsApp() {
         if (!currentJobCardData) {
             alert("No job card data available to send.");
@@ -877,7 +884,7 @@
         // Format the message content
         let message = `*Garage Manager PRO - Vehicle Job Report*\n\n`;
         message += `*Client*: ${data.clientName}\n`;
-        message += `*Vehicle*: ${data.year} ${data.make} ${data.model} (VIN: ${data.vin})\n`;
+        message += `*Vehicle*: ${data.year} ${data.make} ${data.model} (Plate: ${data.plate}) (VIN: ${data.vin})\n`;
         message += `*Assigned Mechanic*: ${data.assignedMechanic}\n`;
         message += `*Estimated Delivery*: ${data.deliveryDate}\n\n`;
         
@@ -925,7 +932,8 @@
             clientPhone: document.getElementById('client-phone').value || 'N/A',
             clientEmail: document.getElementById('client-email').value || 'N/A',
 
-            // VEHICLE CORE INFO
+            // VEHICLE CORE INFO (MODIFIED: Added Plate)
+            plate: document.getElementById('number-plate').value || 'N/A',
             make: document.getElementById('make').value || 'N/A',
             model: document.getElementById('model').value || 'N/A',
             year: document.getElementById('year').value || 'N/A',
@@ -967,11 +975,12 @@
         doc.setTextColor(0, 0, 0); // black for table text
         y += 5;
         
+        // MODIFIED: Added Plate to the PDF table
         doc.autoTable({
             startY: y,
             body: [
                 ['Client Name', data.clientName, 'Phone', data.clientPhone],
-                ['Make/Model', `${data.make} ${data.model} (${data.year})`, 'VIN', data.vin],
+                ['Make/Model', `${data.make} ${data.model} (${data.year})`, 'Plate No.', data.plate],
                 ['Engine', `${data.engineName} (${data.engineCC}cc)`, 'Mechanic', data.assignedMechanic]
             ],
             theme: 'plain',
@@ -1029,7 +1038,7 @@
     }
 
     // ----------------------------------------------------------------------
-    // 7. GENERAL SERVICE LOGIC (Unchanged)
+    // 7. GENERAL SERVICE LOGIC (MODIFIED: Added Plate)
     // ----------------------------------------------------------------------
 
     const SERVICE_ITEMS = [
@@ -1121,10 +1130,11 @@
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF();
         
-        // Data Collation
+        // Data Collation (MODIFIED: Added Plate)
         const data = {};
         data.clientName = document.getElementById('service-client-name').value || 'N/A';
         data.clientPhone = document.getElementById('service-client-phone').value || 'N/A';
+        data.plate = document.getElementById('service-plate').value || 'N/A';
         data.make = document.getElementById('service-make').value || 'N/A';
         data.model = document.getElementById('service-model').value || 'N/A';
         data.vin = document.getElementById('service-vin').value || 'N/A';
@@ -1132,7 +1142,7 @@
         data.nextServiceMileage = document.getElementById('next-service-mileage').value || 'N/A';
         data.servicePerson = document.getElementById('service-person').value || 'N/A';
 
-        // 4. Checklist Items
+        // 4. Checklist Items (unchanged logic)
         data.serviceChecks = SERVICE_ITEMS.map(item => {
             let status = 'OK';
             if (form.querySelector(`[name="${item.name}-faulty"]`) && form.querySelector(`[name="${item.name}-faulty"]`).checked) {
@@ -1169,11 +1179,12 @@
         doc.setTextColor(0, 0, 0); // black for table text
         y += 5;
 
+        // MODIFIED: Added Plate to the PDF table
         doc.autoTable({
             startY: y,
             body: [
                 ['Client Name', data.clientName, 'Phone', data.clientPhone],
-                ['Make/Model', `${data.make} ${data.model}`, 'VIN', data.vin],
+                ['Make/Model', `${data.make} ${data.model}`, 'Plate No.', data.plate],
                 ['Service By', data.servicePerson, 'Date', new Date().toLocaleDateString()]
             ],
             theme: 'plain',
