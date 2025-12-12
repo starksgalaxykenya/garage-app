@@ -63,6 +63,7 @@
                 <button onclick="showSection('general-service')" class="text-white hover:text-blue-200 font-medium transition duration-150">General Service</button>
                 <button onclick="showSection('car-list')" class="text-white hover:text-blue-200 font-medium transition duration-150">Active Jobs</button>
                 <button onclick="showSection('completed-list')" class="text-white hover:text-blue-200 font-medium transition duration-150">Completed Jobs</button>
+                <button onclick="showSection('reports-section')" class="text-white hover:text-blue-200 font-bold py-2 px-4 rounded-lg bg-yellow-600 hover:bg-yellow-700 transition duration-150">Reports</button>
                 <button id="logoutBtn" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded transition duration-150" style="display:none;">Logout</button>
             </nav>
         </div>
@@ -273,6 +274,20 @@
                 </div>
         </section>
 
+        <section id="reports-section" style="display:none;">
+            <h2 class="text-3xl font-bold text-gray-800 border-b pb-2 mb-6">📊 Daily & Monthly Analytics</h2>
+            
+            <div class="bg-white p-6 rounded-xl shadow-lg space-y-6">
+                <h3 class="text-xl font-semibold text-blue-700">End-of-Day Operations Summary</h3>
+                <p class="text-gray-600">Click the button below to generate a report summarizing all jobs marked as completed today.</p>
+                <button onclick="generateDailyReport()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-lg transition duration-150">Generate Today's Report</button>
+            </div>
+
+            <div class="mt-8 bg-gray-100 p-6 rounded-xl shadow-inner">
+                <h3 class="text-xl font-semibold text-gray-700 border-b pb-2 mb-4">Monthly Compilation (Analytics Placeholder)</h3>
+                <p class="text-gray-500">This section is where monthly aggregate data would be queried from the database and compiled. It would show trends, top mechanics, most frequent repairs, and profitability over a 30-day period using charting libraries like **Chart.js**.</p>
+            </div>
+        </section>
         <div id="jobCardModal" class="fixed inset-0 bg-gray-600 bg-opacity-75 flex items-center justify-center p-4 z-[100]" style="display:none;">
             <div class="bg-white p-8 rounded-lg shadow-xl w-full max-w-3xl custom-scrollbar max-h-[90vh] overflow-y-auto">
                 <div class="text-center border-b pb-4 mb-4">
@@ -289,7 +304,20 @@
             </div>
         </div>
         
-    </main>
+        <div id="dailyReportModal" class="fixed inset-0 bg-gray-600 bg-opacity-75 flex items-center justify-center p-4 z-[100]" style="display:none;">
+            <div class="bg-white p-8 rounded-lg shadow-xl w-full max-w-4xl custom-scrollbar max-h-[90vh] overflow-y-auto">
+                <div class="text-center border-b pb-4 mb-4">
+                    <h2 class="text-3xl font-bold text-blue-800">End-of-Day Report: <span id="report-date"></span></h2>
+                    <p class="text-sm text-gray-600">Summary of all jobs completed on this date.</p>
+                </div>
+                <div id="report-content" class="space-y-6 text-gray-700">
+                    </div>
+                <div class="flex justify-end mt-6">
+                    <button onclick="document.getElementById('dailyReportModal').style.display = 'none'" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded transition duration-150">Close</button>
+                </div>
+            </div>
+        </div>
+        </main>
 
     <footer class="bg-gray-800 text-white text-center py-4 mt-8">
         <p class="text-sm">© 2025 Garage Manager PRO | Powered by Tailwind & Firebase</p>
@@ -330,6 +358,9 @@
 
     // MODIFICATION 4: Global variable to hold current job card data for modal and WhatsApp
     let currentJobCardData = null;
+    
+    // NEW: Global cache for completed jobs to power the daily report
+    let completedJobsCache = [];
 
     // Expose functions globally for HTML onclick attributes
     window.showSection = showSection;
@@ -343,16 +374,15 @@
     window.markCarAsCompleted = markCarAsCompleted;
     window.deleteCompletedCar = deleteCompletedCar;
     window.openDetailedReport = openDetailedReport;
-    
-    // MODIFICATION 3: Expose new Repair Plan functions
     window.addRepairPlanCard = addRepairPlanCard;
     window.removeRepairPlanCard = removeRepairPlanCard;
     window.sendJobCardViaWhatsApp = sendJobCardViaWhatsApp;
-    
-    // START MODIFICATION 2: Expose the new function
     window.completeServiceJob = completeServiceJob; 
-    // END MODIFICATION 2
     
+    // START NEW: Expose the daily report function
+    window.generateDailyReport = generateDailyReport;
+    // END NEW
+
     // ----------------------------------------------------------------------
     // 2. AUTHENTICATION LOGIC
     // ----------------------------------------------------------------------
@@ -374,7 +404,8 @@
     });
 
     function showSection(sectionId) {
-        const sections = ['auth-section', 'car-entry', 'general-service', 'car-list', 'completed-list'];
+        // MODIFICATION: Added 'reports-section'
+        const sections = ['auth-section', 'car-entry', 'general-service', 'car-list', 'completed-list', 'reports-section'];
         sections.forEach(id => {
             document.getElementById(id).style.display = 'none';
         });
@@ -550,8 +581,12 @@
         // Real-time listener for updates
         onSnapshot(carsQuery, (snapshot) => {
             container.innerHTML = ''; 
-            // Filter locally for demo purposes, if needed:
-            const filteredCars = snapshot.docs.map(doc => ({...doc.data(), id: doc.id})).filter(car => car.status === status);
+            
+            const allCars = snapshot.docs.map(doc => ({...doc.data(), id: doc.id}));
+            const activeCars = allCars.filter(car => car.status === 'Active');
+            completedJobsCache = allCars.filter(car => car.status === 'Completed'); // NEW: Update the global cache
+            
+            const filteredCars = status === 'Active' ? activeCars : completedJobsCache;
 
             if (filteredCars.length === 0) {
                 container.innerHTML = `<p class="text-center text-xl text-gray-500 py-10">No ${status} jobs found.</p>`;
@@ -1302,8 +1337,8 @@
         doc.setFontSize(14);
         doc.setTextColor(249, 115, 22); // orange-600
         doc.text("Client, Vehicle & Service Details", 14, y);
-        y += 5;
         doc.setTextColor(0, 0, 0); // black for table text
+        y += 5;
 
         doc.autoTable({
             startY: y,
@@ -1413,6 +1448,126 @@
 
         doc.save(`Service_Report_${data.plate || data.vin}.pdf`);
     }
+
+    // ----------------------------------------------------------------------
+    // 8. DAILY REPORT LOGIC (NEW SECTION)
+    // ----------------------------------------------------------------------
+    
+    // Helper to check if two dates are the same day (ignoring time)
+    function isSameDay(date1, date2) {
+        return date1.getFullYear() === date2.getFullYear() &&
+               date1.getMonth() === date2.getMonth() &&
+               date1.getDate() === date2.getDate();
+    }
+    
+    function objectToHtmlList(obj) {
+        return Object.entries(obj).map(([key, value]) => `<li><span class="font-semibold">${key}</span>: ${value} jobs</li>`).join('');
+    };
+
+    function generateDailyReport() {
+        // 1. Filter completed jobs for today
+        const today = new Date();
+        const completedToday = completedJobsCache.filter(job => {
+            // Use the 'completedAt' timestamp if available, fallback to 'createdAt'
+            const completionTime = job.completedAt ? job.completedAt.toDate() : (job.createdAt ? job.createdAt.toDate() : null);
+            if (completionTime) {
+                return isSameDay(completionTime, today);
+            }
+            return false;
+        });
+
+        const reportDate = today.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+        document.getElementById('report-date').textContent = reportDate;
+        const reportContentEl = document.getElementById('report-content');
+
+        if (completedToday.length === 0) {
+            reportContentEl.innerHTML = `<p class="text-center text-xl text-gray-500 py-10">No jobs were marked as completed today (${reportDate}).</p>`;
+            document.getElementById('dailyReportModal').style.display = 'flex';
+            return;
+        }
+
+        // 2. Data Summarization
+        const summary = {
+            totalJobs: completedToday.length,
+            jobsByType: {},
+            jobsByMechanic: {},
+            jobsByMake: {}
+        };
+
+        completedToday.forEach(job => {
+            const type = job.jobType === 'GeneralService' ? 'General Service' : 'Standard Repair';
+            const mechanic = job.assignedMechanic || 'N/A';
+            const make = job.make || 'N/A';
+
+            summary.jobsByType[type] = (summary.jobsByType[type] || 0) + 1;
+            summary.jobsByMechanic[mechanic] = (summary.jobsByMechanic[mechanic] || 0) + 1;
+            summary.jobsByMake[make] = (summary.jobsByMake[make] || 0) + 1;
+        });
+        
+        // 3. Render Summary
+        reportContentEl.innerHTML = `
+            <div class="bg-blue-50 p-4 rounded-lg border-l-4 border-blue-500">
+                <h4 class="text-2xl font-bold text-blue-800">${summary.totalJobs} Jobs Completed Today</h4>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="bg-gray-100 p-4 rounded-lg">
+                    <h5 class="font-bold text-lg text-blue-600 border-b pb-1 mb-2">Jobs by Type</h5>
+                    <ul class="list-disc list-inside space-y-1 text-sm">
+                        ${objectToHtmlList(summary.jobsByType)}
+                    </ul>
+                </div>
+                <div class="bg-gray-100 p-4 rounded-lg">
+                    <h5 class="font-bold text-lg text-green-600 border-b pb-1 mb-2">Jobs by Mechanic</h5>
+                    <ul class="list-disc list-inside space-y-1 text-sm">
+                        ${objectToHtmlList(summary.jobsByMechanic)}
+                    </ul>
+                </div>
+                <div class="bg-gray-100 p-4 rounded-lg">
+                    <h5 class="font-bold text-lg text-orange-600 border-b pb-1 mb-2">Top Vehicle Makes</h5>
+                    <ul class="list-disc list-inside space-y-1 text-sm">
+                        ${objectToHtmlList(summary.jobsByMake)}
+                    </ul>
+                </div>
+            </div>
+            
+            <h3 class="text-xl font-bold text-red-700 mt-6 border-b pb-1">Detailed Completed List</h3>
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Plate</th>
+                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Vehicle</th>
+                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Job Type</th>
+                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Mechanic</th>
+                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Time</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200 text-sm">
+                        ${completedToday.map(job => `
+                            <tr>
+                                <td class="px-3 py-2 whitespace-nowrap">${job.plate || 'N/A'}</td>
+                                <td class="px-3 py-2 whitespace-nowrap">${job.make || 'N/A'} ${job.model || 'N/A'}</td>
+                                <td class="px-3 py-2 whitespace-nowrap">${job.jobType === 'GeneralService' ? 'G. Service' : 'Repair'}</td>
+                                <td class="px-3 py-2 whitespace-nowrap">${job.assignedMechanic || 'N/A'}</td>
+                                <td class="px-3 py-2 whitespace-nowrap">${job.completedAt ? job.completedAt.toDate().toLocaleTimeString() : 'N/A'}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+
+            <h3 class="text-xl font-bold text-purple-700 mt-6 border-b pb-1">Charts & Monthly Compilation</h3>
+            <div id="chart-placeholder" class="bg-purple-50 p-4 rounded-lg text-center border-dashed border-2 border-purple-300">
+                <p class="text-purple-700 font-semibold">CHART INTEGRATION AREA</p>
+                <p class="text-sm text-purple-600">To generate dynamic charts (e.g., jobs by mechanic pie chart, jobs by make bar chart), you would integrate a library like **Chart.js** here, using the data summarized above.</p>
+                <p class="text-sm text-purple-600 mt-2">The Monthly Compilation logic would similarly aggregate data across a month using Firebase query filters and render a summary chart here.</p>
+            </div>
+        `;
+
+        document.getElementById('dailyReportModal').style.display = 'flex';
+    }
+
 
     document.addEventListener('DOMContentLoaded', () => {
         // Initialize the first error code input field
