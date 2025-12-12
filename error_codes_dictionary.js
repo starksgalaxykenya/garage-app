@@ -1556,7 +1556,7 @@ export const ERROR_CODE_LOOKUP = {
     "P0C84": { issuer: "Hybrid/EV", meaning: "Traction Motor/Inverter/Cooling System Fault. (Refine meaning for specific P0Axx-P0Cxx codes)" },
     "P0C85": { issuer: "Hybrid/EV", meaning: "Traction Motor/Inverter/Cooling System Fault. (Refine meaning for specific P0Axx-P0Cxx codes)" },
     "P0C86": { issuer: "Hybrid/EV", meaning: "Traction Motor/Inverter/Cooling System Fault. (Refine meaning for specific P0Axx-P0Cxx codes)" },
-    "P0C87": { issuer: "Hybrid/EV", meaning: "Hybrid/EV Battery Temperature Sensor 'G'/'H' Correlation" },
+    "P0C87": { issuer: "Hybrid/EV", meaning: "Hybrid/EV Battery Temperature Sensor 'G'/'H' Correlation" }
     
 };
 
