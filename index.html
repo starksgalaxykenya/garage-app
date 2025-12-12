@@ -59,11 +59,11 @@
                 <p class="text-sm text-blue-200">The Ultimate Auto Service Tool</p>
             </div>
             <nav class="flex space-x-4">
-                <button id="nav-car-entry" class="text-white hover:text-blue-200 font-medium transition duration-150">New Car Entry</button>
-                <button id="nav-general-service" class="text-white hover:text-blue-200 font-medium transition duration-150">General Service</button>
-                <button id="nav-car-list" class="text-white hover:text-blue-200 font-medium transition duration-150">Active Jobs</button>
-                <button id="nav-completed-list" class="text-white hover:text-blue-200 font-medium transition duration-150">Completed Jobs</button>
-                <button id="nav-reports-section" class="text-white hover:text-blue-200 font-bold py-2 px-4 rounded-lg bg-yellow-600 hover:bg-yellow-700 transition duration-150">Reports</button>
+                <button onclick="showSection('car-entry')" class="text-white hover:text-blue-200 font-medium transition duration-150">New Car Entry</button>
+                <button onclick="showSection('general-service')" class="text-white hover:text-blue-200 font-medium transition duration-150">General Service</button>
+                <button onclick="showSection('car-list')" class="text-white hover:text-blue-200 font-medium transition duration-150">Active Jobs</button>
+                <button onclick="showSection('completed-list')" class="text-white hover:text-blue-200 font-medium transition duration-150">Completed Jobs</button>
+                <button onclick="showSection('error-checker-section')" class="text-white hover:text-blue-200 font-medium transition duration-150">Error Code Checker</button>
                 <button id="logoutBtn" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded transition duration-150" style="display:none;">Logout</button>
             </nav>
         </div>
@@ -97,7 +97,6 @@
                 <fieldset class="border-2 border-blue-200 p-4 rounded-lg">
                     <legend class="text-xl font-semibold text-blue-700 px-2">Vehicle Core Details</legend>
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-4">
-                        <input id="number-plate" type="text" placeholder="Vehicle Number Plate" required class="p-3 border rounded-lg" />
                         <input id="vin" type="text" placeholder="VIN / Chassis No." required class="p-3 border rounded-lg" />
                         <input id="make" type="text" placeholder="Make (e.g., Toyota)" required class="p-3 border rounded-lg" />
                         <input id="model" type="text" placeholder="Model (e.g., Corolla)" required class="p-3 border rounded-lg" />
@@ -136,13 +135,12 @@
                         
                         <div>
                             <label for="assigned-mechanic" class="block text-sm font-medium text-gray-700 mb-1">Assigned Mechanic</label>
-                            <input id="assigned-mechanic" type="text" placeholder="Type Mechanic's Name" required class="w-full p-3 border rounded-lg" list="mechanic-suggestions"/>
-                            <datalist id="mechanic-suggestions">
-                                <option value="John Doe (Mock)">
-                                <option value="Jane Smith (Mock)">
-                            </datalist>
+                            <select id="assigned-mechanic" class="w-full p-3 border rounded-lg">
+                                <option value="">Select Mechanic</option>
+                                <option value="JohnDoe">John Doe (Mock)</option>
+                                <option value="JaneSmith">Jane Smith (Mock)</option>
+                            </select>
                         </div>
-
                         <div>
                             <label for="due-date" class="block text-sm font-medium text-gray-700 mb-1">Service Due Date</label>
                             <input id="due-date" type="date" class="w-full p-3 border rounded-lg" />
@@ -155,17 +153,13 @@
                 </fieldset>
                 
                 <fieldset class="border-2 border-red-200 p-4 rounded-lg">
-                    <legend class="text-xl font-semibold text-red-700 px-2">Error Codes & Diagnostic</legend>
+                    <legend class="text-xl font-semibold text-red-700 px-2">Error Codes & Repair Plan</legend>
                     <div id="error-codes-container" class="space-y-4">
                         </div>
                     <button type="button" onclick="addErrorCodeInput()" class="mt-4 bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg transition duration-150">Add Another Error Code</button>
-                </fieldset>
-                
-                <fieldset class="border-2 border-pink-200 p-4 rounded-lg">
-                    <legend class="text-xl font-semibold text-pink-700 px-2">🛠️ Repair Plan / Action Items</legend>
-                    <div id="repair-plan-container" class="space-y-4 mt-4">
-                        </div>
-                    <button type="button" onclick="addRepairPlanCard()" class="mt-4 bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition duration-150">Add Repair Plan Item</button>
+                    
+                    <textarea id="repair-notes" rows="3" placeholder="Detailed Repair Notes / Action Taken" class="w-full p-3 border rounded-lg mt-6"></textarea>
+                    <textarea id="replacement-parts" rows="3" placeholder="Replacement Parts Needed (e.g., Oil Filter - Qty 1, Spark Plugs - Qty 4)" class="w-full p-3 border rounded-lg mt-4"></textarea>
                 </fieldset>
 
                 <div class="flex justify-end space-x-4 pt-4">
@@ -189,10 +183,9 @@
                 <fieldset class="border-2 border-blue-200 p-4 rounded-lg">
                     <legend class="text-xl font-semibold text-blue-700 px-2">Vehicle ID for Service</legend>
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-4">
-                        <input id="service-plate" type="text" placeholder="Vehicle Number Plate" required class="p-3 border rounded-lg" />
                         <input id="service-make" type="text" placeholder="Make" required class="p-3 border rounded-lg" />
                         <input id="service-model" type="text" placeholder="Model" required class="p-3 border rounded-lg" />
-                        <input id="service-vin" type="text" placeholder="VIN / Chassis No. (Optional)" class="p-3 border rounded-lg" />
+                        <input id="service-vin" type="text" placeholder="VIN / Chassis No." required class="p-3 border rounded-lg" />
                     </div>
                 </fieldset>
 
@@ -256,11 +249,10 @@
                     </div>
                 </fieldset>
 
-                <div class="flex justify-end pt-4 space-x-4">
-                    <button type="button" onclick="completeServiceJob()" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8 rounded-lg transition duration-150">Complete Job & Save</button>
+                <div class="flex justify-end pt-4">
                     <button type="button" onclick="generateServiceReportPDF()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-lg transition duration-150">Generate Service Report (PDF)</button>
                 </div>
-                </form>
+            </form>
         </section>
         <section id="car-list" style="display:none;">
             <h2 class="text-3xl font-bold text-gray-800 border-b pb-2 mb-6">📋 Active Jobs & Work in Progress</h2>
@@ -274,23 +266,34 @@
                 </div>
         </section>
 
-        <section id="reports-section" style="display:none;">
-            <h2 class="text-3xl font-bold text-gray-800 border-b pb-2 mb-6">📊 Daily & Monthly Analytics</h2>
-            
-            <div class="bg-white p-6 rounded-xl shadow-lg space-y-6">
-                <h3 class="text-xl font-semibold text-blue-700">End-of-Day Operations Summary</h3>
-                <p class="text-gray-600">Click the button below to generate a report summarizing all jobs marked as completed today.</p>
-                <button onclick="generateDailyReport()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-lg transition duration-150">Generate Today's Report</button>
-            </div>
+        <section id="error-checker-section" class="space-y-8" style="display:none;">
+            <h2 class="text-3xl font-bold text-gray-800 border-b pb-2">🔍 Standalone Error Code Checker</h2>
+            <form id="error-checker-form" class="space-y-6 bg-white p-6 rounded-xl shadow-lg">
+                <fieldset class="border-2 border-blue-200 p-4 rounded-lg">
+                    <legend class="text-xl font-semibold text-blue-700 px-2">Vehicle & Client ID (For Report)</legend>
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mt-4">
+                        <input id="error-checker-make" type="text" placeholder="Make (e.g., Toyota)" required class="p-3 border rounded-lg" />
+                        <input id="error-checker-model" type="text" placeholder="Model (e.g., Corolla)" required class="p-3 border rounded-lg" />
+                        <input id="error-checker-vin" type="text" placeholder="VIN / Chassis No." required class="p-3 border rounded-lg" />
+                        <input id="error-checker-client-phone" type="tel" placeholder="Client Phone (for WhatsApp)" required class="p-3 border rounded-lg" />
+                    </div>
+                </fieldset>
 
-            <div class="mt-8 bg-gray-100 p-6 rounded-xl shadow-inner space-y-6">
-                <h3 class="text-xl font-semibold text-gray-700 border-b pb-2">Monthly Compilation & Analytics</h3>
-                <p class="text-gray-500">Generate a comprehensive report summarizing all completed jobs over the last 30 days. This aggregates data for monthly performance review.</p>
-                <button onclick="generateMonthlyReport()" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-8 rounded-lg transition duration-150">Generate Monthly Report</button>
-            </div>
+                <fieldset class="border-2 border-red-200 p-4 rounded-lg">
+                    <legend class="text-xl font-semibold text-red-700 px-2">Error Codes Input</legend>
+                    <div id="error-checker-codes-container" class="space-y-4">
+                    </div>
+                    <button type="button" onclick="addCheckerErrorCodeInput()" class="mt-4 bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg transition duration-150">Add Another Error Code</button>
+                </fieldset>
+
+                <div class="flex justify-end space-x-4 pt-4">
+                    <button type="button" onclick="generateErrorCodeReportPDF()" class="bg-teal-500 hover:bg-teal-600 text-white font-bold py-3 px-6 rounded-lg transition duration-150">Generate Report (PDF)</button>
+                    <button type="button" onclick="sendErrorCodeReportWhatsApp()" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg transition duration-150">Send via WhatsApp</button>
+                </div>
+            </form>
         </section>
         <div id="jobCardModal" class="fixed inset-0 bg-gray-600 bg-opacity-75 flex items-center justify-center p-4 z-[100]" style="display:none;">
-            <div id="job-card-dialog" class="bg-white p-8 rounded-lg shadow-xl w-full max-w-3xl custom-scrollbar max-h-[90vh] overflow-y-auto">
+            <div class="bg-white p-8 rounded-lg shadow-xl w-full max-w-3xl custom-scrollbar max-h-[90vh] overflow-y-auto">
                 <div class="text-center border-b pb-4 mb-4">
                     <h2 class="text-3xl font-bold text-blue-800">Vehicle Job Detail Report</h2>
                     <p class="text-sm text-gray-600">Garage Manager PRO - The Ultimate Auto Service Tool</p>
@@ -305,35 +308,7 @@
             </div>
         </div>
         
-        <div id="dailyReportModal" class="fixed inset-0 bg-gray-600 bg-opacity-75 flex items-center justify-center p-4 z-[100]" style="display:none;">
-            <div class="bg-white p-8 rounded-lg shadow-xl w-full max-w-4xl custom-scrollbar max-h-[90vh] overflow-y-auto">
-                <div class="text-center border-b pb-4 mb-4">
-                    <h2 class="text-3xl font-bold text-blue-800">End-of-Day Report: <span id="report-date"></span></h2>
-                    <p class="text-sm text-gray-600">Summary of all jobs completed on this date.</p>
-                </div>
-                <div id="report-content" class="space-y-6 text-gray-700">
-                    </div>
-                <div class="flex justify-end mt-6 space-x-4">
-                    <button id="dailyDownloadBtn" data-report-type="daily" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded transition duration-150">Download PDF</button>
-                    <button onclick="document.getElementById('dailyReportModal').style.display = 'none'" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded transition duration-150">Close</button>
-                </div>
-            </div>
-        </div>
-        <div id="monthlyReportModal" class="fixed inset-0 bg-gray-600 bg-opacity-75 flex items-center justify-center p-4 z-[100]" style="display:none;">
-            <div class="bg-white p-8 rounded-lg shadow-xl w-full max-w-5xl custom-scrollbar max-h-[90vh] overflow-y-auto">
-                <div class="text-center border-b pb-4 mb-4">
-                    <h2 class="text-3xl font-bold text-purple-800">Monthly Performance Report</h2>
-                    <p class="text-sm text-gray-600">Summary of all jobs completed between <span id="monthly-report-start"></span> and <span id="monthly-report-end"></span>.</p>
-                </div>
-                <div id="monthly-report-content" class="space-y-6 text-gray-700">
-                    </div>
-                <div class="flex justify-end mt-6 space-x-4">
-                    <button id="monthlyDownloadBtn" data-report-type="monthly" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded transition duration-150">Download PDF</button>
-                    <button onclick="document.getElementById('monthlyReportModal').style.display = 'none'" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded transition duration-150">Close</button>
-                </div>
-            </div>
-        </div>
-        </main>
+    </main>
 
     <footer class="bg-gray-800 text-white text-center py-4 mt-8">
         <p class="text-sm">© 2025 Garage Manager PRO | Powered by Tailwind & Firebase</p>
@@ -343,8 +318,6 @@
 
     // NEW: Import the local error code dictionary
     import { ERROR_CODE_LOOKUP } from "./error_codes_dictionary.js";
-    // MODIFICATION 2: Expose dictionary globally for functions called via onclick to access
-    window.GLOBAL_ERROR_CODE_LOOKUP = ERROR_CODE_LOOKUP; 
     
     // ----------------------------------------------------------------------
     // 1. FIREBASE INITIALIZATION & CONFIGURATION (MODULAR)
@@ -372,21 +345,8 @@
     const carsCollection = collection(db, 'cars');
     let currentUserRole = null; // 'admin' or 'mechanic'
 
-    // FIX: Global variable to hold current job card data for modal and WhatsApp
-    // It is now explicitly attached to window to be accessible by inline onclick handlers.
-    window.currentJobCardData = null;
-    
-    // NEW: Global cache for completed jobs to power the daily report
-    let completedJobsCache = [];
-    
-    // NEW: Global variables to temporarily hold the report data for PDF generation
-    let currentReportJobs = [];
-    let currentReportSummary = {};
-    let currentReportTitle = "";
-    let currentReportDateRange = "";
-
     // Expose functions globally for HTML onclick attributes
-    // NOTE: showSection is *not* exposed here; its handlers are attached via DOMContentLoaded
+    window.showSection = showSection;
     window.handleLoginSignup = handleLoginSignup;
     window.addErrorCodeInput = addErrorCodeInput;
     window.removeErrorCodeInput = removeErrorCodeInput;
@@ -397,48 +357,46 @@
     window.markCarAsCompleted = markCarAsCompleted;
     window.deleteCompletedCar = deleteCompletedCar;
     window.openDetailedReport = openDetailedReport;
-    window.addRepairPlanCard = addRepairPlanCard;
-    window.removeRepairPlanCard = removeRepairPlanCard;
-    window.sendJobCardViaWhatsApp = sendJobCardViaWhatsApp;
-    window.completeServiceJob = completeServiceJob; 
-    
-    // START NEW: Expose the daily & monthly report functions
-    window.generateDailyReport = generateDailyReport;
-    window.generateMonthlyReport = generateMonthlyReport; 
-    window.generateReportPDF = generateReportPDF; // EXPOSE PDF FUNCTION
-    // END NEW
+    // NEW EXPOSURE FOR CHECKER
+    window.addCheckerErrorCodeInput = addCheckerErrorCodeInput;
+    window.removeCheckerErrorCodeInput = removeCheckerErrorCodeInput;
+    window.lookupCheckerErrorCode = lookupCheckerErrorCode;
+    window.generateErrorCodeReportPDF = generateErrorCodeReportPDF;
+    window.sendErrorCodeReportWhatsApp = sendErrorCodeReportWhatsApp;
+
+
+    // Global variable to hold current job card data for WhatsApp sending
+    let currentJobCardData = null;
 
     // ----------------------------------------------------------------------
-    // 2. AUTHENTICATION LOGIC
+    // 2. VIEW MANAGEMENT & AUTH
     // ----------------------------------------------------------------------
 
-    onAuthStateChanged(auth, (user) => {
-        const headerNav = document.querySelector('header nav');
+    // Handles the flow after Firebase Auth state changes
+    onAuthStateChanged(auth, async (user) => {
+        document.getElementById('logoutBtn').style.display = 'none';
         if (user) {
+            // Logged in: Grant access immediately
             currentUserRole = getMockRole(user.email);
             document.getElementById('logoutBtn').style.display = 'block';
-            headerNav.style.display = 'flex';
             // Redirect to active jobs list
             showSection('car-list');
         } else {
             // Logged out
-            document.getElementById('logoutBtn').style.display = 'none';
-            headerNav.style.display = 'none'; // Hide nav bar when logged out
             showSection('auth-section');
         }
     });
 
     function showSection(sectionId) {
-        // MODIFICATION: Added 'reports-section'
-        const sections = ['auth-section', 'car-entry', 'general-service', 'car-list', 'completed-list', 'reports-section'];
+        const sections = ['auth-section', 'car-entry', 'general-service', 'car-list', 'completed-list', 'error-checker-section'];
         sections.forEach(id => {
             document.getElementById(id).style.display = 'none';
         });
         document.getElementById(sectionId).style.display = 'block';
-
         if (sectionId === 'car-list') fetchCars('Active');
         if (sectionId === 'completed-list') fetchCars('Completed');
         if (sectionId === 'general-service') initializeGeneralService();
+        if (sectionId === 'error-checker-section') initializeErrorCodeChecker();
     }
 
     function getMockRole(email) {
@@ -450,7 +408,6 @@
         const password = document.getElementById('auth-password').value;
         const messageEl = document.getElementById('auth-message');
         messageEl.textContent = '';
-
         try {
             if (isLogin) {
                 await signInWithEmailAndPassword(auth, email, password);
@@ -476,12 +433,12 @@
     // ----------------------------------------------------------------------
     // 3. LOGIN ENHANCEMENT (Make the log in work with Enter key)
     // ----------------------------------------------------------------------
-
     // Add event listener to the password field to trigger login on 'Enter' key press
-    document.getElementById('auth-password').addEventListener('keypress', function(e) {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            document.getElementById('loginBtn').click();
+    document.getElementById('auth-password').addEventListener('keypress', function(event) {
+        // 'Enter' key is detected by event.key === 'Enter'
+        if (event.key === 'Enter') {
+            event.preventDefault(); // Prevents accidental form submission/page reload
+            handleLoginSignup(true); // Call the login function directly
         }
     });
 
@@ -489,82 +446,43 @@
     // 4. CRUD OPERATIONS (Firestore)
     // ----------------------------------------------------------------------
 
-    // Helper function to get data from new Repair Plan Cards
-    function getAllRepairPlanItems() {
-        const cards = document.querySelectorAll('.repair-plan-card');
-        const items = [];
-        cards.forEach(card => {
-            const action = card.querySelector('.repair-action-input').value.trim();
-            const parts = card.querySelector('.repair-parts-input').value.trim();
-            if (action.length > 0) {
-                items.push({ action, parts });
-            }
-        });
-        return items;
-    }
-
-
-    // Function to save new car entry
+    // Creates a new car entry
     async function saveCarEntry(event) {
-        event.preventDefault();
+        event.preventDefault(); // Stop form from submitting normally
 
-        if (!auth.currentUser) {
-            alert("You must be logged in to save an entry.");
-            return;
-        }
-
+        // Collect error codes and their meanings
         const errorData = getAllErrorCodesWithMeaning();
         const rawErrorCodes = errorData.map(e => e.code).join(', ');
-        const fullErrorMeanings = errorData.map(e => e.meaning).map((m, i) => `${errorData[i].code}: ${m}`).join('\n');
-
-        // MODIFICATION 3: Collect data from Repair Plan Cards
-        const repairPlan = getAllRepairPlanItems();
-        const actionItems = repairPlan.map(item => item.action).join('\n---\n');
-        const partsList = repairPlan.map(item => item.parts).filter(p => p).join('\n'); // Join non-empty parts lists
-        if (repairPlan.length === 0) {
-            alert("Please add at least one Repair Plan Item.");
-            return;
-        }
+        const fullErrorMeanings = errorData.map(e => e.meaning).join('; ');
 
         const carData = {
             // CLIENT INFO
-            clientName: document.getElementById('client-name').value,
-            clientPhone: document.getElementById('client-phone').value,
-            clientEmail: document.getElementById('client-email').value,
-
-            // VEHICLE CORE INFO (MODIFIED: Added Plate)
-            plate: document.getElementById('number-plate').value,
-            vin: document.getElementById('vin').value,
-            make: document.getElementById('make').value,
-            model: document.getElementById('model').value,
-            year: document.getElementById('year').value,
-            color: document.getElementById('color').value,
-            engineCC: document.getElementById('engine-cc').value,
-            trim: document.getElementById('trim').value,
-            engineName: document.getElementById('engine-name').value,
-            transmission: document.getElementById('transmission').value,
-            driveType: document.getElementById('drive').value,
-
+            clientName: document.getElementById('client-name').value || 'N/A',
+            clientPhone: document.getElementById('client-phone').value || 'N/A',
+            clientEmail: document.getElementById('client-email').value || 'N/A',
+            // VEHICLE CORE INFO
+            make: document.getElementById('make').value || 'N/A',
+            model: document.getElementById('model').value || 'N/A',
+            year: document.getElementById('year').value || 'N/A',
+            vin: document.getElementById('vin').value || 'N/A',
+            color: document.getElementById('color').value || 'N/A',
+            engineCC: document.getElementById('engine-cc').value || 'N/A',
+            trim: document.getElementById('trim').value || 'N/A',
+            engineName: document.getElementById('engine-name').value || 'N/A',
+            transmission: document.getElementById('transmission').value || 'N/A',
+            driveType: document.getElementById('drive').value || 'N/A',
             // JOB DETAILS
-            reportedProblems: document.getElementById('reported-problems').value,
+            reportedProblems: document.getElementById('reported-problems').value || 'None specified.',
             diagnosticNotes: document.getElementById('diagnostic-notes').value || 'No notes yet.',
-            
-            // MODIFICATION 3: New Repair Plan Structure
-            repairPlanItems: repairPlan, 
-            // Fallback summaries for reports/PDFs that might expect the old structure
-            repairNotesSummary: actionItems || 'Pending assessment.', 
-            replacementParts: partsList || 'No parts required yet.', 
-            
-            // ERROR CODES
+            repairNotes: document.getElementById('repair-notes').value || 'Pending assessment.',
+            replacementParts: document.getElementById('replacement-parts').value || 'No parts required yet.',
             errorCodes: rawErrorCodes,
             errorMeanings: fullErrorMeanings,
-
-            // STATUS & METADATA
             assignedMechanic: document.getElementById('assigned-mechanic').value || 'Unassigned',
             dueDate: document.getElementById('due-date').value || 'TBD',
             deliveryDate: document.getElementById('delivery-date').value || 'TBD',
+            // STATUS & METADATA
             status: 'Active', // Default status for new entry
-            jobType: 'StandardRepair', // Flag to differentiate from General Service
             createdAt: serverTimestamp(),
             createdBy: auth.currentUser ? auth.currentUser.email : 'System'
         };
@@ -573,11 +491,6 @@
             await addDoc(carsCollection, carData);
             alert("New Vehicle Entry Saved Successfully!");
             document.getElementById('car-entry-form').reset();
-            // Reset and re-initialize dynamic fields
-            document.getElementById('error-codes-container').innerHTML = '';
-            document.getElementById('repair-plan-container').innerHTML = '';
-            addErrorCodeInput(); 
-            addRepairPlanCard('Full diagnostic and repair of error codes.', '');
             // Automatically switch to the active job list
             showSection('car-list');
         } catch (e) {
@@ -605,90 +518,48 @@
 
         // Real-time listener for updates
         onSnapshot(carsQuery, (snapshot) => {
-            container.innerHTML = ''; 
-            
-            const allCars = snapshot.docs.map(doc => ({...doc.data(), id: doc.id}));
-            const activeCars = allCars.filter(car => car.status === 'Active');
-            completedJobsCache = allCars.filter(car => car.status === 'Completed'); // NEW: Update the global cache
-            
-            const filteredCars = status === 'Active' ? activeCars : completedJobsCache;
+            container.innerHTML = '';
+            // Filter locally for demo purposes, if needed:
+            const filteredCars = snapshot.docs.map(doc => ({...doc.data(), id: doc.id})).filter(car => car.status === status);
 
             if (filteredCars.length === 0) {
-                container.innerHTML = `<p class="text-center text-xl text-gray-500 py-10">No ${status} jobs found.</p>`;
+                container.innerHTML = `<p class="text-center text-xl text-gray-400 p-8">No ${status} jobs currently.</p>`;
                 return;
             }
 
             filteredCars.forEach(car => {
-                const card = createCarCard(car, status);
+                const color = status === 'Active' ? 'border-blue-500' : 'border-green-500';
+                const card = document.createElement('div');
+                card.className = `bg-white p-6 rounded-xl shadow-lg border-l-4 ${color} cursor-pointer hover:shadow-xl transition duration-300`;
+                card.innerHTML = `
+                    <div onclick="openDetailedReport('${car.id}', '${status}')">
+                        <h3 class="text-xl font-bold">${car.make} ${car.model} (${car.year})</h3>
+                        <p class="text-gray-600 text-sm">VIN: ${car.vin} | Assigned: ${car.assignedMechanic}</p>
+                        <p class="font-semibold mt-2 ${status === 'Active' ? 'text-red-500' : 'text-green-600'}">
+                            ${status === 'Active' ? `Due: ${car.dueDate}` : 'Status: Completed'}
+                        </p>
+                        <p class="mt-1 text-sm text-gray-700">**Client:** ${car.clientName || 'N/A'}</p>
+                    </div>
+                    <div class="mt-4">
+                        ${status === 'Active' ? `<button onclick="markCarAsCompleted('${car.id}')" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg transition duration-150">Mark as Completed</button>` : `<button onclick="deleteCompletedCar('${car.id}')" class="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg transition duration-150">Delete History</button>`}
+                    </div>
+                `;
                 container.appendChild(card);
             });
-        }, (error) => {
-            console.error("Error fetching cars: ", error);
-            container.innerHTML = `<p class="text-center text-xl text-red-500 py-10">Error loading jobs: ${error.message}</p>`;
         });
     }
 
-    // Creates the HTML card for a car entry (MODIFIED: Added Plate to card)
-    function createCarCard(car, status) {
-        const card = document.createElement('div');
-        const borderColor = car.jobType === 'GeneralService' ? 'border-green-500' : 'border-blue-500';
-        const jobTypeLabel = car.jobType === 'GeneralService' ? '<span class="text-xs font-semibold bg-green-100 text-green-800 px-2 py-0.5 rounded">G. Service</span>' : '';
-        
-        card.className = `bg-white p-6 rounded-xl shadow-lg border-t-4 ${borderColor} hover:shadow-xl transition duration-200`;
-        
-        const actions = status === 'Active' ? 
-            `<button onclick="markCarAsCompleted('${car.id}')" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded transition duration-150 text-sm">Mark Complete</button>` :
-            `<button onclick="deleteCompletedCar('${car.id}')" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded transition duration-150 text-sm">Delete History</button>`;
-        
-        card.innerHTML = `
-            <h3 class="text-xl font-bold text-gray-800 mb-2">${car.make} ${car.model} (${car.year || 'N/A'}) ${jobTypeLabel}</h3>
-            <p class="text-sm text-gray-600 mb-4">Plate: <span class="font-mono text-xs text-orange-700">${car.plate || 'N/A'}</span> | VIN: <span class="font-mono text-xs text-blue-700">${car.vin || 'N/A'}</span></p>
-            
-            <div class="space-y-1 text-sm mb-4">
-                <p><span class="font-semibold">Client:</span> ${car.clientName}</p>
-                <p><span class="font-semibold">Mechanic:</span> ${car.assignedMechanic}</p>
-                <p><span class="font-semibold">Due:</span> ${car.deliveryDate}</p>
-            </div>
-            
-            <div class="flex justify-between items-center mt-4 border-t pt-4">
-                <button onclick="openDetailedReport('${car.id}')" class="text-blue-500 hover:text-blue-700 font-medium text-sm">View Report</button>
-                ${actions}
-            </div>
-        `;
-        return card;
-    }
-
-    // Function to retrieve and display job card for an existing entry
-    async function openDetailedReport(carId) {
-        const carRef = doc(db, 'cars', carId);
-        try {
-            const docSnap = await getDoc(carRef);
-            if (docSnap.exists()) {
-                const data = { ...docSnap.data(), id: docSnap.id };
-                renderJobCardContent(data, data.status);
-                document.getElementById('jobCardModal').style.display = 'flex';
-            } else {
-                alert("No such job found!");
-            }
-        } catch (error) {
-            console.error("Error fetching document: ", error);
-            alert("Could not load detailed report. See console for details.");
-        }
-    }
-
-
-    // Function to mark a car entry as completed
+    // Function to change status to 'Completed'
     async function markCarAsCompleted(carId) {
-        if (!confirm("Are you sure you want to mark this job as completed?")) return;
+        if (!confirm("Are you sure you want to mark this job as COMPLETED and move it to history?")) return;
+
         const carRef = doc(db, 'cars', carId);
         try {
             await updateDoc(carRef, {
                 status: 'Completed',
-                completedAt: serverTimestamp(),
-                completedBy: auth.currentUser.email
+                completedAt: serverTimestamp()
             });
-            alert("Job successfully moved to Completed list!");
-            showSection('car-list'); // Refresh the active list
+            alert("Job marked as completed!");
         } catch (error) {
             console.error("Error updating document: ", error);
             alert("Could not mark job as completed.");
@@ -698,6 +569,7 @@
     // Function to delete a completed car entry
     async function deleteCompletedCar(carId) {
         if (!confirm("WARNING: This will permanently delete the job from the system. Are you sure?")) return;
+
         const carRef = doc(db, 'cars', carId);
         try {
             await deleteDoc(carRef);
@@ -709,7 +581,7 @@
     }
 
     // ----------------------------------------------------------------------
-    // 5. ERROR CODE & DIAGNOSTIC LOGIC (MODIFIED for fix)
+    // 5. ERROR CODE & DIAGNOSTIC LOGIC (For Car Entry)
     // ----------------------------------------------------------------------
 
     function addErrorCodeInput(initialCode = '') {
@@ -723,61 +595,68 @@
             <input type="hidden" class="error-code-meaning" value="" />
         `;
         container.appendChild(newGroup);
-        
+
         // Add a placeholder for the explanation below the input group
         const explanation = document.createElement('p');
-        explanation.className = 'error-code-explanation text-sm p-2 bg-gray-100 text-gray-700 rounded mt-1';
-        explanation.style.display = 'none';
+        explanation.className = 'error-code-explanation text-sm p-2 bg-red-50 text-red-800 rounded mt-1 hidden';
         container.appendChild(explanation);
 
-        // Show remove button for all groups except the first one after adding
-        document.querySelectorAll('.error-code-group').forEach((group, index) => {
-            const removeBtn = group.querySelector('.remove-btn');
-            if (removeBtn) {
-                removeBtn.style.display = index > 0 ? 'block' : 'none';
-            }
-        });
+        updateRemoveButtonsVisibility();
     }
 
     function removeErrorCodeInput(button) {
         const group = button.closest('.error-code-group');
-        const nextSibling = group.nextElementSibling; // The explanation p tag
-        if (nextSibling && nextSibling.classList.contains('error-code-explanation')) {
-            nextSibling.remove();
-        }
+        const explanation = group.nextElementSibling; // Explanation is the next sibling
+        
         group.remove();
-        // Ensure the first remaining input still doesn't have a remove button
-        const remainingGroups = document.querySelectorAll('.error-code-group');
-        if (remainingGroups.length > 0) {
-            remainingGroups[0].querySelector('.remove-btn').style.display = 'none';
+        if (explanation && explanation.classList.contains('error-code-explanation')) {
+            explanation.remove();
         }
+        updateRemoveButtonsVisibility();
     }
 
-    // MODIFICATION 2 FIX: Function now uses window.GLOBAL_ERROR_CODE_LOOKUP
+    function updateRemoveButtonsVisibility() {
+        const groupsArray = Array.from(document.querySelectorAll('.error-code-group'));
+        groupsArray.forEach((group, index) => {
+            const removeBtn = group.querySelector('.remove-btn');
+            // Only show the remove button if there is more than one input group
+            removeBtn.style.display = groupsArray.length > 1 ? 'block' : 'none';
+        });
+    }
+
+    // REVISED: Local Dictionary Lookup (Uses error_codes_dictionary.js)
     function lookupErrorCode(button) {
         const group = button.closest('.error-code-group');
-        const codeInput = group.querySelector('.error-code-input');
+        const inputElement = group.querySelector('.error-code-input');
+        const explanationEl = group.querySelector('.error-code-explanation');
         const hiddenMeaningEl = group.querySelector('.error-code-meaning');
-        const displayEl = group.nextElementSibling; // Assuming the next sibling is the explanation p tag
-        const code = codeInput.value.toUpperCase().trim();
+        const code = inputElement.value.toUpperCase().trim();
 
-        if (code.length === 0) {
-            displayEl.style.display = 'none';
+        // The explanation element is the *next sibling* in the DOM
+        const displayEl = group.nextElementSibling;
+        
+        // Reset display
+        displayEl.style.display = 'none';
+        hiddenMeaningEl.value = '';
+
+        if (!code) {
+            displayEl.innerHTML = 'Please enter a code.';
+            displayEl.style.display = 'block';
             return;
         }
 
-        const definition = window.GLOBAL_ERROR_CODE_LOOKUP[code]; 
-        let fullMeaning = '';
+        const details = ERROR_CODE_LOOKUP[code];
 
-        if (definition) {
-            fullMeaning = `${definition.issuer}: ${definition.meaning}`;
-            displayEl.innerHTML = `✅ <strong>${code}</strong>: ${fullMeaning}`;
-            displayEl.className = 'error-code-explanation text-sm p-2 bg-green-50 text-green-800 rounded mt-1';
+        if (details) {
+            // Found a match in the local dictionary
+            const fullMeaning = `${code} (${details.issuer}): ${details.meaning}`;
+            displayEl.innerHTML = `**${details.issuer}:** ${details.meaning}`;
+            displayEl.className = 'error-code-explanation text-sm p-2 bg-indigo-50 text-indigo-800 rounded mt-1';
             displayEl.style.display = 'block';
             hiddenMeaningEl.value = fullMeaning;
         } else {
             // No match found
-            displayEl.innerHTML = `⚠️ <strong>${code}</strong>: No definition found in the local dictionary.`;
+            displayEl.innerHTML = `**Code ${code}**: No definition found in the local dictionary.`;
             displayEl.className = 'error-code-explanation text-sm p-2 bg-red-50 text-red-800 rounded mt-1';
             displayEl.style.display = 'block';
             hiddenMeaningEl.value = `${code}: No definition found.`;
@@ -785,7 +664,7 @@
     }
 
     function getAllErrorCodesWithMeaning() {
-        const groups = document.querySelectorAll('.error-code-group');
+        const groups = document.querySelectorAll('#car-entry-form .error-code-group');
         const codesAndMeanings = [];
         groups.forEach(group => {
             const codeInput = group.querySelector('.error-code-input').value.toUpperCase().trim();
@@ -796,55 +675,134 @@
         });
         return codesAndMeanings;
     }
-    
-    // MODIFICATION 3: New Repair Plan Card Functions
-    function addRepairPlanCard(initialAction = '', initialParts = '') {
-        const container = document.getElementById('repair-plan-container');
-        const card = document.createElement('div');
-        card.className = 'repair-plan-card p-4 border border-pink-300 bg-pink-50 rounded-lg shadow-sm space-y-3';
-        card.innerHTML = `
-            <div class="flex justify-between items-center">
-                <h4 class="font-semibold text-pink-800">Repair Action Item</h4>
-                <button type="button" onclick="removeRepairPlanCard(this)" class="text-red-500 hover:text-red-700 font-bold text-lg leading-none p-1">-</button>
-            </div>
-            <textarea rows="2" placeholder="Detailed Repair Action/Procedure" class="repair-action-input w-full p-2 border rounded-lg" required>${initialAction}</textarea>
-            <textarea rows="2" placeholder="Replacement Parts Needed (e.g., Oil Filter - Qty 1, Spark Plugs - Qty 4)" class="repair-parts-input w-full p-2 border rounded-lg">${initialParts}</textarea>
-        `;
-        container.appendChild(card);
-    }
-
-    function removeRepairPlanCard(button) {
-        button.closest('.repair-plan-card').remove();
-    }
-
 
     // ----------------------------------------------------------------------
-    // 6. JOB CARD & REPORT GENERATION LOGIC (PDF/Modal) (MODIFIED: Added Plate)
+    // 5B. STANDALONE ERROR CODE CHECKER LOGIC
+    // ----------------------------------------------------------------------
+    
+    // NEW: Initialization for the Error Code Checker
+    function initializeErrorCodeChecker() {
+        const container = document.getElementById('error-checker-codes-container');
+        // Only initialize if it's empty
+        if (container && container.children.length === 0) {
+            addCheckerErrorCodeInput();
+        }
+    }
+
+    function addCheckerErrorCodeInput(initialCode = '') {
+        const container = document.getElementById('error-checker-codes-container'); // TARGET NEW CONTAINER
+        const newGroup = document.createElement('div');
+        newGroup.className = 'error-code-group-checker flex space-x-2 items-center'; // NEW CLASS
+        newGroup.innerHTML = `
+            <input type="text" value="${initialCode}" placeholder="Pxxxx (e.g., P001A)" class="error-code-input p-3 border rounded-lg w-full md:w-1/3" oninput="document.querySelector('#error-checker-codes-container .error-code-explanation-checker').style.display = 'none'" />
+            <button type="button" onclick="lookupCheckerErrorCode(this)" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-lg transition duration-150 whitespace-nowrap">Lookup Code</button>
+            <button type="button" onclick="removeCheckerErrorCodeInput(this)" class="remove-btn-checker bg-red-400 hover:bg-red-500 text-white font-bold py-2 px-4 rounded-lg transition duration-150" style="display:none;">-</button>
+            <input type="hidden" class="error-code-meaning" value="" />
+        `;
+        container.appendChild(newGroup);
+
+        // Add a placeholder for the explanation below the input group
+        const explanation = document.createElement('p');
+        explanation.className = 'error-code-explanation-checker text-sm p-2 bg-red-50 text-red-800 rounded mt-1 hidden'; // NEW CLASS
+        container.appendChild(explanation);
+
+        updateCheckerRemoveButtonsVisibility();
+    }
+
+    function removeCheckerErrorCodeInput(button) {
+        const group = button.closest('.error-code-group-checker'); // NEW CLASS
+        const explanation = group.nextElementSibling;
+        
+        group.remove();
+        if (explanation && explanation.classList.contains('error-code-explanation-checker')) { // NEW CLASS
+            explanation.remove();
+        }
+        updateCheckerRemoveButtonsVisibility();
+    }
+
+    function updateCheckerRemoveButtonsVisibility() {
+        const groupsArray = Array.from(document.querySelectorAll('#error-checker-codes-container .error-code-group-checker')); // TARGET NEW CONTAINER & CLASS
+        groupsArray.forEach((group, index) => {
+            const removeBtn = group.querySelector('.remove-btn-checker'); // NEW CLASS
+            removeBtn.style.display = groupsArray.length > 1 ? 'block' : 'none';
+        });
+    }
+
+    function lookupCheckerErrorCode(button) {
+        const group = button.closest('.error-code-group-checker'); // NEW CLASS
+        const inputElement = group.querySelector('.error-code-input');
+        const hiddenMeaningEl = group.querySelector('.error-code-meaning');
+        const code = inputElement.value.toUpperCase().trim();
+
+        // The explanation element is the *next sibling* in the DOM
+        const displayEl = group.nextElementSibling;
+        
+        displayEl.style.display = 'none';
+        hiddenMeaningEl.value = '';
+
+        if (!code) {
+            displayEl.innerHTML = 'Please enter a code.';
+            displayEl.style.display = 'block';
+            return;
+        }
+
+        const details = ERROR_CODE_LOOKUP[code];
+
+        if (details) {
+            const fullMeaning = `${code} (${details.issuer}): ${details.meaning}`;
+            displayEl.innerHTML = `**${details.issuer}:** ${details.meaning}`;
+            displayEl.className = 'error-code-explanation-checker text-sm p-2 bg-indigo-50 text-indigo-800 rounded mt-1'; // NEW CLASS
+            displayEl.style.display = 'block';
+            hiddenMeaningEl.value = fullMeaning;
+        } else {
+            displayEl.innerHTML = `**Code ${code}**: No definition found in the local dictionary.`;
+            displayEl.className = 'error-code-explanation-checker text-sm p-2 bg-red-50 text-red-800 rounded mt-1'; // NEW CLASS
+            displayEl.style.display = 'block';
+            hiddenMeaningEl.value = `${code}: No definition found.`;
+        }
+    }
+
+    function getCheckerErrorCodesWithMeaning() {
+        const groups = document.querySelectorAll('#error-checker-codes-container .error-code-group-checker'); // TARGET NEW CONTAINER & CLASS
+        const codesAndMeanings = [];
+        groups.forEach(group => {
+            const codeInput = group.querySelector('.error-code-input').value.toUpperCase().trim();
+            const meaningInput = group.querySelector('.error-code-meaning').value.trim();
+            if (codeInput.length > 0) {
+                codesAndMeanings.push({ code: codeInput, meaning: meaningInput || `${codeInput}: Not looked up/No data.` });
+            }
+        });
+        return codesAndMeanings;
+    }
+
+
+    document.addEventListener('DOMContentLoaded', () => {
+        // Initialize the first error code input field for Car Entry
+        addErrorCodeInput();
+        // NEW: Initialize for the Error Code Checker
+        initializeErrorCodeChecker(); 
+    });
+
+    // ----------------------------------------------------------------------
+    // 6. JOB CARD & REPORT GENERATION LOGIC (PDF/Modal)
     // ----------------------------------------------------------------------
 
     // Generates a mock job card/report data object from the car entry form
-    function createJobCard(event) {
+    function createJobCard() {
         // Prevent form submission
-        if (event) event.preventDefault(); 
-        
+        event.preventDefault();
+
         const errorData = getAllErrorCodesWithMeaning();
         const rawErrorCodes = errorData.map(e => e.code).join(', ');
-        const fullErrorMeanings = errorData.map(e => e.meaning).map((m, i) => `${errorData[i].code}: ${m}`).join('\n');
+        const fullErrorMeanings = errorData.map(e => e.meaning).map((m, i) => `${errorData[i].code}: ${m}`).join('<br>');
 
-        // MODIFICATION 3: Collect data from Repair Plan Cards
-        const repairPlan = getAllRepairPlanItems();
-        const actionItems = repairPlan.map(item => item.action).join('\n---\n');
-        const partsList = repairPlan.map(item => item.parts).filter(p => p).join('\n');
-
-        // Collate data for the modal (MODIFIED: Added Plate)
+        // Collate data for the modal
         const data = {
             // CLIENT INFO
             clientName: document.getElementById('client-name').value || 'N/A',
             clientPhone: document.getElementById('client-phone').value || 'N/A',
             clientEmail: document.getElementById('client-email').value || 'N/A',
-
-            // VEHICLE CORE INFO (MODIFIED: Added Plate)
-            plate: document.getElementById('number-plate').value || 'N/A',
+            // VEHICLE CORE INFO
             make: document.getElementById('make').value || 'N/A',
             model: document.getElementById('model').value || 'N/A',
             year: document.getElementById('year').value || 'N/A',
@@ -855,104 +813,48 @@
             engineName: document.getElementById('engine-name').value || 'N/A',
             transmission: document.getElementById('transmission').value || 'N/A',
             driveType: document.getElementById('drive').value || 'N/A',
-            jobType: 'StandardRepair', // Ensure this is set for preview
-
             // JOB DETAILS
             reportedProblems: document.getElementById('reported-problems').value || 'None specified.',
             diagnosticNotes: document.getElementById('diagnostic-notes').value || 'No notes yet.',
+            repairNotes: document.getElementById('repair-notes').value || 'Pending assessment.',
+            replacementParts: document.getElementById('replacement-parts').value || 'No parts required yet.',
+            errorCodes: rawErrorCodes,
+            errorMeanings: fullErrorMeanings,
             assignedMechanic: document.getElementById('assigned-mechanic').value || 'Unassigned',
             dueDate: document.getElementById('due-date').value || 'TBD',
             deliveryDate: document.getElementById('delivery-date').value || 'TBD',
-            
-            // MODIFICATION 3: New Repair Plan Structure
-            repairPlanItems: repairPlan, // Use array for detailed modal view
-            repairNotes: actionItems || 'Pending assessment.', // Use summary for PDF fallback
-            replacementParts: partsList || 'No parts required yet.', // Use summary for PDF fallback
-
-            // ERROR CODES
-            errorCodes: rawErrorCodes,
-            errorMeanings: fullErrorMeanings,
+            id: 'TEMPORARY_CARD',
+            status: 'Draft'
         };
 
-        renderJobCardContent(data, 'Preview');
-        document.getElementById('jobCardModal').style.display = 'flex';
+        displayJobCardModal(data, 'Draft');
     }
 
-    function renderJobCardContent(data, status) {
-        const jobCardContent = document.getElementById('job-card-content');
-        const dialogEl = document.getElementById('job-card-dialog');
-        const widthClasses = ['max-w-3xl', 'max-w-xl'];
-
-        // 1. Clear existing width classes from the dialog element
-        dialogEl.classList.remove(...widthClasses);
-        
-        // MODIFICATION 5 FIX: Handle General Service Job Type
-        if (data.jobType === 'GeneralService') {
-            // FIX: Set the global data on the window object for PDF generation via button click
-            window.currentJobCardData = data; 
-            
-            // FIX: Set the smaller size class
-            dialogEl.classList.add('max-w-xl');
-
-            jobCardContent.innerHTML = `
-                <div class="text-center border-b pb-4 mb-4">
-                    <h2 class="text-3xl font-bold text-green-800">General Service Completion Report</h2>
-                    <p class="text-sm text-gray-600">Job Type: ${data.reportedProblems}</p>
-                </div>
-                <div class="grid grid-cols-2 gap-4 border-b pb-4 text-sm">
-                    <div><p><span class="font-bold">Client:</span> ${data.clientName}</p></div>
-                    <div><p><span class="font-bold">Phone:</span> ${data.clientPhone}</p></div>
-                </div>
-
-                <h3 class="text-xl font-bold text-blue-700 mt-4 border-b-2 pb-1">Vehicle Details</h3>
-                <div class="grid grid-cols-2 gap-4 text-sm">
-                    <p><span class="font-bold">Plate No:</span> ${data.plate}</p>
-                    <p><span class="font-bold">Make:</span> ${data.make}</p>
-                    <p><span class="font-bold">Model:</span> ${data.model}</p>
-                    <p><span class="font-bold">VIN:</span> ${data.vin || 'N/A'}</p>
-                    <p><span class="font-bold">Mileage:</span> ${data.currentMileage} KM</p>
-                    <p><span class="font-bold">Next Service:</span> ${data.nextServiceMileage} KM</p>
-                </div>
-                
-                <h3 class="text-xl font-bold text-green-700 mt-4 border-b-2 pb-1">Service Summary</h3>
-                <p class="whitespace-pre-wrap text-sm">${data.diagnosticNotes}</p>
-                
-                <div class="flex justify-center mt-6">
-                    <button onclick="generateServiceReportPDF(window.currentJobCardData)" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-lg transition duration-150 print:hidden">Generate Full Service Checklist PDF</button>
-                </div>
-            `;
-            // Hide WhatsApp button for this specialized report
-            document.getElementById('whatsapp-btn').style.display = 'none';
-            return;
+    async function openDetailedReport(carId, status) {
+        const carRef = doc(db, 'cars', carId);
+        try {
+            const docSnap = await getDoc(carRef);
+            if (!docSnap.exists()) {
+                alert('Car data not found.');
+                return;
+            }
+            const data = docSnap.data();
+            data.id = docSnap.id;
+            displayJobCardModal(data, status);
+        } catch (error) {
+            console.error('Error fetching detailed report: ', error);
+            alert('Could not fetch detailed report.');
         }
-        
-        // If NOT GeneralService (i.e., standard car entry)
-        
-        // FIX: Set the standard size class
-        dialogEl.classList.add('max-w-3xl'); 
-        
-        // MODIFICATION 4: Set the global data for WhatsApp function
-        window.currentJobCardData = data; 
-        document.getElementById('whatsapp-btn').style.display = 'block';
+    }
 
-        const errorCodesHtml = data.errorCodes && data.errorCodes.length > 0 ? 
-            `<div class="mt-2 p-3 bg-red-50 rounded-lg"><h4 class="font-bold text-red-700">Error Codes Found (${data.errorCodes.split(',').length})</h4><p class="whitespace-pre-wrap text-sm">${data.errorMeanings || data.errorCodes}</p></div>` : 
-            '<p class="text-gray-500">No error codes logged.</p>';
+    function displayJobCardModal(data, status) {
+        // Set the global job card data for WhatsApp
+        currentJobCardData = data;
+        const errorCodesHtml = data.errorCodes.length > 0 
+            ? `<div class="p-3 bg-red-50 rounded-lg"><h4 class="font-bold text-lg text-red-700 mb-1">Error Codes:</h4><p class="whitespace-pre-wrap">${data.errorMeanings || data.errorCodes}</p></div>`
+            : '<p class="text-gray-500">No error codes logged.</p>';
 
-        // MODIFICATION 3: HTML for the Repair Plan Cards
-        const repairPlanHtml = data.repairPlanItems && data.repairPlanItems.length > 0 ?
-            `<div class="space-y-3">
-                ${data.repairPlanItems.map((item, index) => `
-                    <div class="p-3 border border-pink-300 bg-pink-50 rounded-lg shadow-sm">
-                        <p class="font-bold text-pink-700">Action Item ${index + 1}:</p>
-                        <p class="whitespace-pre-wrap">${item.action}</p>
-                        ${item.parts ? `<p class="mt-2 text-sm"><span class="font-semibold">Parts:</span> ${item.parts}</p>` : ''}
-                    </div>
-                `).join('')}
-            </div>`
-            : '<p class="text-gray-500">No repair plan items specified.</p>';
-
-
+        const jobCardContent = document.getElementById('job-card-content');
         jobCardContent.innerHTML = `
             <div class="grid grid-cols-2 gap-4 border-b pb-4">
                 <div><p><span class="font-bold">Client:</span> ${data.clientName}</p></div>
@@ -962,7 +864,6 @@
 
             <h3 class="text-xl font-bold text-blue-700 mt-4 border-b-2 pb-1">Vehicle Details</h3>
             <div class="grid grid-cols-3 gap-4">
-                <p><span class="font-bold">Plate No:</span> ${data.plate}</p>
                 <p><span class="font-bold">Make:</span> ${data.make}</p>
                 <p><span class="font-bold">Model:</span> ${data.model}</p>
                 <p><span class="font-bold">Year:</span> ${data.year}</p>
@@ -979,82 +880,76 @@
                 <p><span class="font-bold">Delivery Date:</span> ${data.deliveryDate}</p>
             </div>
 
-            <h3 class="text-xl font-bold text-orange-700 mt-4 border-b-2 pb-1">Reported Problems & Diagnosis</h3>
-            <div class="space-y-3">
-                <div><p class="font-bold">Client Report:</p><p class="whitespace-pre-wrap">${data.reportedProblems}</p></div>
-                <div><p class="font-bold">Mechanic Diagnosis:</p><p class="whitespace-pre-wrap">${data.diagnosticNotes}</p></div>
-            </div>
-            
-            <h3 class="text-xl font-bold text-red-700 mt-4 border-b-2 pb-1">Error Codes & Diagnostic Summary</h3>
+            <h3 class="text-xl font-bold text-orange-700 mt-4 border-b-2 pb-1">Service Notes</h3>
+            <p><span class="font-bold">Reported Problems:</span> ${data.reportedProblems}</p>
+            <p><span class="font-bold">Diagnostic Notes:</span> ${data.diagnosticNotes}</p>
+
             ${errorCodesHtml}
-            
-            <h3 class="text-xl font-bold text-pink-700 mt-4 border-b-2 pb-1">🛠️ Repair Plan</h3>
-            ${repairPlanHtml}
+
+            <p><span class="font-bold">Repair Plan/Action Taken:</span> ${data.repairNotes}</p>
+            <p><span class="font-bold">Replacement Parts:</span> ${data.replacementParts}</p>
         `;
+
+        // Update actions based on status
+        const actionContainer = document.getElementById('job-card-actions');
+        actionContainer.innerHTML = `
+            ${status === 'Active' ? `<button onclick="markCarAsCompleted('${data.id}'); document.getElementById('jobCardModal').style.display = 'none';" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded transition duration-150 print:hidden">Repaired - Release</button>` : (status === 'Completed' ? `<button onclick="deleteCompletedCar('${data.id}'); document.getElementById('jobCardModal').style.display = 'none';" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded transition duration-150 print:hidden">Delete History</button>` : '' // Hide for Draft status
+            )}
+            <button onclick="document.getElementById('jobCardModal').style.display = 'none'" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded transition duration-150 print:hidden">Close</button>
+            <button onclick="sendJobCardWhatsApp()" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded transition duration-150 print:hidden">Send via WhatsApp</button>
+            <button onclick="window.print()" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded transition duration-150 print:hidden">Print Job Card</button>
+        `;
+
+        document.getElementById('jobCardModal').style.display = 'flex';
     }
 
-    // MODIFICATION 4: WhatsApp button functionality (MODIFIED: Added Plate)
-    function sendJobCardViaWhatsApp() {
-        if (!window.currentJobCardData) { // FIX: Use window.currentJobCardData
-            alert("No job card data available to send.");
+    // NEW: WhatsApp Functionality
+    function sendJobCardWhatsApp() {
+        if (!currentJobCardData || !currentJobCardData.clientPhone) {
+            alert("Client phone number not available or job card data not set.");
             return;
         }
 
-        const data = window.currentJobCardData; // FIX: Use window.currentJobCardData
+        const data = currentJobCardData;
+        const phone = data.clientPhone.replace(/\s|-/g, ''); // Clean phone number
         
-        // Format the message content
-        let message = `*Garage Manager PRO - Vehicle Job Report*\n\n`;
-        message += `*Client*: ${data.clientName}\n`;
-        message += `*Vehicle*: ${data.year || 'N/A'} ${data.make} ${data.model} (Plate: ${data.plate})\n`;
-        message += `*Assigned Mechanic*: ${data.assignedMechanic}\n`;
-        message += `*Estimated Delivery*: ${data.deliveryDate}\n\n`;
+        // Prepare the message text (URL encoded)
+        let message = `*Garage Manager PRO Job Card Update*\n\n`;
+        message += `*Vehicle:* ${data.make} ${data.model} (${data.year})\n`;
+        message += `*VIN:* ${data.vin}\n`;
+        message += `*Assigned Mechanic:* ${data.assignedMechanic}\n`;
+        message += `*Est. Delivery:* ${data.deliveryDate}\n\n`;
         
-        message += `*Reported Problems*:\n${data.reportedProblems}\n\n`;
-
-        if (data.repairPlanItems && data.repairPlanItems.length > 0) {
-             message += `*🛠️ Repair Plan/Actions*:\n`;
-             data.repairPlanItems.forEach((item, index) => {
-                 message += `\n- *Action ${index + 1}*:\n${item.action}`;
-                 if (item.parts) {
-                     message += `\n  - Parts Needed: ${item.parts}`;
-                 }
-             });
-             message += `\n`;
-        } else {
-             message += `*Repair Plan*: Pending assessment.\n`;
+        message += `*Reported Problems:*\n${data.reportedProblems}\n\n`;
+        
+        if (data.repairNotes) {
+            message += `*Repair Plan:*\n${data.repairNotes}\n\n`;
         }
         
         if (data.errorCodes) {
-            message += `\n*Error Codes Logged*: ${data.errorCodes.split(', ').length} codes recorded.`;
+            message += `*Error Codes:*\n${data.errorCodes}\n\n`;
         }
+        
+        message += `*Status:* ${data.status.toUpperCase()}\n`;
 
-        const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
-        window.open(whatsappUrl, '_blank');
+        const whatsappURL = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+        window.open(whatsappURL, '_blank');
     }
 
-
+    // PDF Report Generation for Car Entry/Diagnostic
     function generateAnalysisReportPDF() {
+        // Prevent form submission
+        event.preventDefault();
+
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF();
         
-        const errorData = getAllErrorCodesWithMeaning();
-        const rawErrorCodes = errorData.map(e => e.code).join(', ');
-        const fullErrorMeanings = errorData.map(e => e.meaning).map((m, i) => `${errorData[i].code}: ${m}`).join('\n');
-
-        // MODIFICATION 3: Collect consolidated repair plan strings for the PDF
-        const repairPlan = getAllRepairPlanItems();
-        const actionItems = repairPlan.map(item => item.action).join('\n---\n');
-        const partsList = repairPlan.map(item => item.parts).filter(p => p).join('\n');
-
-
         const data = {
             // CLIENT INFO
             clientName: document.getElementById('client-name').value || 'N/A',
             clientPhone: document.getElementById('client-phone').value || 'N/A',
             clientEmail: document.getElementById('client-email').value || 'N/A',
-
-            // VEHICLE CORE INFO (MODIFIED: Added Plate)
-            plate: document.getElementById('number-plate').value || 'N/A',
+            // VEHICLE CORE INFO
             make: document.getElementById('make').value || 'N/A',
             model: document.getElementById('model').value || 'N/A',
             year: document.getElementById('year').value || 'N/A',
@@ -1065,105 +960,193 @@
             engineName: document.getElementById('engine-name').value || 'N/A',
             transmission: document.getElementById('transmission').value || 'N/A',
             driveType: document.getElementById('drive').value || 'N/A',
-
             // JOB DETAILS
             reportedProblems: document.getElementById('reported-problems').value || 'None specified.',
             diagnosticNotes: document.getElementById('diagnostic-notes').value || 'No notes yet.',
-            assignedMechanic: document.getElementById('assigned-mechanic').value || 'Unassigned',
-            
-            // MODIFICATION 3: Use consolidated strings for PDF content
-            repairNotes: actionItems || 'Pending assessment.', 
-            replacementParts: partsList || 'No parts required yet.', 
-            
-            // ERROR CODES
-            errorCodes: rawErrorCodes,
-            errorMeanings: fullErrorMeanings,
+            repairNotes: document.getElementById('repair-notes').value || 'Pending assessment.',
+            replacementParts: document.getElementById('replacement-parts').value || 'No parts required yet.',
         };
+        const errorData = getAllErrorCodesWithMeaning();
 
         // 1. Title
         doc.setFontSize(22);
         doc.setTextColor(30, 58, 138); // blue-800
         doc.text("Vehicle Analysis & Diagnostic Report", 14, 20);
+
         doc.setFontSize(10);
         doc.setTextColor(107, 114, 128); // gray-500
         doc.text("Report Generated by Garage Manager PRO", 14, 25);
-        doc.line(14, 27, 196, 27); // Divider line
+        doc.line(14, 27, 196, 27); // Separator line
 
         let y = 35;
-        doc.setFontSize(14);
-        doc.setTextColor(249, 115, 22); // orange-600
-        doc.text("Client & Vehicle Details", 14, y);
-        doc.setTextColor(0, 0, 0); // black for table text
-        y += 5;
         
-        // MODIFIED: Added Plate to the PDF table
-        doc.autoTable({
-            startY: y,
-            body: [
-                ['Client Name', data.clientName, 'Phone', data.clientPhone],
-                ['Make/Model', `${data.make} ${data.model} (${data.year})`, 'Plate No.', data.plate],
-                ['Engine', `${data.engineName} (${data.engineCC}cc)`, 'Mechanic', data.assignedMechanic]
-            ],
-            theme: 'plain',
-            styles: { fontSize: 10, cellPadding: 2, lineWidth: 0.1, lineColor: 200 },
-            columnStyles: { 0: { fontStyle: 'bold', cellWidth: 40 }, 2: { fontStyle: 'bold', cellWidth: 40 } }
-        });
-        
-        y = doc.autoTable.previous.finalY + 8;
+        // 2. General Details Table
+        const generalData = [
+            ['Client Name', data.clientName],
+            ['Phone/Email', `${data.clientPhone} / ${data.clientEmail}`],
+            ['Make/Model/Year', `${data.make} ${data.model} (${data.year})`],
+            ['VIN / Chassis No.', data.vin],
+            ['Engine Details', `${data.engineName} ${data.engineCC}cc`],
+            ['Transmission/Drive', `${data.transmission} / ${data.driveType}`],
+            ['Assigned Mechanic', document.getElementById('assigned-mechanic').value || 'Unassigned'],
+            ['Service Dates', `Due: ${data.dueDate} | Delivery: ${data.deliveryDate}`],
+            ['Client Reported Problems', data.reportedProblems],
+            ['Diagnostic Notes', data.diagnosticNotes],
+            ['Repair Plan', data.repairNotes],
+            ['Parts Needed', data.replacementParts],
+        ];
 
-        // 2. Reported Issues
+        doc.autoTable({
+            startY: y + 5,
+            head: [['Section', 'Details']],
+            body: generalData,
+            theme: 'striped',
+            styles: { fontSize: 10, cellPadding: 2 },
+            columnStyles: { 0: { fontStyle: 'bold', cellWidth: 40 }, 1: { cellWidth: 150 } },
+            didDrawPage: function (hookData) {
+                doc.setFontSize(8);
+                doc.text('Report Generated: ' + new Date().toLocaleDateString(), 14, doc.internal.pageSize.height - 10);
+            }
+        });
+
+        // Error Code Specific Table
+        if (errorData.length > 0) {
+            y = doc.autoTable.previous.finalY + 10;
+            doc.addPage();
+            doc.setFontSize(14);
+            doc.setTextColor(185, 28, 28); // red-700
+            doc.text("Error Codes and Meanings", 14, 15);
+            doc.setTextColor(0, 0, 0); // black for table text
+            
+            const errorTableData = errorData.map(e => [e.code, e.meaning]);
+            doc.autoTable({
+                startY: 20,
+                head: [['Code', 'Meaning / Explanation']],
+                body: errorTableData,
+                theme: 'grid',
+                styles: { fontSize: 9, cellPadding: 2 },
+                columnStyles: { 0: { fontStyle: 'bold', cellWidth: 30 }, 1: { cellWidth: 160 } },
+                didDrawPage: function (hookData) {
+                    doc.setFontSize(8);
+                    doc.text('Report Generated: ' + new Date().toLocaleDateString(), 14, doc.internal.pageSize.height - 10);
+                }
+            });
+        }
+
+        doc.save(`Report_${data.vin}.pdf`);
+    }
+
+    // PDF Report Generation for Standalone Checker
+    function generateErrorCodeReportPDF() {
+        event.preventDefault();
+
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+        
+        const data = {
+            make: document.getElementById('error-checker-make').value || 'N/A',
+            model: document.getElementById('error-checker-model').value || 'N/A',
+            vin: document.getElementById('error-checker-vin').value || 'N/A',
+            clientPhone: document.getElementById('error-checker-client-phone').value || 'N/A',
+        };
+        const errorData = getCheckerErrorCodesWithMeaning();
+
+        // Title
+        doc.setFontSize(22);
+        doc.setTextColor(30, 58, 138);
+        doc.text("Standalone Error Code Diagnostic Report", 14, 20);
+
+        doc.setFontSize(10);
+        doc.setTextColor(107, 114, 128);
+        doc.text("Report Generated by Garage Manager PRO", 14, 25);
+        doc.line(14, 27, 196, 27);
+
+        let y = 35;
+        
+        // General Details Table
+        const generalData = [
+            ['Vehicle ID', `${data.make} ${data.model}`],
+            ['VIN / Chassis No.', data.vin],
+            ['Client Phone', data.clientPhone],
+            ['Report Date', new Date().toLocaleDateString()]
+        ];
+
+        doc.autoTable({
+            startY: y + 5,
+            head: [['Section', 'Details']],
+            body: generalData,
+            theme: 'striped',
+            styles: { fontSize: 10, cellPadding: 2 },
+            columnStyles: { 0: { fontStyle: 'bold', cellWidth: 40 }, 1: { cellWidth: 150 } },
+        });
+
+        // Error Code Specific Table
+        y = doc.autoTable.previous.finalY + 10;
         doc.setFontSize(14);
-        doc.setTextColor(239, 68, 68); // red-500
-        doc.text("Reported Problems & Diagnosis", 14, y);
+        doc.setTextColor(185, 28, 28);
+        doc.text("Error Codes and Meanings", 14, y);
         doc.setTextColor(0, 0, 0);
-        y += 5;
         
-        doc.autoTable({
-            startY: y,
-            body: [
-                [{ content: `Reported Problems:\n${data.reportedProblems}`, styles: { fontStyle: 'bold', minCellHeight: 15 } }],
-                [{ content: `Diagnostic Notes:\n${data.diagnosticNotes}`, styles: { fontStyle: 'bold', minCellHeight: 15 } }],
-                [{ content: `Error Codes Found (${data.errorCodes.split(',').length}):\n${data.errorMeanings}`, styles: { fontStyle: 'bold', minCellHeight: 25, fillColor: [254, 226, 226] } }] // Red background
-            ],
-            theme: 'grid',
-            styles: { fontSize: 10, cellPadding: 2, overflow: 'linebreak' }
-        });
-
-        y = doc.autoTable.previous.finalY + 8;
+        if (errorData.length > 0) {
+            const errorTableData = errorData.map(e => [e.code, e.meaning]);
+            doc.autoTable({
+                startY: y + 5,
+                head: [['Code', 'Meaning / Explanation']],
+                body: errorTableData,
+                theme: 'grid',
+                styles: { fontSize: 9, cellPadding: 2 },
+                columnStyles: { 0: { fontStyle: 'bold', cellWidth: 30 }, 1: { cellWidth: 160 } },
+            });
+        } else {
+            doc.text("No error codes were entered for this report.", 14, y + 5);
+        }
         
-        // 3. Repair Plan (MODIFICATION 3: Uses consolidated string)
-        doc.setFontSize(14);
-        doc.setTextColor(236, 72, 153); // pink-600
-        doc.text("🛠️ Repair Plan & Parts", 14, y);
-        doc.setTextColor(0, 0, 0);
-        y += 5;
-
-        doc.autoTable({
-            startY: y,
-            body: [
-                [{ content: `Repair Actions/Notes:\n${data.repairNotes}`, styles: { fontStyle: 'bold', minCellHeight: 25, fillColor: [240, 249, 255] } }], // Light blue background
-                [{ content: `Replacement Parts Needed:\n${data.replacementParts}`, styles: { fontStyle: 'bold', minCellHeight: 15 } }]
-            ],
-            theme: 'grid',
-            styles: { fontSize: 10, cellPadding: 2, overflow: 'linebreak' }
-        });
-
-        y = doc.autoTable.previous.finalY + 15;
-        
-        // Footer
         doc.setFontSize(8);
-        doc.setTextColor(156, 163, 175); // gray-400
-        doc.text(`Generated on: ${new Date().toLocaleDateString()} | This is a preliminary report and does not constitute a final invoice.`, 14, doc.internal.pageSize.height - 10);
+        doc.text('Report Generated: ' + new Date().toLocaleDateString(), 14, doc.internal.pageSize.height - 10);
+        doc.save(`ErrorDiagnosticReport_${data.vin}.pdf`);
+    }
 
-        doc.save(`Analysis_Report_${data.plate}.pdf`);
+    // WhatsApp Functionality for Standalone Checker
+    function sendErrorCodeReportWhatsApp() {
+        const data = {
+            make: document.getElementById('error-checker-make').value || 'N/A',
+            model: document.getElementById('error-checker-model').value || 'N/A',
+            vin: document.getElementById('error-checker-vin').value || 'N/A',
+            clientPhone: document.getElementById('error-checker-client-phone').value || '',
+        };
+        const errorData = getCheckerErrorCodesWithMeaning();
+
+        if (!data.clientPhone) {
+            alert("Client phone number is required to send via WhatsApp.");
+            return;
+        }
+
+        const phone = data.clientPhone.replace(/\s|-/g, '');
+        
+        let message = `*Garage Manager PRO Error Code Report*\n\n`;
+        message += `*Vehicle:* ${data.make} ${data.model} (VIN: ${data.vin})\n\n`;
+        
+        if (errorData.length > 0) {
+            message += `*Scan Results (Error Codes):*\n`;
+            errorData.forEach(e => {
+                message += `- ${e.code}: ${e.meaning.replace(/\n/g, ' ')}\n`; // Replace newlines in meaning for better WhatsApp readability
+            });
+        } else {
+            message += `*Scan Results:*\nNo error codes were logged for this vehicle.\n`;
+        }
+        
+        message += `\n_Generated on ${new Date().toLocaleDateString()}_`;
+
+        const whatsappURL = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+        window.open(whatsappURL, '_blank');
     }
 
     // ----------------------------------------------------------------------
-    // 7. GENERAL SERVICE LOGIC (MODIFIED: Added Plate & Save Logic)
+    // 7. GENERAL SERVICE CHECKLIST LOGIC
     // ----------------------------------------------------------------------
 
     const SERVICE_ITEMS = [
-        { name: 'Engine Oil', type: 'filter' },
+        { name: 'Oil Change', type: 'filter' },
         { name: 'Oil Filter', type: 'filter' },
         { name: 'Air Filter', type: 'filter' },
         { name: 'AC Gas', type: 'filter' },
@@ -1181,16 +1164,16 @@
         { name: 'Horn Function', type: 'other' },
         { name: 'Spare Tyre/Kit', type: 'other' }
     ];
-    
+
     const LIGHTS_ITEMS = [
-        'Headlights (Low Beam)', 
-        'Headlights (High Beam)', 
-        'Fog Lights', 
-        'Turn Signals (F)', 
-        'Turn Signals (R)', 
-        'Brake Lights', 
-        'Reverse Lights', 
-        'Interior Lights', 
+        'Headlights (Low Beam)',
+        'Headlights (High Beam)',
+        'Fog Lights',
+        'Turn Signals (F)',
+        'Turn Signals (R)',
+        'Brake Lights',
+        'Reverse Lights',
+        'Interior Lights',
         'Hazard Lights'
     ];
 
@@ -1198,241 +1181,168 @@
         const fluidsBody = document.getElementById('fluids-filters-body');
         const lightsBody = document.getElementById('lights-body');
         const otherChecksBody = document.getElementById('other-checks-body');
-        
+
         if (!fluidsBody || fluidsBody.children.length > 0) return; // Prevent re-initialization
 
         fluidsBody.innerHTML = '';
         lightsBody.innerHTML = '';
         otherChecksBody.innerHTML = '';
 
-        // Dynamically populate Fluids & Filters and Other Checks
+        // Dynamically create rows for Fluids, Filters, and Other Checks
         SERVICE_ITEMS.forEach(item => {
+            let rowContent = `<td><input type="checkbox" name="${item.name}-faulty" class="faulty-checkbox" value="Faulty"></td>
+                              <td><input type="checkbox" name="${item.name}-checked" class="checked-checkbox" value="Checked"></td>
+                              <td><input type="checkbox" name="${item.name}-changed" class="changed-checkbox" value="Changed"></td>`;
+
+            if (item.type === 'other') {
+                 rowContent += `<td><input type="text" name="${item.name}-notes" placeholder="Notes" class="p-1 border rounded w-full text-xs"></td>`;
+            }
+
+            let row = `<tr><td>${item.name}</td>${rowContent}</tr>`;
+
             if (item.type === 'filter') {
-                 const tr = document.createElement('tr');
-                 tr.innerHTML = `
-                    <td>${item.name}</td>
-                    <td><input type="checkbox" name="${item.name}-faulty" class="form-checkbox h-4 w-4 text-red-600"></td>
-                    <td><input type="checkbox" name="${item.name}-checked" class="form-checkbox h-4 w-4 text-green-600"></td>
-                    <td><input type="checkbox" name="${item.name}-changed" class="form-checkbox h-4 w-4 text-blue-600"></td>
-                `;
-                fluidsBody.appendChild(tr);
-            } else {
-                // For 'other' items, use the more detailed row
-                const trOther = document.createElement('tr');
-                trOther.innerHTML = `
-                    <td>${item.name}</td>
-                    <td><input type="checkbox" name="${item.name}-faulty" class="form-checkbox h-4 w-4 text-red-600"></td>
-                    <td><input type="checkbox" name="${item.name}-checked" class="form-checkbox h-4 w-4 text-green-600"></td>
-                    <td><input type="checkbox" name="${item.name}-changed" class="form-checkbox h-4 w-4 text-blue-600"></td>
-                    <td><input type="text" name="${item.name}-notes" placeholder="Condition/Recommendation" class="w-full p-1 border rounded text-xs"></td>
-                `;
-                otherChecksBody.appendChild(trOther);
+                fluidsBody.innerHTML += row;
+            } else if (item.type === 'other') {
+                otherChecksBody.innerHTML += row;
             }
         });
 
-        // Dynamically populate Lights & Electrical
-        LIGHTS_ITEMS.forEach(light => {
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td>${light}</td>
-                <td><input type="checkbox" name="${light}-left" class="form-checkbox h-4 w-4 text-green-600"></td>
-                <td><input type="checkbox" name="${light}-right" class="form-checkbox h-4 w-4 text-green-600"></td>
-                <td><input type="text" name="${light}-notes" placeholder="Notes" class="w-full p-1 border rounded text-xs"></td>
+        // Dynamically create rows for Lights
+        LIGHTS_ITEMS.forEach(item => {
+            lightsBody.innerHTML += `
+                <tr>
+                    <td>${item}</td>
+                    <td><input type="checkbox" name="${item}-left" class="light-checkbox" value="LeftWorking"></td>
+                    <td><input type="checkbox" name="${item}-right" class="light-checkbox" value="RightWorking"></td>
+                    <td><input type="text" name="${item}-notes" placeholder="Notes" class="p-1 border rounded w-full text-xs"></td>
+                </tr>
             `;
-            lightsBody.appendChild(tr);
         });
     }
 
-    // START MODIFICATION 2: Helper and Job Completion Functions
-    
-    // Function to collect all data from the General Service form
-    function collectGeneralServiceData() {
+    // document.addEventListener('DOMContentLoaded', initializeGeneralService); // Called inside showSection now
+
+    function getGeneralServiceData() {
         const form = document.getElementById('general-service-form');
-        
         const data = {};
-        data.clientName = document.getElementById('service-client-name').value.trim() || 'N/A';
-        data.clientPhone = document.getElementById('service-client-phone').value.trim() || 'N/A';
-        data.plate = document.getElementById('service-plate').value.trim() || 'N/A';
-        data.make = document.getElementById('service-make').value.trim() || 'N/A';
-        data.model = document.getElementById('service-model').value.trim() || 'N/A';
-        data.vin = document.getElementById('service-vin').value.trim() || 'N/A';
-        data.currentMileage = document.getElementById('current-mileage').value.trim() || 'N/A';
-        data.nextServiceMileage = document.getElementById('next-service-mileage').value.trim() || 'N/A';
-        data.servicePerson = document.getElementById('service-person').value.trim() || 'N/A';
+
+        // 1. Client Info
+        data.clientName = document.getElementById('service-client-name').value || 'N/A';
+        data.clientPhone = document.getElementById('service-client-phone').value || 'N/A';
         
-        // Simple validation
-        if (data.clientName === 'N/A' || data.clientPhone === 'N/A' || data.plate === 'N/A' || data.make === 'N/A' || data.model === 'N/A' || data.servicePerson === 'N/A') {
-            alert("Please fill in all mandatory fields (Client, Vehicle, and Service Person details) before completing the job.");
-            return null; 
-        }
+        // 2. Vehicle Info
+        data.make = document.getElementById('service-make').value || 'N/A';
+        data.model = document.getElementById('service-model').value || 'N/A';
+        data.vin = document.getElementById('service-vin').value || 'N/A';
+
+        // 3. Mileage & Person
+        data.currentMileage = document.getElementById('current-mileage').value || 'N/A';
+        data.nextServiceMileage = document.getElementById('next-service-mileage').value || 'N/A';
+        data.servicePerson = document.getElementById('service-person').value || 'N/A';
 
         // 4. Checklist Items
         data.serviceChecks = SERVICE_ITEMS.map(item => {
             let status = 'OK';
-            let notes = form.querySelector(`[name="${item.name}-notes"]`) ? form.querySelector(`[name="${item.name}-notes"]`).value.trim() : '';
-            
             if (form.querySelector(`[name="${item.name}-faulty"]`) && form.querySelector(`[name="${item.name}-faulty"]`).checked) {
                 status = 'Faulty';
             } else if (form.querySelector(`[name="${item.name}-changed"]`) && form.querySelector(`[name="${item.name}-changed"]`).checked) {
                 status = 'Changed';
             } else if (form.querySelector(`[name="${item.name}-checked"]`) && form.querySelector(`[name="${item.name}-checked"]`).checked) {
-                status = 'Checked'; 
-            } else {
-                 status = 'Not Checked';
+                status = 'Checked';
             }
+            
+            const notes = form.querySelector(`[name="${item.name}-notes"]`) ? form.querySelector(`[name="${item.name}-notes"]`).value : '';
 
-            return { item: item.name, status: status, notes: notes };
+            return {
+                item: item.name,
+                status: status,
+                notes: notes
+            };
         });
 
-        data.lightChecks = LIGHTS_ITEMS.map(light => {
-            const left = form.querySelector(`[name="${light}-left"]`) && form.querySelector(`[name="${light}-left"]`).checked ? 'Yes' : 'No';
-            const right = form.querySelector(`[name="${light}-right"]`) && form.querySelector(`[name="${light}-right"]`).checked ? 'Yes' : 'No';
-            const notes = form.querySelector(`[name="${light}-notes"]`) ? form.querySelector(`[name="${light}-notes"]`).value.trim() : '';
-            return { light: light, left: left, right: right, notes: notes };
+        data.lightChecks = LIGHTS_ITEMS.map(item => {
+            const left = form.querySelector(`[name="${item}-left"]`).checked ? 'Working' : 'Faulty';
+            const right = form.querySelector(`[name="${item}-right"]`).checked ? 'Working' : 'Faulty';
+            const notes = form.querySelector(`[name="${item}-notes"]`).value;
+
+            return {
+                light: item,
+                left: left,
+                right: right,
+                notes: notes
+            };
         });
-        
-        // Add flags and summary to fit the standard job card structure
-        data.jobType = 'GeneralService';
-        data.reportedProblems = 'Standard General Service Check.';
-        data.diagnosticNotes = `Service performed by ${data.servicePerson} on ${new Date().toLocaleDateString()}. See detailed checklist in the General Service Report PDF. Current Mileage: ${data.currentMileage} KM. Next Service Due: ${data.nextServiceMileage} KM.`;
-        data.repairPlanItems = []; // Empty array to satisfy standard job card structure
-        data.errorCodes = 'N/A';
-        data.errorMeanings = 'N/A';
-        data.assignedMechanic = data.servicePerson;
-        data.dueDate = new Date().toISOString().split('T')[0]; // Set due/delivery to today
-        data.deliveryDate = new Date().toISOString().split('T')[0];
-        data.color = 'N/A'; // Fill missing core vehicle details
-        data.engineCC = 'N/A';
-        data.trim = 'N/A';
-        data.engineName = 'N/A';
-        data.transmission = 'N/A';
-        data.driveType = 'N/A';
-        data.year = 'N/A'; 
-        
+
         return data;
     }
 
-    // Function to complete and save the service job (NEW FUNCTION)
-    async function completeServiceJob() {
-        if (!auth.currentUser) {
-            alert("You must be logged in to save an entry.");
-            return;
-        }
-
-        const carData = collectGeneralServiceData();
-        if (!carData) return; // Exit if data collection failed (e.g., missing mandatory fields)
-
-        // Set final status and metadata
-        carData.status = 'Completed';
-        carData.createdAt = serverTimestamp();
-        carData.completedAt = serverTimestamp();
-        carData.createdBy = auth.currentUser ? auth.currentUser.email : 'System';
-        carData.completedBy = auth.currentUser ? auth.currentUser.email : 'System';
-
-        try {
-            await addDoc(carsCollection, carData);
-            alert(`General Service for Plate ${carData.plate} successfully completed and saved!`);
-            document.getElementById('general-service-form').reset();
-            initializeGeneralService();
-            showSection('completed-list');
-        } catch (e) {
-            console.error("Error adding document: ", e);
-            alert(`Error saving service entry: ${e.message}`);
-        }
-    }
-    // END MODIFICATION 2
-
-    // MODIFICATION 6: Refactored and corrected generateServiceReportPDF
-    function generateServiceReportPDF(carData = null) {
-        // Get data from DB (via carData) or from the live form
-        const data = carData || collectGeneralServiceData();
-        if (!data) return; 
+    // PDF Report Generation for General Service
+    function generateServiceReportPDF() {
+        event.preventDefault();
 
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF();
-        let y = 20; // Starting Y position
+        const data = getGeneralServiceData();
 
         // 1. Title
         doc.setFontSize(22);
         doc.setTextColor(30, 58, 138); // blue-800
-        doc.text("General Service & Safety Check Report", 14, y);
-        y += 5;
+        doc.text("Vehicle General Service Report", 14, 20);
+
         doc.setFontSize(10);
         doc.setTextColor(107, 114, 128); // gray-500
-        doc.text("Report Generated by Garage Manager PRO", 14, y);
-        y += 2;
-        doc.line(14, y, 196, y); // Divider line
-        y += 8;
+        doc.text("Report Generated by Garage Manager PRO", 14, 25);
+        doc.line(14, 27, 196, 27); // Separator line
 
-        // 2. Client, Vehicle & Service Details
+        let y = 35;
+        
+        // 2. Client and Vehicle Details
         doc.setFontSize(14);
-        doc.setTextColor(249, 115, 22); // orange-600
-        doc.text("Client, Vehicle & Service Details", 14, y);
+        doc.setTextColor(234, 88, 12); // orange-700
+        doc.text("Vehicle & Client Details", 14, y);
         doc.setTextColor(0, 0, 0); // black for table text
         y += 5;
 
-        doc.autoTable({
-            startY: y,
-            body: [
-                ['Client Name', data.clientName, 'Phone', data.clientPhone],
-                ['Make/Model', `${data.make} ${data.model}`, 'Plate No.', data.plate],
-                ['Service By', data.servicePerson, 'Date', new Date().toLocaleDateString()]
-            ],
-            theme: 'plain',
-            styles: { fontSize: 10, cellPadding: 2, lineWidth: 0.1, lineColor: 200 },
-            columnStyles: { 0: { fontStyle: 'bold', cellWidth: 40 }, 2: { fontStyle: 'bold', cellWidth: 40 } },
-            margin: { left: 14 }
-        });
-        
-        y = doc.autoTable.previous.finalY + 8;
-        
-        // 3. Fluids and Filters Table
-        doc.setFontSize(14);
-        doc.setTextColor(16, 185, 129); // green-500
-        doc.text("Fluids & Filter Check", 14, y);
-        doc.setTextColor(0, 0, 0); // black for table text
-        y += 5;
-
-        const fluidsTableData = data.serviceChecks
-            .filter(item => SERVICE_ITEMS.find(s => s.name === item.item && s.type === 'filter'))
-            .map(item => [item.item, item.status]);
+        const generalData = [
+            ['Client Name', data.clientName],
+            ['Phone', data.clientPhone],
+            ['Vehicle ID', `${data.make} ${data.model} (VIN: ${data.vin})`],
+            ['Mileage (IN/NEXT)', `${data.currentMileage} KM / ${data.nextServiceMileage} KM`],
+            ['Service Person', data.servicePerson],
+        ];
 
         doc.autoTable({
             startY: y + 2,
-            head: [['Item', 'Status']],
-            body: fluidsTableData,
-            theme: 'grid',
-            styles: { fontSize: 10, cellPadding: 2 },
-            columnStyles: { 0: { fontStyle: 'bold', cellWidth: 100 }, 1: { cellWidth: 80 } },
-            margin: { left: 14 }
+            head: [['Field', 'Value']],
+            body: generalData,
+            theme: 'plain',
+            styles: { fontSize: 10, cellPadding: 2, lineWidth: 0 },
+            columnStyles: { 0: { fontStyle: 'bold', cellWidth: 40 }, 1: { cellWidth: 150 } }
         });
 
-        y = doc.autoTable.previous.finalY + 8;
-        
-        // 4. Other Critical Checks Table
+        y = doc.autoTable.previous.finalY + 10;
+
+        // 3. Fluids/Filters/Other Items Table
         doc.setFontSize(14);
-        doc.setTextColor(239, 68, 68); // red-500
-        doc.text("Brakes, Tyres & Other Critical Checks", 14, y);
+        doc.setTextColor(4, 120, 87); // green-700
+        doc.text("Fluids, Filters & Brakes Checklist", 14, y);
         doc.setTextColor(0, 0, 0); // black for table text
         y += 5;
-
-        const otherChecksTableData = data.serviceChecks
-            .filter(item => SERVICE_ITEMS.find(s => s.name === item.item && s.type !== 'filter'))
-            .map(item => [item.item, item.status, item.notes]);
-
+        
+        const serviceTableData = data.serviceChecks.map(item => [item.item, item.status, item.notes]);
+        
         doc.autoTable({
             startY: y + 2,
             head: [['Item', 'Status', 'Notes']],
-            body: otherChecksTableData,
-            theme: 'grid',
-            styles: { fontSize: 10, cellPadding: 2, overflow: 'linebreak' },
-            columnStyles: { 0: { fontStyle: 'bold', cellWidth: 40 }, 1: { cellWidth: 40 }, 2: { cellWidth: 100 } },
-            margin: { left: 14 }
+            body: serviceTableData,
+            theme: 'striped',
+            styles: { fontSize: 10, cellPadding: 2 },
+            columnStyles: { 0: { fontStyle: 'bold', cellWidth: 40 }, 1: { cellWidth: 40 }, 2: { cellWidth: 100 } }
         });
 
-        y = doc.autoTable.previous.finalY + 8;
+        y = doc.autoTable.previous.finalY + 10;
         
-        // 5. Lights Check Table
+        // 4. Lights Check Table
         doc.setFontSize(14);
         doc.setTextColor(202, 138, 4); // yellow-700
         doc.text("Lights & Electrical Check", 14, y);
@@ -1446,356 +1356,22 @@
             head: [['Light', 'Left Side', 'Right Side', 'Notes']],
             body: lightsTableData,
             theme: 'grid',
-            styles: { fontSize: 10, cellPadding: 2, overflow: 'linebreak' },
-            columnStyles: { 0: { fontStyle: 'bold', cellWidth: 40 }, 1: { cellWidth: 30 }, 2: { cellWidth: 30 }, 3: { cellWidth: 90 } },
-            margin: { left: 14 }
-        });
-
-        y = doc.autoTable.previous.finalY + 8; // Update Y after the Lights table
-        
-        // 6. Mileage
-        doc.setFontSize(14);
-        doc.setTextColor(79, 70, 229); // indigo-600
-        doc.text("Mileage & Next Service", 14, y);
-        doc.setTextColor(0, 0, 0); // black for table text
-        y += 5;
-
-        doc.autoTable({
-            startY: y,
-            body: [
-                ['Current Mileage', `${data.currentMileage} KM`],
-                ['Next Service Est.', `${data.nextServiceMileage} KM`]
-            ],
-            theme: 'plain',
-            styles: { fontSize: 10, cellPadding: 2, lineWidth: 0.1, lineColor: 200 },
-            columnStyles: { 0: { fontStyle: 'bold', cellWidth: 50 } },
-            margin: { left: 14 }
-        });
-
-        // Footer (Fixed position for the bottom of the page)
-        doc.setFontSize(8);
-        doc.setTextColor(156, 163, 175); // gray-400
-        doc.text(`Generated by Garage Manager PRO on ${new Date().toLocaleDateString()} | Service Performed by: ${data.servicePerson}`, 14, doc.internal.pageSize.height - 10);
-
-        doc.save(`Service_Report_${data.plate || data.vin}.pdf`);
-    }
-
-    // ----------------------------------------------------------------------
-    // 8. DAILY & MONTHLY REPORT LOGIC (NEW SECTION)
-    // ----------------------------------------------------------------------
-    
-    // Helper to check if two dates are the same day (ignoring time)
-    function isSameDay(date1, date2) {
-        return date1.getFullYear() === date2.getFullYear() &&
-               date1.getMonth() === date2.getMonth() &&
-               date1.getDate() === date2.getDate();
-    }
-    
-    // Helper function to aggregate data from a list of jobs (Refactored from Daily Report)
-    function summarizeJobs(jobs) {
-        const summary = {
-            totalJobs: jobs.length,
-            jobsByType: {},
-            jobsByMechanic: {},
-            jobsByMake: {}
-        };
-
-        jobs.forEach(job => {
-            const type = job.jobType === 'GeneralService' ? 'General Service' : 'Standard Repair';
-            const mechanic = job.assignedMechanic || 'N/A';
-            const make = job.make || 'N/A';
-
-            summary.jobsByType[type] = (summary.jobsByType[type] || 0) + 1;
-            summary.jobsByMechanic[mechanic] = (summary.jobsByMechanic[mechanic] || 0) + 1;
-            summary.jobsByMake[make] = (summary.jobsByMake[make] || 0) + 1;
-        });
-        
-        return summary;
-    }
-    
-    function objectToHtmlList(obj) {
-        // Sort the list by value (descending) for 'Charts' effect
-        return Object.entries(obj)
-            .sort(([, a], [, b]) => b - a)
-            .map(([key, value]) => `<li><span class="font-semibold">${key}</span>: ${value} jobs</li>`).join('');
-    };
-    
-    // Renders the summary in the modal (Reusable function for both daily/monthly)
-    function renderReportContent(jobs, summary, title, dateRange, containerId, modalId) {
-        const reportContentEl = document.getElementById(containerId);
-        
-        // NEW: Populate globals for PDF generation
-        currentReportJobs = jobs;
-        currentReportSummary = summary;
-        currentReportTitle = title;
-        currentReportDateRange = dateRange;
-
-        if (jobs.length === 0) {
-            reportContentEl.innerHTML = `<p class="text-center text-xl text-gray-500 py-10">No jobs were completed in this period (${dateRange}).</p>`;
-            document.getElementById(modalId).style.display = 'flex';
-            return;
-        }
-        
-        // --- HTML Content for the Report (Charts & Graphs compiled as lists) ---
-        reportContentEl.innerHTML = `
-            <div class="bg-blue-50 p-4 rounded-lg border-l-4 border-blue-500">
-                <h4 class="text-2xl font-bold text-blue-800">${summary.totalJobs} Jobs Completed ${title}</h4>
-                <p class="text-sm text-gray-600">${dateRange}</p>
-            </div>
-            
-            <h3 class="text-xl font-bold text-purple-700 mt-6 border-b pb-1">Summary Charts & Graphs (Data Compilation) </h3>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div class="bg-gray-100 p-4 rounded-lg">
-                    <h5 class="font-bold text-lg text-blue-600 border-b pb-1 mb-2">Jobs by Type (Pie Chart Data)</h5>
-                    <ul class="list-disc list-inside space-y-1 text-sm">
-                        ${objectToHtmlList(summary.jobsByType)}
-                    </ul>
-                </div>
-                <div class="bg-gray-100 p-4 rounded-lg">
-                    <h5 class="font-bold text-lg text-green-600 border-b pb-1 mb-2">Top Mechanics (Bar Chart Data)</h5>
-                    <ul class="list-disc list-inside space-y-1 text-sm">
-                        ${objectToHtmlList(summary.jobsByMechanic)}
-                    </ul>
-                </div>
-                <div class="bg-gray-100 p-4 rounded-lg">
-                    <h5 class="font-bold text-lg text-orange-600 border-b pb-1 mb-2">Top Vehicle Makes (Bar Chart Data)</h5>
-                    <ul class="list-disc list-inside space-y-1 text-sm">
-                        ${objectToHtmlList(summary.jobsByMake)}
-                    </ul>
-                </div>
-            </div>
-            
-            <h3 class="text-xl font-bold text-red-700 mt-6 border-b pb-1">Detailed Completed List</h3>
-            <div class="overflow-x-auto">
-                <table class="min-w-full divide-y divide-gray-200">
-                    <thead class="bg-gray-50">
-                        <tr>
-                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Plate</th>
-                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Vehicle</th>
-                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Job Type</th>
-                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Mechanic</th>
-                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Time</th>
-                        </tr>
-                    </thead>
-                    <tbody class="bg-white divide-y divide-gray-200 text-sm">
-                        ${jobs.map(job => `
-                            <tr>
-                                <td class="px-3 py-2 whitespace-nowrap">${job.plate || 'N/A'}</td>
-                                <td class="px-3 py-2 whitespace-nowrap">${job.make || 'N/A'} ${job.model || 'N/A'}</td>
-                                <td class="px-3 py-2 whitespace-nowrap">${job.jobType === 'GeneralService' ? 'G. Service' : 'Repair'}</td>
-                                <td class="px-3 py-2 whitespace-nowrap">${job.assignedMechanic || 'N/A'}</td>
-                                <td class="px-3 py-2 whitespace-nowrap">${job.completedAt ? job.completedAt.toDate().toLocaleTimeString() : 'N/A'}</td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
-            </div>
-        `;
-        
-        document.getElementById(modalId).style.display = 'flex';
-    }
-
-
-    function generateDailyReport() {
-        // 1. Filter completed jobs for today
-        const today = new Date();
-        const completedToday = completedJobsCache.filter(job => {
-            const completionTime = job.completedAt ? job.completedAt.toDate() : (job.createdAt ? job.createdAt.toDate() : null);
-            if (completionTime) {
-                return job.status === 'Completed' && isSameDay(completionTime, today);
-            }
-            return false;
-        });
-        
-        // 2. Data Summarization
-        const summary = summarizeJobs(completedToday);
-
-        // 3. Render Report
-        const reportDate = today.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-        document.getElementById('report-date').textContent = reportDate;
-        
-        renderReportContent(
-            completedToday,
-            summary,
-            'End-of-Day Report',
-            `Date: ${reportDate}`,
-            'report-content',
-            'dailyReportModal'
-        );
-    }
-    
-    function generateMonthlyReport() {
-        const today = new Date();
-        const thirtyDaysAgo = new Date();
-        thirtyDaysAgo.setDate(today.getDate() - 30); // Calculate 30 days ago
-
-        // 1. Filter completed jobs for the last 30 days
-        const completedThisMonth = completedJobsCache.filter(job => {
-            const completionTime = job.completedAt ? job.completedAt.toDate() : (job.createdAt ? job.createdAt.toDate() : null);
-            if (completionTime) {
-                return job.status === 'Completed' && completionTime >= thirtyDaysAgo;
-            }
-            return false;
-        });
-
-        // 2. Data Summarization
-        const summary = summarizeJobs(completedThisMonth);
-
-        // 3. Render Report
-        const startDate = thirtyDaysAgo.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-        const endDate = today.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-        
-        document.getElementById('monthly-report-start').textContent = startDate;
-        document.getElementById('monthly-report-end').textContent = endDate;
-
-        renderReportContent(
-            completedThisMonth,
-            summary,
-            'Monthly Performance Report',
-            `Period: ${startDate} - ${endDate}`,
-            'monthly-report-content',
-            'monthlyReportModal'
-        );
-    }
-    
-    // NEW FUNCTION: Generates the PDF for the Daily/Monthly report
-    function generateReportPDF(reportType) {
-        const { jsPDF } = window.jspdf;
-        const doc = new jsPDF('p', 'mm', 'a4'); // 'p' for portrait, 'mm' unit, A4 size
-        let y = 15;
-        
-        const jobs = currentReportJobs;
-        const summary = currentReportSummary;
-        const title = currentReportTitle;
-        const dateRange = currentReportDateRange;
-        const fileName = `${reportType}_Report_${new Date().toISOString().split('T')[0]}.pdf`;
-        
-        // 1. Header
-        doc.setFontSize(22);
-        doc.setTextColor(79, 70, 229); // indigo-600
-        doc.text(title, 14, y);
-        y += 8;
-        
-        doc.setFontSize(10);
-        doc.setTextColor(107, 114, 128); // gray-500
-        doc.text(`Period: ${dateRange}`, 14, y);
-        y += 4;
-        doc.line(14, y, 196, y); // Divider
-        y += 8;
-        
-        // 2. Summary (The "Charts and Graphs" represented as tables)
-        
-        doc.setFontSize(16);
-        doc.setTextColor(16, 185, 129); // green-500
-        doc.text("Performance Summary (Key Metrics)", 14, y);
-        y += 8;
-        
-        doc.setFontSize(12);
-        doc.setTextColor(0, 0, 0);
-        doc.text(`Total Jobs Completed: ${summary.totalJobs}`, 14, y);
-        y += 10;
-        
-        // Convert summary objects to table data arrays, sorted by value
-        const jobTypesData = Object.entries(summary.jobsByType).sort(([, a], [, b]) => b - a);
-        const mechanicsData = Object.entries(summary.jobsByMechanic).sort(([, a], [, b]) => b - a);
-        const makesData = Object.entries(summary.jobsByMake).sort(([, a], [, b]) => b - a);
-        
-        const summaryTableData = [
-            [{ content: 'Jobs by Type', colSpan: 2, styles: { fillColor: [240, 249, 255], fontStyle: 'bold' } }],
-            ...jobTypesData,
-            [{ content: '', colSpan: 2, styles: { minCellHeight: 5, fillColor: [255, 255, 255] } }], // Spacer
-            [{ content: 'Top Mechanics', colSpan: 2, styles: { fillColor: [240, 249, 255], fontStyle: 'bold' } }],
-            ...mechanicsData,
-            [{ content: '', colSpan: 2, styles: { minCellHeight: 5, fillColor: [255, 255, 255] } }], // Spacer
-            [{ content: 'Top Vehicle Makes', colSpan: 2, styles: { fillColor: [240, 249, 255], fontStyle: 'bold' } }],
-            ...makesData
-        ];
-
-        doc.autoTable({
-            startY: y,
-            body: summaryTableData,
-            theme: 'plain',
             styles: { fontSize: 10, cellPadding: 2 },
-            columnStyles: { 0: { fontStyle: 'bold' } },
-            margin: { left: 14, right: 14 },
-            columnWidth: 'wrap'
+            columnStyles: { 0: { fontStyle: 'bold', cellWidth: 40 }, 1: { cellWidth: 30 }, 2: { cellWidth: 30 }, 3: { cellWidth: 90 } }
         });
         
-        y = doc.autoTable.previous.finalY + 15;
+        doc.autoTable.previous.finalY = doc.autoTable.previous.finalY; // Reset Y position for the footer
         
-        // 3. Detailed List
-        if (jobs.length > 0) {
-            doc.setFontSize(16);
-            doc.setTextColor(239, 68, 68); // red-500
-            doc.text("Detailed Completed Jobs List", 14, y);
-            y += 8;
-            
-            const detailedHead = [['Plate', 'Vehicle (Make/Model/Year)', 'Job Type', 'Mechanic', 'Completion Time']];
-            const detailedBody = jobs.map(job => [
-                job.plate || 'N/A',
-                `${job.make || 'N/A'} ${job.model || 'N/A'} (${job.year || 'N/A'})`,
-                job.jobType === 'GeneralService' ? 'G. Service' : 'Repair',
-                job.assignedMechanic || 'N/A',
-                job.completedAt ? job.completedAt.toDate().toLocaleTimeString() : 'N/A'
-            ]);
-
-            doc.autoTable({
-                startY: y,
-                head: detailedHead,
-                body: detailedBody,
-                theme: 'striped',
-                styles: { fontSize: 8, cellPadding: 1.5, overflow: 'linebreak' },
-                headStyles: { fillColor: [59, 130, 246] }, // blue-500
-                margin: { left: 14, right: 14 }
-            });
-        }
-
-        // 4. Footer
+        // Footer
         doc.setFontSize(8);
-        doc.setTextColor(156, 163, 175); // gray-400
-        doc.text(`Generated by Garage Manager PRO on ${new Date().toLocaleDateString()}`, 14, doc.internal.pageSize.height - 10);
-        
-        doc.save(fileName);
+        doc.setTextColor(107, 114, 128); // gray-500
+        doc.text('Report Generated: ' + new Date().toLocaleDateString(), 14, doc.internal.pageSize.height - 10);
+        doc.text('This is a checklist report and does not constitute a final invoice.', 14, doc.internal.pageSize.height - 5);
+
+
+        doc.save(`ServiceReport_${data.vin}.pdf`);
     }
-
-
-    document.addEventListener('DOMContentLoaded', () => {
-        
-        // FIX: Attach event listeners to navigation buttons to avoid 'showSection is not defined' error
-        function attachNavHandlers() {
-            const navButtons = [
-                { id: 'nav-car-entry', section: 'car-entry' },
-                { id: 'nav-general-service', section: 'general-service' },
-                { id: 'nav-car-list', section: 'car-list' },
-                { id: 'nav-completed-list', section: 'completed-list' },
-                { id: 'nav-reports-section', section: 'reports-section' }
-            ];
-
-            navButtons.forEach(({ id, section }) => {
-                const button = document.getElementById(id);
-                if (button) {
-                    // Use a proper event listener instead of inline onclick
-                    button.addEventListener('click', () => showSection(section));
-                }
-            });
-        }
-        
-        attachNavHandlers();
-        
-        // Initialize the first error code input field
-        addErrorCodeInput(); 
-        // MODIFICATION 3: Initialize the first repair plan card
-        addRepairPlanCard('Full diagnostic and repair of error codes.', '');
-
-        // MODIFICATION 4: Attach WhatsApp handler to the button element in the modal
-        document.getElementById('whatsapp-btn').onclick = sendJobCardViaWhatsApp;
-        
-        // NEW: Attach PDF handlers to the report modals
-        document.getElementById('dailyDownloadBtn').onclick = () => generateReportPDF('daily');
-        document.getElementById('monthlyDownloadBtn').onclick = () => generateReportPDF('monthly');
-    });
 
 </script>
-
 </body>
 </html>
