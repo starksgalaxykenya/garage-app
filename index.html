@@ -63,6 +63,7 @@
                 <button onclick="showSection('general-service')" class="text-white hover:text-blue-200 font-medium transition duration-150">General Service</button>
                 <button onclick="showSection('car-list')" class="text-white hover:text-blue-200 font-medium transition duration-150">Active Jobs</button>
                 <button onclick="showSection('completed-list')" class="text-white hover:text-blue-200 font-medium transition duration-150">Completed Jobs</button>
+                <a href="lookup_manager.html" target="_blank" class="bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2 px-4 rounded transition duration-150 flex items-center">Manage Error Codes</a>
                 <button id="logoutBtn" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded transition duration-150" style="display:none;">Logout</button>
             </nav>
         </div>
@@ -295,7 +296,7 @@
     // Import the functions you need from the SDKs
     import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
     import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-auth.js";
-    import { getFirestore, collection, addDoc, doc, updateDoc, deleteDoc, query, where, orderBy, onSnapshot, getDoc, serverTimestamp, setDoc } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js";
+    import { getFirestore, collection, addDoc, doc, updateDoc, deleteDoc, query, where, orderBy, onSnapshot, getDoc, serverTimestamp, setDoc, getDocs } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js";
 
     // Your web app's Firebase configuration
     const firebaseConfig = {
@@ -312,6 +313,8 @@
     const auth = getAuth(app);
     const db = getFirestore(app);
     const carsCollection = collection(db, 'cars'); 
+    // NEW: Reference to the error codes collection
+    const errorCodesCollection = collection(db, 'error_codes'); 
     
     let currentUserRole = null; 
     
@@ -335,7 +338,7 @@
     // 2. VIEW MANAGEMENT & AUTH
     // ----------------------------------------------------------------------
 
-    // Handles the flow after Firebase Auth state changes (Subscription logic removed)
+    // Handles the flow after Firebase Auth state changes
     onAuthStateChanged(auth, async (user) => {
         document.getElementById('logoutBtn').style.display = 'none';
         
@@ -354,7 +357,6 @@
     });
 
     function showSection(sectionId) {
-        // Updated sections list - subscription-warning removed
         const sections = ['auth-section', 'car-entry', 'general-service', 'car-list', 'completed-list'];
         sections.forEach(id => {
             document.getElementById(id).style.display = 'none';
@@ -381,7 +383,6 @@
         try {
             if (isLogin) {
                 await signInWithEmailAndPassword(auth, email, password);
-                // Auth state change listener handles the rest
             } else {
                 // Ensure only admin can signup - simplified check for demo
                 if (email && !email.toLowerCase().includes('admin')) {
@@ -389,7 +390,6 @@
                     return;
                 }
                 await createUserWithEmailAndPassword(auth, email, password);
-                // Auth state change listener handles the rest
             }
         } catch (error) {
             messageEl.textContent = `Error: ${error.message}`;
@@ -403,7 +403,7 @@
     };
 
     // ----------------------------------------------------------------------
-    // 3. DYNAMIC ERROR CODE INPUTS & LOOKUP
+    // 3. DYNAMIC ERROR CODE INPUTS & LOOKUP (REFACTORED)
     // ----------------------------------------------------------------------
     
     function addErrorCodeInput() {
@@ -441,15 +441,8 @@
         });
     }
 
-    // Mock Lookup Table
-    const ERROR_CODE_LOOKUP = {
-        'P0300': { issuer: 'Powertrain (Generic)', meaning: 'Random/Multiple Cylinder Misfire Detected' },
-        'P0420': { issuer: 'Powertrain (Generic)', meaning: 'Catalyst System Efficiency Below Threshold (Bank 1)' },
-        'B1015': { issuer: 'Body (Specific)', meaning: 'Control Unit Fault/Component Failure' },
-        'C0035': { issuer: 'Chassis (Specific)', meaning: 'Front Left Wheel Speed Sensor Circuit' }
-    };
-
-    function lookupErrorCode(button) {
+    // REFACTORED: Uses Firestore instead of a hardcoded map
+    async function lookupErrorCode(button) {
         const group = button.closest('.error-code-group');
         const inputElement = group.querySelector('.error-code-input');
         const explanationEl = group.querySelector('.error-code-explanation');
@@ -466,18 +459,31 @@
             return;
         }
 
-        const details = ERROR_CODE_LOOKUP[code];
+        // Query Firestore for the code
+        try {
+            const q = query(errorCodesCollection, where("code", "==", code));
+            const querySnapshot = await getDocs(q);
 
-        if (details) {
-            const fullMeaning = `${code} (${details.issuer}): ${details.meaning}`;
-            explanationEl.innerHTML = `**${details.issuer}:** ${details.meaning}`;
-            explanationEl.className = 'error-code-explanation text-sm p-2 bg-indigo-50 text-indigo-800 rounded';
-            explanationEl.style.display = 'block';
-            hiddenMeaningEl.value = fullMeaning; 
-        } else {
-            explanationEl.innerHTML = `**Code ${code}**: No definition found.`;
-            explanationEl.className = 'error-code-explanation text-sm p-2 bg-red-50 text-red-800 rounded';
-            hiddenMeaningEl.value = `${code}: No definition found.`; 
+            if (!querySnapshot.empty) {
+                // Found a match
+                const details = querySnapshot.docs[0].data();
+                const fullMeaning = `${code} (${details.issuer}): ${details.meaning}`;
+                
+                explanationEl.innerHTML = `**${details.issuer}:** ${details.meaning}`;
+                explanationEl.className = 'error-code-explanation text-sm p-2 bg-indigo-50 text-indigo-800 rounded';
+                explanationEl.style.display = 'block';
+                hiddenMeaningEl.value = fullMeaning; 
+            } else {
+                // No match found
+                explanationEl.innerHTML = `**Code ${code}**: No definition found in database.`;
+                explanationEl.className = 'error-code-explanation text-sm p-2 bg-red-50 text-red-800 rounded';
+                hiddenMeaningEl.value = `${code}: No definition found.`; 
+            }
+        } catch (error) {
+            console.error("Error looking up code from Firestore:", error);
+            explanationEl.innerHTML = `**Code ${code}**: Lookup failed (Network/DB error).`;
+            explanationEl.className = 'error-code-explanation text-sm p-2 bg-yellow-50 text-yellow-800 rounded';
+            hiddenMeaningEl.value = `${code}: Lookup failed.`; 
         }
     }
 
@@ -500,7 +506,6 @@
     }
 
     document.addEventListener('DOMContentLoaded', () => {
-        // Check if there are any error code inputs, if not, add one
         if (document.querySelectorAll('.error-code-group').length === 0) {
             addErrorCodeInput(); 
         }
@@ -614,6 +619,9 @@
                 `;
                 container.appendChild(card);
             });
+        }, (error) => {
+            container.innerHTML = '<p class="text-center text-red-500 p-8">Error fetching data. Check your Firebase Console Security Rules.</p>';
+            console.error("Firestore fetch failed:", error);
         });
     }
 
@@ -903,9 +911,8 @@
     }
 
     // ----------------------------------------------------------------------
-    // 6. GENERAL SERVICE CHECKLIST LOGIC (NEW)
+    // 6. GENERAL SERVICE CHECKLIST LOGIC
     // ----------------------------------------------------------------------
-    // UPDATED SERVICE ITEMS
     const SERVICE_ITEMS = [
         { name: 'Oil Change', type: 'filter' },
         { name: 'Oil Filter', type: 'filter' },
@@ -917,11 +924,11 @@
         { name: 'Battery Condition', type: 'other' },
         { name: 'Brake Pads Front', type: 'other' },
         { name: 'Brake Pads Rear', type: 'other' },
-        { name: 'Wiper Check Front', type: 'other' }, // NEW
-        { name: 'Wiper Check Rear', type: 'other' },  // NEW
-        { name: 'Tyre Pressure', type: 'other' },     // NEW
-        { name: 'Tyre Condition Front L/R', type: 'other' }, // NEW
-        { name: 'Tyre Condition Rear L/R', type: 'other' }  // NEW
+        { name: 'Wiper Check Front', type: 'other' }, 
+        { name: 'Wiper Check Rear', type: 'other' },  
+        { name: 'Tyre Pressure', type: 'other' },     
+        { name: 'Tyre Condition Front L/R', type: 'other' }, 
+        { name: 'Tyre Condition Rear L/R', type: 'other' }  
     ];
 
     const LIGHTS_ITEMS = [
@@ -938,22 +945,26 @@
         otherChecksBody.innerHTML = '';
 
         SERVICE_ITEMS.forEach(item => {
-            let row = `
-                <tr>
-                    <td>${item.name}</td>
-                    <td><input type="checkbox" name="${item.name}-faulty" class="service-checkbox" value="Faulty"></td>
-                    <td><input type="checkbox" name="${item.name}-checked" class="service-checkbox" value="Checked"></td>
-                    <td><input type="checkbox" name="${item.name}-changed" class="service-checkbox" value="Changed"></td>
-                    <td><input type="text" name="${item.name}-notes" placeholder="Notes" class="p-1 border rounded w-full text-xs"></td>
-                </tr>
-            `;
-            // Only fluids & filters go into the first table, everything else in the third
+            // Note: Removed the extra notes field for fluids/filters for brevity and kept it only for other-checks
+            let rowContent = item.type === 'filter' ? 
+                `<td><input type="checkbox" name="${item.name}-faulty" class="service-checkbox" value="Faulty"></td>
+                 <td><input type="checkbox" name="${item.name}-checked" class="service-checkbox" value="Checked"></td>
+                 <td><input type="checkbox" name="${item.name}-changed" class="service-checkbox" value="Changed"></td>`
+                 : 
+                `<td><input type="checkbox" name="${item.name}-faulty" class="service-checkbox" value="Faulty"></td>
+                 <td><input type="checkbox" name="${item.name}-checked" class="service-checkbox" value="Checked"></td>
+                 <td><input type="checkbox" name="${item.name}-changed" class="service-checkbox" value="Changed"></td>
+                 <td><input type="text" name="${item.name}-notes" placeholder="Notes" class="p-1 border rounded w-full text-xs"></td>`;
+
+            let row = `<tr><td>${item.name}</td>${rowContent}</tr>`;
+
             if (item.type === 'filter') {
                 fluidsBody.innerHTML += row;
             } else if (item.type === 'other') {
                 otherChecksBody.innerHTML += row;
             }
         });
+
 
         LIGHTS_ITEMS.forEach(item => {
             lightsBody.innerHTML += `
@@ -967,14 +978,13 @@
         });
     }
 
-    // Call this once on load, though it will be called by showSection too.
     document.addEventListener('DOMContentLoaded', initializeGeneralService); 
 
     function getGeneralServiceData() {
         const form = document.getElementById('general-service-form');
         const data = {};
 
-        // 1. Client Info (NEW)
+        // 1. Client Info
         data.clientName = document.getElementById('service-client-name').value || 'N/A';
         data.clientPhone = document.getElementById('service-client-phone').value || 'N/A';
 
@@ -988,11 +998,12 @@
 
         // 3. Service Items (Fluids, Filters, Brakes, etc.)
         data.serviceChecks = SERVICE_ITEMS.map(item => {
-            // Find inputs in the entire form, as they are unique by name
             const faulty = form.querySelector(`input[name="${item.name}-faulty"]`).checked;
             const checked = form.querySelector(`input[name="${item.name}-checked"]`).checked;
             const changed = form.querySelector(`input[name="${item.name}-changed"]`).checked;
-            const notes = form.querySelector(`input[name="${item.name}-notes"]`)?.value || '';
+            // Notes is optional and only present for 'other' checks in the UI structure
+            const notesInput = form.querySelector(`input[name="${item.name}-notes"]`);
+            const notes = notesInput ? notesInput.value : '';
 
             let status = 'OK';
             if (changed) status = 'Changed';
@@ -1015,7 +1026,7 @@
         return data;
     }
 
-    // NEW: Function to generate the General Service PDF
+    // Function to generate the General Service PDF
     function generateServiceReportPDF() {
         const data = getGeneralServiceData();
         const { jsPDF } = window.jspdf;
@@ -1030,7 +1041,7 @@
         doc.text(`${data.make} ${data.model} - VIN: ${data.vin}`, 105, y, null, null, "center");
         y += 10;
         
-        // Client Info (NEW)
+        // Client Info 
         doc.setFontSize(10);
         doc.text(`Client Name: ${data.clientName}`, 14, y);
         doc.text(`Client Phone: ${data.clientPhone}`, 105, y);
@@ -1077,7 +1088,7 @@
             columnStyles: { 0: { fontStyle: 'bold', cellWidth: 40 }, 1: { cellWidth: 30 }, 2: { cellWidth: 30 }, 3: { cellWidth: 90 } }
         });
         
-        doc.autoTable.previous.finalY = doc.autoTable.previous.finalY || 10; // safety check
+        doc.autoTable.previous.finalY = doc.autoTable.previous.finalY || 10; 
         doc.setFontSize(8);
         doc.text('Report Generated: ' + new Date().toLocaleDateString(), 14, doc.internal.pageSize.height - 10);
 
