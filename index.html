@@ -289,6 +289,18 @@
     </footer>
 
 <script type="module">
+
+
+    // ... after all other imports
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
+// ... all other firebase imports
+
+// NEW: Import the local error code dictionary
+import { ERROR_CODE_LOOKUP } from "./error_codes_dictionary.js";
+
+// Your web app's Firebase configuration
+// ...
+    
     // ----------------------------------------------------------------------
     // 1. FIREBASE INITIALIZATION & CONFIGURATION (MODULAR)
     // ----------------------------------------------------------------------
@@ -296,7 +308,8 @@
     // Import the functions you need from the SDKs
     import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
     import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-auth.js";
-    import { getFirestore, collection, addDoc, doc, updateDoc, deleteDoc, query, where, orderBy, onSnapshot, getDoc, serverTimestamp, setDoc, getDocs } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js";
+// Note: Removed getDocs, setDoc, and where for local lookup
+import { getFirestore, collection, addDoc, doc, updateDoc, deleteDoc, query, orderBy, onSnapshot, getDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js";
 
     // Your web app's Firebase configuration
     const firebaseConfig = {
@@ -314,7 +327,7 @@
     const db = getFirestore(app);
     const carsCollection = collection(db, 'cars'); 
     // NEW: Reference to the error codes collection
-    const errorCodesCollection = collection(db, 'error_codes'); 
+   // const errorCodesCollection = collection(db, 'error_codes'); // No longer needed
     
     let currentUserRole = null; 
     
@@ -442,50 +455,44 @@
     }
 
     // REFACTORED: Uses Firestore instead of a hardcoded map
-    async function lookupErrorCode(button) {
-        const group = button.closest('.error-code-group');
-        const inputElement = group.querySelector('.error-code-input');
-        const explanationEl = group.querySelector('.error-code-explanation');
-        const hiddenMeaningEl = group.querySelector('.error-code-meaning');
+   // ----------------------------------------------------------------------
+// REVISED: Local Dictionary Lookup (Uses error_codes_dictionary.js)
+// ----------------------------------------------------------------------
+function lookupErrorCode(button) {
+    const group = button.closest('.error-code-group');
+    const inputElement = group.querySelector('.error-code-input');
+    const explanationEl = group.querySelector('.error-code-explanation');
+    const hiddenMeaningEl = group.querySelector('.error-code-meaning');
 
-        const code = inputElement.value.toUpperCase().trim();
-        
-        explanationEl.style.display = 'none';
-        hiddenMeaningEl.value = '';
+    const code = inputElement.value.toUpperCase().trim();
 
-        if (!code) {
-            explanationEl.innerHTML = 'Please enter a code.';
-            explanationEl.style.display = 'block';
-            return;
-        }
+    explanationEl.style.display = 'none';
+    hiddenMeaningEl.value = '';
 
-        // Query Firestore for the code
-        try {
-            const q = query(errorCodesCollection, where("code", "==", code));
-            const querySnapshot = await getDocs(q);
-
-            if (!querySnapshot.empty) {
-                // Found a match
-                const details = querySnapshot.docs[0].data();
-                const fullMeaning = `${code} (${details.issuer}): ${details.meaning}`;
-                
-                explanationEl.innerHTML = `**${details.issuer}:** ${details.meaning}`;
-                explanationEl.className = 'error-code-explanation text-sm p-2 bg-indigo-50 text-indigo-800 rounded';
-                explanationEl.style.display = 'block';
-                hiddenMeaningEl.value = fullMeaning; 
-            } else {
-                // No match found
-                explanationEl.innerHTML = `**Code ${code}**: No definition found in database.`;
-                explanationEl.className = 'error-code-explanation text-sm p-2 bg-red-50 text-red-800 rounded';
-                hiddenMeaningEl.value = `${code}: No definition found.`; 
-            }
-        } catch (error) {
-            console.error("Error looking up code from Firestore:", error);
-            explanationEl.innerHTML = `**Code ${code}**: Lookup failed (Network/DB error).`;
-            explanationEl.className = 'error-code-explanation text-sm p-2 bg-yellow-50 text-yellow-800 rounded';
-            hiddenMeaningEl.value = `${code}: Lookup failed.`; 
-        }
+    if (!code) {
+        explanationEl.innerHTML = 'Please enter a code.';
+        explanationEl.style.display = 'block';
+        return;
     }
+
+    const details = ERROR_CODE_LOOKUP[code];
+
+    if (details) {
+        // Found a match in the local dictionary
+        const fullMeaning = `${code} (${details.issuer}): ${details.meaning}`;
+
+        explanationEl.innerHTML = `**${details.issuer}:** ${details.meaning}`;
+        explanationEl.className = 'error-code-explanation text-sm p-2 bg-indigo-50 text-indigo-800 rounded';
+        explanationEl.style.display = 'block';
+        hiddenMeaningEl.value = fullMeaning; 
+    } else {
+        // No match found
+        explanationEl.innerHTML = `**Code ${code}**: No definition found in the local dictionary.`;
+        explanationEl.className = 'error-code-explanation text-sm p-2 bg-red-50 text-red-800 rounded';
+        explanationEl.style.display = 'block';
+        hiddenMeaningEl.value = `${code}: No definition found.`; 
+    }
+}
 
     function getAllErrorCodesWithMeaning() {
         const groups = document.querySelectorAll('.error-code-group');
@@ -1100,3 +1107,4 @@
 </script>
 </body>
 </html>
+
