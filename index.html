@@ -942,55 +942,71 @@
      * Updates the client fields and populates the vehicle dropdown for that client.
      * @param {string} section 'entry' or 'service'
      */
-    function lookupClientDetails(section) {
-        const searchInputId = `client-search-${section}`;
-        const nameInputId = section === 'entry' ? 'client-name' : 'service-client-name';
-        const phoneInputId = section === 'entry' ? 'client-phone' : 'service-client-phone';
-        const emailInputId = section === 'entry' ? 'client-email' : null;
-        const carSelectId = `car-select-${section}`;
-        const searchVal = document.getElementById(searchInputId).value.trim();
-        
-        // Extract phone number from the datalist value (e.g., "+2547... (John Doe)")
-        const match = searchVal.match(/\+?[0-9\s\-\(\)]+/);
-        const clientPhone = match ? match[0].trim() : searchVal;
+    /**
+ * Looks up client details based on the selected value from the datalist.
+ * Updates the client fields and populates the vehicle dropdown for that client.
+ * @param {string} section 'entry' or 'service'
+ */
+function lookupClientDetails(section) {
+    const searchInputId = `client-search-${section}`;
+    const nameInputId = section === 'entry' ? 'client-name' : 'service-client-name';
+    const phoneInputId = section === 'entry' ? 'client-phone' : 'service-client-phone';
+    const emailInputId = section === 'entry' ? 'client-email' : null;
+    const carSelectId = `car-select-${section}`;
+    const searchVal = document.getElementById(searchInputId).value.trim();
+    
+    // NOTE: The original extraction logic (using 'match') is now skipped for the search
+    // to allow searching by name. The search will now use the raw 'searchVal'.
 
-        const client = clientCache.find(c => c.clientPhone === clientPhone);
-        const carSelect = document.getElementById(carSelectId);
-        
-        currentClientVehicles = []; // Clear previous vehicles
-        carSelect.innerHTML = '<option value="">-- New Vehicle Entry --</option>'; // Reset vehicle dropdown
+    // MODIFIED: Use a robust search that checks the raw input against:
+    // 1. The full Phone Number
+    // 2. The Client Name (case-insensitive)
+    // 3. The full Datalist suggestion (Phone (Name))
+    const client = clientCache.find(c => 
+        c.clientPhone.trim() === searchVal ||
+        c.clientName.trim().toLowerCase() === searchVal.toLowerCase() ||
+        `${c.clientPhone} (${c.clientName})`.trim() === searchVal
+    );
+    
+    const carSelect = document.getElementById(carSelectId);
+    
+    currentClientVehicles = []; // Clear previous vehicles
+    carSelect.innerHTML = '<option value="">-- New Vehicle Entry --</option>'; // Reset vehicle dropdown
 
-        if (client) {
-            // 1. Autofill Client Details
-            document.getElementById(nameInputId).value = client.clientName;
-            document.getElementById(phoneInputId).value = client.clientPhone;
-            if (emailInputId) {
-                document.getElementById(emailInputId).value = client.clientEmail || '';
-            }
-            
-            // 2. Populate Vehicle Dropdown
-            const vehicles = clientCarsCache[client.clientPhone] || [];
-            currentClientVehicles = vehicles;
-            
-            vehicles.forEach((car, index) => {
-                const option = document.createElement('option');
-                option.value = index; // Use index to reference the car in the cache
-                option.textContent = `${car.plate} (${car.make} ${car.model}) - Status: ${car.status}`;
-                carSelect.appendChild(option);
-            });
-            
-            alert(`Client ${client.clientName} loaded with ${vehicles.length} previous vehicles. You can now select a vehicle.`);
-            
-        } else {
-            // Reset client fields if no client found
-            document.getElementById(nameInputId).value = '';
-            document.getElementById(phoneInputId).value = clientPhone; // Keep the phone if it's a potential new one
-            if (emailInputId) {
-                document.getElementById(emailInputId).value = '';
-            }
-            alert("Client not found in database. Please fill in their details manually.");
+    if (client) {
+        // 1. Autofill Client Details
+        document.getElementById(nameInputId).value = client.clientName;
+        document.getElementById(phoneInputId).value = client.clientPhone;
+        if (emailInputId) {
+            document.getElementById(emailInputId).value = client.clientEmail || '';
         }
+        
+        // 2. Populate Vehicle Dropdown
+        const vehicles = clientCarsCache[client.clientPhone] || [];
+        currentClientVehicles = vehicles;
+        
+        vehicles.forEach((car, index) => {
+            const option = document.createElement('option');
+            option.value = index; // Use index to reference the car in the cache
+            option.textContent = `${car.plate} (${car.make} ${car.model}) - Status: ${car.status}`;
+            carSelect.appendChild(option);
+        });
+        
+        alert(`Client ${client.clientName} loaded with ${vehicles.length} previous vehicles. You can now select a vehicle.`);
+        
+    } else {
+        // Reset client fields if no client found
+        document.getElementById(nameInputId).value = '';
+        // If the user typed a valid-looking phone, keep it. Otherwise, clear.
+        const phoneMatch = searchVal.match(/\+?[0-9\s\-\(\)]+/); 
+        document.getElementById(phoneInputId).value = phoneMatch ? phoneMatch[0].trim() : ''; 
+        
+        if (emailInputId) {
+            document.getElementById(emailInputId).value = '';
+        }
+        alert("Client not found in database. Please fill in their details manually.");
     }
+}
 
     /**
      * Autofills vehicle details when a car is selected from the dropdown.
