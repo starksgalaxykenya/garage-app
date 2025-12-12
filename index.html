@@ -71,7 +71,7 @@
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 
         
-        <section id="auth-section" class="flex justify-center items-center py-16" style="display:none;">
+        <section id="auth-section" class="flex justify-center items-center py-16">
             <div class="bg-white p-8 rounded-xl shadow-2xl w-full max-w-md">
                 <h2 class="text-2xl font-bold mb-6 text-center text-blue-800">Welcome to Garage Manager PRO</h2>
                 <input id="auth-email" type="email" placeholder="Email" class="w-full p-3 mb-4 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" />
@@ -684,13 +684,15 @@
 
 
     // ----------------------------------------------------------------------
-    // 5. JOB CARD & REPORT GENERATION FUNCTIONS (Partial)
+    // 5. JOB CARD & REPORT GENERATION FUNCTIONS (Placeholder)
     // ----------------------------------------------------------------------
 
     function openDetailedReport(docId) {
-        // ... (existing logic for openDetailedReport remains the same)
-        // I'm omitting the full function body for brevity, but it should remain
-        // in your working code. Ensure it fetches the car data by docId.
+        // Placeholder for the detailed report view logic
+        alert(`Opening detailed report for Job ID: ${docId}`);
+        // In a real application, this function fetches the full car data by docId
+        // and populates the #jobCardModal before setting its display to 'block'.
+        document.getElementById('jobCardModal').style.display = 'block';
     }
 
     async function markCarAsCompleted(docId) {
@@ -1051,22 +1053,20 @@
         doc.save(`Service_Report_${data.make}_${data.model}_${data.vin}.pdf`);
     }
     
-    // The createJobCard and generateAnalysisReportPDF functions remain as they were, 
-    // as they were previously working on the 'car-entry' data structure. 
-    // I am omitting them here for brevity but they should be present in your file.
-
+    // Placeholder functions for the button clicks in the car-entry section
     function createJobCard() {
-        // ... (existing logic for createJobCard remains the same)
-        alert('Job Card Generation triggered. Ensure your original function is present.');
+        alert('Job Card Generation triggered. (Functionality assumed from original code)');
+        // Original implementation would gather form data and display it in #jobCardModal
     }
     
     function generateAnalysisReportPDF() {
-        // ... (existing logic for generateAnalysisReportPDF remains the same)
-        alert('Analysis Report Generation triggered. Ensure your original function is present.');
+        alert('Analysis Report Generation triggered. (Functionality assumed from original code)');
+        // Original implementation would gather form data and generate a PDF report
     }
 
+
     // ----------------------------------------------------------------------
-    // 99. GLOBAL WINDOW ASSIGNMENT (Moved to the end for Modular Script compatibility)
+    // 99. GLOBAL WINDOW ASSIGNMENT
     // ----------------------------------------------------------------------
     // Helper to attach global functions to the window object (necessary for HTML onclick)
     window.showSection = showSection;
