@@ -313,7 +313,8 @@
                 </div>
                 <div id="report-content" class="space-y-6 text-gray-700">
                     </div>
-                <div class="flex justify-end mt-6">
+                <div class="flex justify-end mt-6 space-x-4">
+                    <button id="dailyDownloadBtn" data-report-type="daily" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded transition duration-150">Download PDF</button>
                     <button onclick="document.getElementById('dailyReportModal').style.display = 'none'" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded transition duration-150">Close</button>
                 </div>
             </div>
@@ -326,7 +327,8 @@
                 </div>
                 <div id="monthly-report-content" class="space-y-6 text-gray-700">
                     </div>
-                <div class="flex justify-end mt-6">
+                <div class="flex justify-end mt-6 space-x-4">
+                    <button id="monthlyDownloadBtn" data-report-type="monthly" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded transition duration-150">Download PDF</button>
                     <button onclick="document.getElementById('monthlyReportModal').style.display = 'none'" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded transition duration-150">Close</button>
                 </div>
             </div>
@@ -375,6 +377,12 @@
     
     // NEW: Global cache for completed jobs to power the daily report
     let completedJobsCache = [];
+    
+    // NEW: Global variables to temporarily hold the report data for PDF generation
+    let currentReportJobs = [];
+    let currentReportSummary = {};
+    let currentReportTitle = "";
+    let currentReportDateRange = "";
 
     // Expose functions globally for HTML onclick attributes
     window.showSection = showSection;
@@ -396,6 +404,7 @@
     // START NEW: Expose the daily & monthly report functions
     window.generateDailyReport = generateDailyReport;
     window.generateMonthlyReport = generateMonthlyReport; 
+    window.generateReportPDF = generateReportPDF; // EXPOSE PDF FUNCTION
     // END NEW
 
     // ----------------------------------------------------------------------
@@ -1508,6 +1517,12 @@
     function renderReportContent(jobs, summary, title, dateRange, containerId, modalId) {
         const reportContentEl = document.getElementById(containerId);
         
+        // NEW: Populate globals for PDF generation
+        currentReportJobs = jobs;
+        currentReportSummary = summary;
+        currentReportTitle = title;
+        currentReportDateRange = dateRange;
+
         if (jobs.length === 0) {
             reportContentEl.innerHTML = `<p class="text-center text-xl text-gray-500 py-10">No jobs were completed in this period (${dateRange}).</p>`;
             document.getElementById(modalId).style.display = 'flex';
@@ -1595,7 +1610,7 @@
         renderReportContent(
             completedToday,
             summary,
-            'Today',
+            'End-of-Day Report',
             `Date: ${reportDate}`,
             'report-content',
             'dailyReportModal'
@@ -1629,11 +1644,111 @@
         renderReportContent(
             completedThisMonth,
             summary,
-            'This Month (Last 30 Days)',
+            'Monthly Performance Report',
             `Period: ${startDate} - ${endDate}`,
             'monthly-report-content',
             'monthlyReportModal'
         );
+    }
+    
+    // NEW FUNCTION: Generates the PDF for the Daily/Monthly report
+    function generateReportPDF(reportType) {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF('p', 'mm', 'a4'); // 'p' for portrait, 'mm' unit, A4 size
+        let y = 15;
+        
+        const jobs = currentReportJobs;
+        const summary = currentReportSummary;
+        const title = currentReportTitle;
+        const dateRange = currentReportDateRange;
+        const fileName = `${reportType}_Report_${new Date().toISOString().split('T')[0]}.pdf`;
+        
+        // 1. Header
+        doc.setFontSize(22);
+        doc.setTextColor(79, 70, 229); // indigo-600
+        doc.text(title, 14, y);
+        y += 8;
+        
+        doc.setFontSize(10);
+        doc.setTextColor(107, 114, 128); // gray-500
+        doc.text(`Period: ${dateRange}`, 14, y);
+        y += 4;
+        doc.line(14, y, 196, y); // Divider
+        y += 8;
+        
+        // 2. Summary (The "Charts and Graphs" represented as tables)
+        
+        doc.setFontSize(16);
+        doc.setTextColor(16, 185, 129); // green-500
+        doc.text("Performance Summary (Key Metrics)", 14, y);
+        y += 8;
+        
+        doc.setFontSize(12);
+        doc.setTextColor(0, 0, 0);
+        doc.text(`Total Jobs Completed: ${summary.totalJobs}`, 14, y);
+        y += 10;
+        
+        // Convert summary objects to table data arrays, sorted by value
+        const jobTypesData = Object.entries(summary.jobsByType).sort(([, a], [, b]) => b - a);
+        const mechanicsData = Object.entries(summary.jobsByMechanic).sort(([, a], [, b]) => b - a);
+        const makesData = Object.entries(summary.jobsByMake).sort(([, a], [, b]) => b - a);
+        
+        const summaryTableData = [
+            [{ content: 'Jobs by Type', colSpan: 2, styles: { fillColor: [240, 249, 255], fontStyle: 'bold' } }],
+            ...jobTypesData,
+            [{ content: '', colSpan: 2, styles: { minCellHeight: 5, fillColor: [255, 255, 255] } }], // Spacer
+            [{ content: 'Top Mechanics', colSpan: 2, styles: { fillColor: [240, 249, 255], fontStyle: 'bold' } }],
+            ...mechanicsData,
+            [{ content: '', colSpan: 2, styles: { minCellHeight: 5, fillColor: [255, 255, 255] } }], // Spacer
+            [{ content: 'Top Vehicle Makes', colSpan: 2, styles: { fillColor: [240, 249, 255], fontStyle: 'bold' } }],
+            ...makesData
+        ];
+
+        doc.autoTable({
+            startY: y,
+            body: summaryTableData,
+            theme: 'plain',
+            styles: { fontSize: 10, cellPadding: 2 },
+            columnStyles: { 0: { fontStyle: 'bold' } },
+            margin: { left: 14, right: 14 },
+            columnWidth: 'wrap'
+        });
+        
+        y = doc.autoTable.previous.finalY + 15;
+        
+        // 3. Detailed List
+        if (jobs.length > 0) {
+            doc.setFontSize(16);
+            doc.setTextColor(239, 68, 68); // red-500
+            doc.text("Detailed Completed Jobs List", 14, y);
+            y += 8;
+            
+            const detailedHead = [['Plate', 'Vehicle (Make/Model/Year)', 'Job Type', 'Mechanic', 'Completion Time']];
+            const detailedBody = jobs.map(job => [
+                job.plate || 'N/A',
+                `${job.make || 'N/A'} ${job.model || 'N/A'} (${job.year || 'N/A'})`,
+                job.jobType === 'GeneralService' ? 'G. Service' : 'Repair',
+                job.assignedMechanic || 'N/A',
+                job.completedAt ? job.completedAt.toDate().toLocaleTimeString() : 'N/A'
+            ]);
+
+            doc.autoTable({
+                startY: y,
+                head: detailedHead,
+                body: detailedBody,
+                theme: 'striped',
+                styles: { fontSize: 8, cellPadding: 1.5, overflow: 'linebreak' },
+                headStyles: { fillColor: [59, 130, 246] }, // blue-500
+                margin: { left: 14, right: 14 }
+            });
+        }
+
+        // 4. Footer
+        doc.setFontSize(8);
+        doc.setTextColor(156, 163, 175); // gray-400
+        doc.text(`Generated by Garage Manager PRO on ${new Date().toLocaleDateString()}`, 14, doc.internal.pageSize.height - 10);
+        
+        doc.save(fileName);
     }
 
 
@@ -1645,6 +1760,10 @@
 
         // MODIFICATION 4: Attach WhatsApp handler to the button element in the modal
         document.getElementById('whatsapp-btn').onclick = sendJobCardViaWhatsApp;
+        
+        // NEW: Attach PDF handlers to the report modals
+        document.getElementById('dailyDownloadBtn').onclick = () => generateReportPDF('daily');
+        document.getElementById('monthlyDownloadBtn').onclick = () => generateReportPDF('monthly');
     });
 
 </script>
