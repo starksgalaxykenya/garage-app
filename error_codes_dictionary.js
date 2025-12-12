@@ -905,7 +905,7 @@ export const ERROR_CODE_LOOKUP = {
     "P0A14": { issuer: "[GENERIC]", meaning: 'Drive System - Manufacturer Sub-Code' },
     "P0A15": { issuer: "[GENERIC]", meaning: 'Drive System - Manufacturer Sub-Code' },
     "P0A16": { issuer: "[GENERIC]", meaning: 'Drive System - Manufacturer Sub-Code' },
-    "P0A17": { issuer: "Power Module", meaning: 'Drive Motor “B” Power Inverter Module Over Temperature' }, // Often linked to B-Side
+    "P0A17": { issuer: "Power Module", meaning: "Drive Motor \"B\" Power Inverter Module Over Temperature" }, // Often linked to B-Side
     "P0A18": { issuer: "[GENERIC]", meaning: 'Drive System - Manufacturer Sub-Code' },
     "P0A19": { issuer: "[GENERIC]", meaning: 'Drive System - Manufacturer Sub-Code' },
     "P0A1A": { issuer: "MG Control", meaning: 'Generator/Motor Control Module Fault' },
@@ -1556,7 +1556,7 @@ export const ERROR_CODE_LOOKUP = {
     "P0C84": { issuer: "Hybrid/EV", meaning: 'Traction Motor/Inverter/Cooling System Fault' },
     "P0C85": { issuer: "Hybrid/EV", meaning: 'Traction Motor/Inverter/Cooling System Fault' },
     "P0C86": { issuer: "Hybrid/EV", meaning: 'Traction Motor/Inverter/Cooling System Fault' },
-    "P0C87": { issuer: "Hybrid/EV", meaning: 'Hybrid/EV Battery Temperature Sensor 'G'/'H' Correlation' }
+    "P0C87": { issuer: "Hybrid/EV", meaning: "Hybrid/EV Battery Temperature Sensor 'G'/'H' Correlation" }
 };
 
  const startCode = parseInt('0A04', 16);
@@ -1579,6 +1579,5 @@ export const ERROR_CODE_LOOKUP = {
             else if (code.startsWith('P0C')) meaning = "Charging/DC-DC Converter/System Control Fault. (Refine meaning for specific P0Axx-P0Cxx codes)";
 
             ERROR_CODE_LOOKUP[code] = { issuer: category, meaning: meaning };
+            }
         }
-    }
-})();
