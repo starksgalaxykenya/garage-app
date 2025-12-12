@@ -283,9 +283,10 @@
                 <button onclick="generateDailyReport()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-lg transition duration-150">Generate Today's Report</button>
             </div>
 
-            <div class="mt-8 bg-gray-100 p-6 rounded-xl shadow-inner">
-                <h3 class="text-xl font-semibold text-gray-700 border-b pb-2 mb-4">Monthly Compilation (Analytics Placeholder)</h3>
-                <p class="text-gray-500">This section is where monthly aggregate data would be queried from the database and compiled. It would show trends, top mechanics, most frequent repairs, and profitability over a 30-day period using charting libraries like **Chart.js**.</p>
+            <div class="mt-8 bg-gray-100 p-6 rounded-xl shadow-inner space-y-6">
+                <h3 class="text-xl font-semibold text-gray-700 border-b pb-2">Monthly Compilation & Analytics</h3>
+                <p class="text-gray-500">Generate a comprehensive report summarizing all completed jobs over the last 30 days. This aggregates data for monthly performance review.</p>
+                <button onclick="generateMonthlyReport()" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-8 rounded-lg transition duration-150">Generate Monthly Report</button>
             </div>
         </section>
         <div id="jobCardModal" class="fixed inset-0 bg-gray-600 bg-opacity-75 flex items-center justify-center p-4 z-[100]" style="display:none;">
@@ -314,6 +315,19 @@
                     </div>
                 <div class="flex justify-end mt-6">
                     <button onclick="document.getElementById('dailyReportModal').style.display = 'none'" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded transition duration-150">Close</button>
+                </div>
+            </div>
+        </div>
+        <div id="monthlyReportModal" class="fixed inset-0 bg-gray-600 bg-opacity-75 flex items-center justify-center p-4 z-[100]" style="display:none;">
+            <div class="bg-white p-8 rounded-lg shadow-xl w-full max-w-5xl custom-scrollbar max-h-[90vh] overflow-y-auto">
+                <div class="text-center border-b pb-4 mb-4">
+                    <h2 class="text-3xl font-bold text-purple-800">Monthly Performance Report</h2>
+                    <p class="text-sm text-gray-600">Summary of all jobs completed between <span id="monthly-report-start"></span> and <span id="monthly-report-end"></span>.</p>
+                </div>
+                <div id="monthly-report-content" class="space-y-6 text-gray-700">
+                    </div>
+                <div class="flex justify-end mt-6">
+                    <button onclick="document.getElementById('monthlyReportModal').style.display = 'none'" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded transition duration-150">Close</button>
                 </div>
             </div>
         </div>
@@ -379,8 +393,9 @@
     window.sendJobCardViaWhatsApp = sendJobCardViaWhatsApp;
     window.completeServiceJob = completeServiceJob; 
     
-    // START NEW: Expose the daily report function
+    // START NEW: Expose the daily & monthly report functions
     window.generateDailyReport = generateDailyReport;
+    window.generateMonthlyReport = generateMonthlyReport; 
     // END NEW
 
     // ----------------------------------------------------------------------
@@ -1450,7 +1465,7 @@
     }
 
     // ----------------------------------------------------------------------
-    // 8. DAILY REPORT LOGIC (NEW SECTION)
+    // 8. DAILY & MONTHLY REPORT LOGIC (NEW SECTION)
     // ----------------------------------------------------------------------
     
     // Helper to check if two dates are the same day (ignoring time)
@@ -1460,41 +1475,16 @@
                date1.getDate() === date2.getDate();
     }
     
-    function objectToHtmlList(obj) {
-        return Object.entries(obj).map(([key, value]) => `<li><span class="font-semibold">${key}</span>: ${value} jobs</li>`).join('');
-    };
-
-    function generateDailyReport() {
-        // 1. Filter completed jobs for today
-        const today = new Date();
-        const completedToday = completedJobsCache.filter(job => {
-            // Use the 'completedAt' timestamp if available, fallback to 'createdAt'
-            const completionTime = job.completedAt ? job.completedAt.toDate() : (job.createdAt ? job.createdAt.toDate() : null);
-            if (completionTime) {
-                return isSameDay(completionTime, today);
-            }
-            return false;
-        });
-
-        const reportDate = today.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-        document.getElementById('report-date').textContent = reportDate;
-        const reportContentEl = document.getElementById('report-content');
-
-        if (completedToday.length === 0) {
-            reportContentEl.innerHTML = `<p class="text-center text-xl text-gray-500 py-10">No jobs were marked as completed today (${reportDate}).</p>`;
-            document.getElementById('dailyReportModal').style.display = 'flex';
-            return;
-        }
-
-        // 2. Data Summarization
+    // Helper function to aggregate data from a list of jobs (Refactored from Daily Report)
+    function summarizeJobs(jobs) {
         const summary = {
-            totalJobs: completedToday.length,
+            totalJobs: jobs.length,
             jobsByType: {},
             jobsByMechanic: {},
             jobsByMake: {}
         };
 
-        completedToday.forEach(job => {
+        jobs.forEach(job => {
             const type = job.jobType === 'GeneralService' ? 'General Service' : 'Standard Repair';
             const mechanic = job.assignedMechanic || 'N/A';
             const make = job.make || 'N/A';
@@ -1504,27 +1494,49 @@
             summary.jobsByMake[make] = (summary.jobsByMake[make] || 0) + 1;
         });
         
-        // 3. Render Summary
+        return summary;
+    }
+    
+    function objectToHtmlList(obj) {
+        // Sort the list by value (descending) for 'Charts' effect
+        return Object.entries(obj)
+            .sort(([, a], [, b]) => b - a)
+            .map(([key, value]) => `<li><span class="font-semibold">${key}</span>: ${value} jobs</li>`).join('');
+    };
+    
+    // Renders the summary in the modal (Reusable function for both daily/monthly)
+    function renderReportContent(jobs, summary, title, dateRange, containerId, modalId) {
+        const reportContentEl = document.getElementById(containerId);
+        
+        if (jobs.length === 0) {
+            reportContentEl.innerHTML = `<p class="text-center text-xl text-gray-500 py-10">No jobs were completed in this period (${dateRange}).</p>`;
+            document.getElementById(modalId).style.display = 'flex';
+            return;
+        }
+        
+        // --- HTML Content for the Report (Charts & Graphs compiled as lists) ---
         reportContentEl.innerHTML = `
             <div class="bg-blue-50 p-4 rounded-lg border-l-4 border-blue-500">
-                <h4 class="text-2xl font-bold text-blue-800">${summary.totalJobs} Jobs Completed Today</h4>
+                <h4 class="text-2xl font-bold text-blue-800">${summary.totalJobs} Jobs Completed ${title}</h4>
+                <p class="text-sm text-gray-600">${dateRange}</p>
             </div>
             
+            <h3 class="text-xl font-bold text-purple-700 mt-6 border-b pb-1">Summary Charts & Graphs (Data Compilation) </h3>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div class="bg-gray-100 p-4 rounded-lg">
-                    <h5 class="font-bold text-lg text-blue-600 border-b pb-1 mb-2">Jobs by Type</h5>
+                    <h5 class="font-bold text-lg text-blue-600 border-b pb-1 mb-2">Jobs by Type (Pie Chart Data)</h5>
                     <ul class="list-disc list-inside space-y-1 text-sm">
                         ${objectToHtmlList(summary.jobsByType)}
                     </ul>
                 </div>
                 <div class="bg-gray-100 p-4 rounded-lg">
-                    <h5 class="font-bold text-lg text-green-600 border-b pb-1 mb-2">Jobs by Mechanic</h5>
+                    <h5 class="font-bold text-lg text-green-600 border-b pb-1 mb-2">Top Mechanics (Bar Chart Data)</h5>
                     <ul class="list-disc list-inside space-y-1 text-sm">
                         ${objectToHtmlList(summary.jobsByMechanic)}
                     </ul>
                 </div>
                 <div class="bg-gray-100 p-4 rounded-lg">
-                    <h5 class="font-bold text-lg text-orange-600 border-b pb-1 mb-2">Top Vehicle Makes</h5>
+                    <h5 class="font-bold text-lg text-orange-600 border-b pb-1 mb-2">Top Vehicle Makes (Bar Chart Data)</h5>
                     <ul class="list-disc list-inside space-y-1 text-sm">
                         ${objectToHtmlList(summary.jobsByMake)}
                     </ul>
@@ -1544,7 +1556,7 @@
                         </tr>
                     </thead>
                     <tbody class="bg-white divide-y divide-gray-200 text-sm">
-                        ${completedToday.map(job => `
+                        ${jobs.map(job => `
                             <tr>
                                 <td class="px-3 py-2 whitespace-nowrap">${job.plate || 'N/A'}</td>
                                 <td class="px-3 py-2 whitespace-nowrap">${job.make || 'N/A'} ${job.model || 'N/A'}</td>
@@ -1556,16 +1568,72 @@
                     </tbody>
                 </table>
             </div>
-
-            <h3 class="text-xl font-bold text-purple-700 mt-6 border-b pb-1">Charts & Monthly Compilation</h3>
-            <div id="chart-placeholder" class="bg-purple-50 p-4 rounded-lg text-center border-dashed border-2 border-purple-300">
-                <p class="text-purple-700 font-semibold">CHART INTEGRATION AREA</p>
-                <p class="text-sm text-purple-600">To generate dynamic charts (e.g., jobs by mechanic pie chart, jobs by make bar chart), you would integrate a library like **Chart.js** here, using the data summarized above.</p>
-                <p class="text-sm text-purple-600 mt-2">The Monthly Compilation logic would similarly aggregate data across a month using Firebase query filters and render a summary chart here.</p>
-            </div>
         `;
+        
+        document.getElementById(modalId).style.display = 'flex';
+    }
 
-        document.getElementById('dailyReportModal').style.display = 'flex';
+
+    function generateDailyReport() {
+        // 1. Filter completed jobs for today
+        const today = new Date();
+        const completedToday = completedJobsCache.filter(job => {
+            const completionTime = job.completedAt ? job.completedAt.toDate() : (job.createdAt ? job.createdAt.toDate() : null);
+            if (completionTime) {
+                return job.status === 'Completed' && isSameDay(completionTime, today);
+            }
+            return false;
+        });
+        
+        // 2. Data Summarization
+        const summary = summarizeJobs(completedToday);
+
+        // 3. Render Report
+        const reportDate = today.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+        document.getElementById('report-date').textContent = reportDate;
+        
+        renderReportContent(
+            completedToday,
+            summary,
+            'Today',
+            `Date: ${reportDate}`,
+            'report-content',
+            'dailyReportModal'
+        );
+    }
+    
+    function generateMonthlyReport() {
+        const today = new Date();
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(today.getDate() - 30); // Calculate 30 days ago
+
+        // 1. Filter completed jobs for the last 30 days
+        const completedThisMonth = completedJobsCache.filter(job => {
+            const completionTime = job.completedAt ? job.completedAt.toDate() : (job.createdAt ? job.createdAt.toDate() : null);
+            if (completionTime) {
+                return job.status === 'Completed' && completionTime >= thirtyDaysAgo;
+            }
+            return false;
+        });
+
+        // 2. Data Summarization
+        const summary = summarizeJobs(completedThisMonth);
+
+        // 3. Render Report
+        const startDate = thirtyDaysAgo.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        const endDate = today.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        
+        document.getElementById('monthly-report-start').textContent = startDate;
+        document.getElementById('monthly-report-end').textContent = endDate;
+
+        renderReportContent(
+            completedThisMonth,
+            summary,
+            'This Month (Last 30 Days)',
+            `Period: ${startDate} - ${endDate}`,
+            'monthly-report-content',
+            'monthlyReportModal'
+        );
     }
 
 
