@@ -70,14 +70,6 @@
 
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 
-        <section id="subscription-warning" class="text-center py-16 bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 rounded-lg shadow-lg" style="display:block;">
-            <h2 class="text-3xl font-bold mb-4">🚨 Subscription Required! 🚨</h2>
-            <p class="text-xl">Your subscription is expired or inactive. Please renew to access **Garage Manager PRO** features.</p>
-            <div class="mt-6 flex justify-center space-x-4">
-                <button onclick="alert('Proceeding to renewal page... (Functionality to be implemented)')" class="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-3 px-6 rounded-lg transition duration-150">Renew Subscription Now</button>
-                <button onclick="activateSubscriptionForTesting()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-lg transition duration-150" id="test-activate-btn">Test: Activate Subscription</button>
-            </div>
-        </section>
         
         <section id="auth-section" class="flex justify-center items-center py-16" style="display:none;">
             <div class="bg-white p-8 rounded-xl shadow-2xl w-full max-w-md">
@@ -363,10 +355,8 @@
     const auth = getAuth(app);
     const db = getFirestore(app);
     const carsCollection = collection(db, 'cars'); 
-    const userStatusCollection = collection(db, 'user_status');
     
     let currentUserRole = null; 
-    let isSubscribed = false; 
     
     // Global variable to hold current job card data for WhatsApp sending
     let currentJobCardData = null; 
@@ -392,103 +382,35 @@
     // 2. VIEW MANAGEMENT & AUTH
     // ----------------------------------------------------------------------
 
-    /**
-     * Checks the user's subscription status from Firestore.
-     * @param {Object} user - The Firebase User object.
-     */
-    async function checkSubscription(user) {
-        if (!user) {
-            isSubscribed = false;
-            return false;
-        }
-
-        const userStatusRef = doc(userStatusCollection, user.uid);
-        try {
-            const docSnap = await getDoc(userStatusRef);
-            
-            if (docSnap.exists() && docSnap.data().subscribed === true) {
-                isSubscribed = true;
-                return true;
-            } else {
-                isSubscribed = false;
-                return false;
-            }
-        } catch (error) {
-            console.error("Error fetching subscription status:", error);
-            isSubscribed = false;
-            return false;
-        }
-    }
-    
     // Handles the flow after Firebase Auth state changes
-    onAuthStateChanged(auth, async (user) => {
+    onAuthStateChanged(auth, (user) => {
         document.getElementById('logoutBtn').style.display = 'none';
         
         if (user) {
-            // Logged in: Check subscription status
-            const subscribed = await checkSubscription(user);
+            // Logged in: Direct access after authentication
             currentUserRole = getMockRole(user.email);
             document.getElementById('logoutBtn').style.display = 'block';
 
-            // Show or hide the test button based on current status
-            document.getElementById('test-activate-btn').style.display = subscribed ? 'none' : 'inline-block';
-
-            if (subscribed) {
-                // Ensure search inputs are reset and we load the active list on successful login/subscription
-                document.getElementById('active-search').value = '';
-                document.getElementById('completed-search').value = '';
-                showSection('car-list'); // Access granted
-            } else {
-                showSection('subscription-warning'); // Access denied
-            }
+            // Ensure search inputs are reset and we load the active list on successful login
+            document.getElementById('active-search').value = '';
+            document.getElementById('completed-search').value = '';
+            showSection('car-list'); // Access granted immediately after login
         } else {
             // Logged out
-            isSubscribed = false;
-            // Hide the test button if logged out
-            document.getElementById('test-activate-btn').style.display = 'none';
             showSection('auth-section');
         }
     });
 
-    // Function to manually activate subscription for testing purposes
-    async function activateSubscriptionForTesting() {
-        const user = auth.currentUser;
-        
-        if (!user) {
-            alert('Please log in first before activating the subscription.');
-            // Force redirection back to login if somehow clicked while logged out
-            showSection('auth-section'); 
-            return;
-        }
-
-        try {
-            const userStatusRef = doc(userStatusCollection, user.uid);
-            
-            // Set subscription status to active
-            await setDoc(userStatusRef, {
-                subscribed: true,
-                startDate: serverTimestamp(),
-                plan: 'PRO_TEST' 
-            }, { merge: true });
-
-            alert('Subscription activated successfully! You now have access.');
-            
-            // Re-run the auth check to refresh the UI and grant access
-            onAuthStateChanged(auth, () => {}); 
-
-        } catch (error) {
-            console.error("Error setting subscription status: ", error);
-            alert(`Failed to activate subscription. Check your Firebase permissions (Rules): ${error.message}`);
-        }
-    }
-
     function showSection(sectionId) {
-        const sections = ['subscription-warning', 'auth-section', 'car-entry', 'general-service', 'car-list', 'completed-list'];
+        // Removed 'subscription-warning' from the list of sections
+        const sections = ['auth-section', 'car-entry', 'general-service', 'car-list', 'completed-list'];
         sections.forEach(id => {
-            document.getElementById(id).style.display = 'none';
+            const el = document.getElementById(id);
+            if (el) el.style.display = 'none';
         });
 
-        document.getElementById(sectionId).style.display = 'block';
+        const targetEl = document.getElementById(sectionId);
+        if (targetEl) targetEl.style.display = 'block';
 
         // When switching sections, pass any existing search term to fetchCars
         if (sectionId === 'car-list') {
@@ -691,7 +613,7 @@
 
     // UPDATED: Fetch and Display Cars with Client-Side Search Filtering
     function fetchCars(status, searchTerm = '') {
-        if (!auth.currentUser || !isSubscribed) return;
+        if (!auth.currentUser) return;
 
         const containerId = status === 'Active' ? 'car-list-container' : 'completed-list-container';
         const container = document.getElementById(containerId);
@@ -1158,7 +1080,6 @@
     window.markCarAsCompleted = markCarAsCompleted;
     window.deleteCompletedCar = deleteCompletedCar;
     window.openDetailedReport = openDetailedReport;
-    window.activateSubscriptionForTesting = activateSubscriptionForTesting; 
     
 </script>
 </body>
