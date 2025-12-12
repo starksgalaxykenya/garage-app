@@ -1015,7 +1015,7 @@ export const ERROR_CODE_LOOKUP = {
     "P0A7C": { issuer: "HV Battery", meaning: 'Hybrid Battery Pack Internal Failure' },
     "P0A7D": { issuer: "HV Battery", meaning: 'Hybrid Battery Pack State of Charge Low' },
     "P0A7E": { issuer: "HV Battery", meaning: 'Hybrid Battery Pack Over Temperature' },
-    "P0A7F": { issuer: "HV Battery", meaning: 'Hybrid Battery Pack Deterioration' }
+    "P0A7F": { issuer: "HV Battery", meaning: 'Hybrid Battery Pack Deterioration' },
     "P0A80": { issuer: "Hybrid/EV", meaning: "High Voltage System/Battery Module Fault. (Refine meaning for specific P0Axx-P0Cxx codes)" },
 
     // ... P0A81 to P0AFE (126 codes) - Added as Hybrid/EV System Fault placeholder ...
@@ -1151,7 +1151,7 @@ export const ERROR_CODE_LOOKUP = {
     "P0AFB": { issuer: "[GENERIC]", meaning: 'Hybrid/EV Powertrain - Reserved/Manufacturer Sub-Code' },
     "P0AFC": { issuer: "[GENERIC]", meaning: 'Hybrid/EV Powertrain - Reserved/Manufacturer Sub-Code' },
     "P0AFD": { issuer: "[GENERIC]", meaning: 'Hybrid/EV Powertrain - Reserved/Manufacturer Sub-Code' },
-    "P0AFE": { issuer: "[GENERIC]", meaning: 'Hybrid/EV Powertrain - Reserved/Manufacturer Sub-Code' }
+    "P0AFE": { issuer: "[GENERIC]", meaning: 'Hybrid/EV Powertrain - Reserved/Manufacturer Sub-Code' },
     "P0AFF": { issuer: "Hybrid/EV", meaning: "Traction Motor/Inverter/Cooling System Fault. (Refine meaning for specific P0Axx-P0Cxx codes)" },
     "P0B00": { issuer: "Hybrid/EV", meaning: "Traction Motor/Inverter/Cooling System Fault. (Refine meaning for specific P0Axx-P0Cxx codes)" },
     // ... P0B01 to P0B7F (127 codes) - Added as Traction Motor/Inverter/Cooling System Fault placeholder ...
@@ -1288,7 +1288,7 @@ export const ERROR_CODE_LOOKUP = {
     "P0B7C": { issuer: "Cell Voltage", meaning: 'Hybrid Battery Cell Voltage Sense "OO" Circuit Low' },
     "P0B7D": { issuer: "Cell Voltage", meaning: 'Hybrid Battery Cell Voltage Sense "OO" Circuit High' },
     "P0B7E": { issuer: "Cell Voltage", meaning: 'Hybrid Battery Cell Voltage Sense "OO" Circuit Range/Performance' },
-    "P0B7F": { issuer: "Cell Voltage", meaning: 'Hybrid Battery Cell Voltage Sense "PP" Circuit Low' }
+    "P0B7F": { issuer: "Cell Voltage", meaning: 'Hybrid Battery Cell Voltage Sense "PP" Circuit Low' },
     "P0B80": { issuer: "Hybrid/EV", meaning: "Hybrid Battery Voltage Sense 'N' Circuit Intermittent/Erratic" },
     // ... P0B81 to P0BF9 (121 codes) - Added as Traction Motor/Inverter/Cooling System Fault placeholder ...
     // === P0B81 - P0B9F: Hybrid Battery Cell/Group Voltage Circuits (QQ - UU) ===
@@ -1414,7 +1414,7 @@ export const ERROR_CODE_LOOKUP = {
     "P0BF6": { issuer: "[GENERIC]", meaning: 'Hybrid/EV Powertrain - Reserved/Manufacturer Sub-Code' },
     "P0BF7": { issuer: "[GENERIC]", meaning: 'Hybrid/EV Powertrain - Reserved/Manufacturer Sub-Code' },
     "P0BF8": { issuer: "[GENERIC]", meaning: 'Hybrid/EV Powertrain - Reserved/Manufacturer Sub-Code' },
-    "P0BF9": { issuer: "[GENERIC]", meaning: 'Hybrid/EV Powertrain - Reserved/Manufacturer Sub-Code' }
+    "P0BF9": { issuer: "[GENERIC]", meaning: 'Hybrid/EV Powertrain - Reserved/Manufacturer Sub-Code' },
     "P0C00": { issuer: "Hybrid/EV", meaning: "Drive Motor 'A' Current Low" },
     // ... P0C01 to P0C7F (127 codes) - Added as Traction Motor/Inverter/Cooling System Fault placeholder ...
     // === P0C01 - P0C1F: Drive Motor "A" Current and Torque Monitoring ===
