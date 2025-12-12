@@ -191,7 +191,7 @@
                         <input id="service-plate" type="text" placeholder="Vehicle Number Plate" required class="p-3 border rounded-lg" />
                         <input id="service-make" type="text" placeholder="Make" required class="p-3 border rounded-lg" />
                         <input id="service-model" type="text" placeholder="Model" required class="p-3 border rounded-lg" />
-                        <input id="service-vin" type="text" placeholder="VIN / Chassis No." required class="p-3 border rounded-lg" />
+                        <input id="service-vin" type="text" placeholder="VIN / Chassis No. (Optional)" class="p-3 border rounded-lg" />
                     </div>
                 </fieldset>
 
@@ -255,10 +255,11 @@
                     </div>
                 </fieldset>
 
-                <div class="flex justify-end pt-4">
+                <div class="flex justify-end pt-4 space-x-4">
+                    <button type="button" onclick="completeServiceJob()" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8 rounded-lg transition duration-150">Complete Job & Save</button>
                     <button type="button" onclick="generateServiceReportPDF()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-lg transition duration-150">Generate Service Report (PDF)</button>
                 </div>
-            </form>
+                </form>
         </section>
         <section id="car-list" style="display:none;">
             <h2 class="text-3xl font-bold text-gray-800 border-b pb-2 mb-6">📋 Active Jobs & Work in Progress</h2>
@@ -347,6 +348,10 @@
     window.addRepairPlanCard = addRepairPlanCard;
     window.removeRepairPlanCard = removeRepairPlanCard;
     window.sendJobCardViaWhatsApp = sendJobCardViaWhatsApp;
+    
+    // START MODIFICATION 2: Expose the new function
+    window.completeServiceJob = completeServiceJob; 
+    // END MODIFICATION 2
     
     // ----------------------------------------------------------------------
     // 2. AUTHENTICATION LOGIC
@@ -503,6 +508,7 @@
             dueDate: document.getElementById('due-date').value || 'TBD',
             deliveryDate: document.getElementById('delivery-date').value || 'TBD',
             status: 'Active', // Default status for new entry
+            jobType: 'StandardRepair', // Flag to differentiate from General Service
             createdAt: serverTimestamp(),
             createdBy: auth.currentUser ? auth.currentUser.email : 'System'
         };
@@ -565,15 +571,18 @@
     // Creates the HTML card for a car entry (MODIFIED: Added Plate to card)
     function createCarCard(car, status) {
         const card = document.createElement('div');
-        card.className = 'bg-white p-6 rounded-xl shadow-lg border-t-4 border-blue-500 hover:shadow-xl transition duration-200';
+        const borderColor = car.jobType === 'GeneralService' ? 'border-green-500' : 'border-blue-500';
+        const jobTypeLabel = car.jobType === 'GeneralService' ? '<span class="text-xs font-semibold bg-green-100 text-green-800 px-2 py-0.5 rounded">G. Service</span>' : '';
+        
+        card.className = `bg-white p-6 rounded-xl shadow-lg border-t-4 ${borderColor} hover:shadow-xl transition duration-200`;
         
         const actions = status === 'Active' ? 
             `<button onclick="markCarAsCompleted('${car.id}')" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded transition duration-150 text-sm">Mark Complete</button>` :
             `<button onclick="deleteCompletedCar('${car.id}')" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded transition duration-150 text-sm">Delete History</button>`;
         
         card.innerHTML = `
-            <h3 class="text-xl font-bold text-gray-800 mb-2">${car.make} ${car.model} (${car.year})</h3>
-            <p class="text-sm text-gray-600 mb-4">Plate: <span class="font-mono text-xs text-orange-700">${car.plate || 'N/A'}</span> | VIN: <span class="font-mono text-xs text-blue-700">${car.vin}</span></p>
+            <h3 class="text-xl font-bold text-gray-800 mb-2">${car.make} ${car.model} (${car.year || 'N/A'}) ${jobTypeLabel}</h3>
+            <p class="text-sm text-gray-600 mb-4">Plate: <span class="font-mono text-xs text-orange-700">${car.plate || 'N/A'}</span> | VIN: <span class="font-mono text-xs text-blue-700">${car.vin || 'N/A'}</span></p>
             
             <div class="space-y-1 text-sm mb-4">
                 <p><span class="font-semibold">Client:</span> ${car.clientName}</p>
@@ -786,6 +795,7 @@
             engineName: document.getElementById('engine-name').value || 'N/A',
             transmission: document.getElementById('transmission').value || 'N/A',
             driveType: document.getElementById('drive').value || 'N/A',
+            jobType: 'StandardRepair', // Ensure this is set for preview
 
             // JOB DETAILS
             reportedProblems: document.getElementById('reported-problems').value || 'None specified.',
@@ -811,9 +821,54 @@
     function renderJobCardContent(data, status) {
         const jobCardContent = document.getElementById('job-card-content');
         
+        // MODIFICATION 5: Handle General Service Job Type
+        if (data.jobType === 'GeneralService') {
+            // Set the global data for PDF generation via button click
+            currentJobCardData = data; 
+            // Adjust modal size for service report
+            document.getElementById('jobCardModal').querySelector('.max-w-3xl').classList.remove('max-w-3xl');
+            document.getElementById('jobCardModal').querySelector('.w-full').classList.add('max-w-xl');
+
+            jobCardContent.innerHTML = `
+                <div class="text-center border-b pb-4 mb-4">
+                    <h2 class="text-3xl font-bold text-green-800">General Service Completion Report</h2>
+                    <p class="text-sm text-gray-600">Job Type: ${data.reportedProblems}</p>
+                </div>
+                <div class="grid grid-cols-2 gap-4 border-b pb-4 text-sm">
+                    <div><p><span class="font-bold">Client:</span> ${data.clientName}</p></div>
+                    <div><p><span class="font-bold">Phone:</span> ${data.clientPhone}</p></div>
+                </div>
+
+                <h3 class="text-xl font-bold text-blue-700 mt-4 border-b-2 pb-1">Vehicle Details</h3>
+                <div class="grid grid-cols-2 gap-4 text-sm">
+                    <p><span class="font-bold">Plate No:</span> ${data.plate}</p>
+                    <p><span class="font-bold">Make:</span> ${data.make}</p>
+                    <p><span class="font-bold">Model:</span> ${data.model}</p>
+                    <p><span class="font-bold">VIN:</span> ${data.vin || 'N/A'}</p>
+                    <p><span class="font-bold">Mileage:</span> ${data.currentMileage} KM</p>
+                    <p><span class="font-bold">Next Service:</span> ${data.nextServiceMileage} KM</p>
+                </div>
+                
+                <h3 class="text-xl font-bold text-green-700 mt-4 border-b-2 pb-1">Service Summary</h3>
+                <p class="whitespace-pre-wrap text-sm">${data.diagnosticNotes}</p>
+                
+                <div class="flex justify-center mt-6">
+                    <button onclick="generateServiceReportPDF(currentJobCardData)" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-lg transition duration-150 print:hidden">Generate Full Service Checklist PDF</button>
+                </div>
+            `;
+            // Hide WhatsApp button for this specialized report
+            document.getElementById('whatsapp-btn').style.display = 'none';
+            return;
+        }
+        
+        // If NOT GeneralService (i.e., standard car entry)
+        document.getElementById('jobCardModal').querySelector('.max-w-xl').classList.remove('max-w-xl');
+        document.getElementById('jobCardModal').querySelector('.w-full').classList.add('max-w-3xl');
+        
         // MODIFICATION 4: Set the global data for WhatsApp function
         currentJobCardData = data; 
-        
+        document.getElementById('whatsapp-btn').style.display = 'block';
+
         const errorCodesHtml = data.errorCodes && data.errorCodes.length > 0 ? 
             `<div class="mt-2 p-3 bg-red-50 rounded-lg"><h4 class="font-bold text-red-700">Error Codes Found (${data.errorCodes.split(',').length})</h4><p class="whitespace-pre-wrap text-sm">${data.errorMeanings || data.errorCodes}</p></div>` : 
             '<p class="text-gray-500">No error codes logged.</p>';
@@ -884,7 +939,7 @@
         // Format the message content
         let message = `*Garage Manager PRO - Vehicle Job Report*\n\n`;
         message += `*Client*: ${data.clientName}\n`;
-        message += `*Vehicle*: ${data.year} ${data.make} ${data.model} (Plate: ${data.plate}) (VIN: ${data.vin})\n`;
+        message += `*Vehicle*: ${data.year || 'N/A'} ${data.make} ${data.model} (Plate: ${data.plate})\n`;
         message += `*Assigned Mechanic*: ${data.assignedMechanic}\n`;
         message += `*Estimated Delivery*: ${data.deliveryDate}\n\n`;
         
@@ -1034,11 +1089,11 @@
         doc.setTextColor(156, 163, 175); // gray-400
         doc.text(`Generated on: ${new Date().toLocaleDateString()} | This is a preliminary report and does not constitute a final invoice.`, 14, doc.internal.pageSize.height - 10);
 
-        doc.save(`Analysis_Report_${data.vin}.pdf`);
+        doc.save(`Analysis_Report_${data.plate}.pdf`);
     }
 
     // ----------------------------------------------------------------------
-    // 7. GENERAL SERVICE LOGIC (MODIFIED: Added Plate)
+    // 7. GENERAL SERVICE LOGIC (MODIFIED: Added Plate & Save Logic)
     // ----------------------------------------------------------------------
 
     const SERVICE_ITEMS = [
@@ -1086,20 +1141,17 @@
 
         // Dynamically populate Fluids & Filters and Other Checks
         SERVICE_ITEMS.forEach(item => {
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td>${item.name}</td>
-                <td><input type="checkbox" name="${item.name}-faulty" class="form-checkbox h-4 w-4 text-red-600"></td>
-                <td><input type="checkbox" name="${item.name}-checked" class="form-checkbox h-4 w-4 text-green-600"></td>
-                ${item.type === 'filter' ? 
-                    `<td><input type="checkbox" name="${item.name}-changed" class="form-checkbox h-4 w-4 text-blue-600"></td>` :
-                    `<td><input type="text" name="${item.name}-notes" placeholder="Notes" class="w-full p-1 border rounded text-xs"></td>`
-                }
-            `;
             if (item.type === 'filter') {
+                 const tr = document.createElement('tr');
+                 tr.innerHTML = `
+                    <td>${item.name}</td>
+                    <td><input type="checkbox" name="${item.name}-faulty" class="form-checkbox h-4 w-4 text-red-600"></td>
+                    <td><input type="checkbox" name="${item.name}-checked" class="form-checkbox h-4 w-4 text-green-600"></td>
+                    <td><input type="checkbox" name="${item.name}-changed" class="form-checkbox h-4 w-4 text-blue-600"></td>
+                `;
                 fluidsBody.appendChild(tr);
             } else {
-                // For 'other' items, combine 'Changed' and 'Notes' column into one 'Notes' input
+                // For 'other' items, use the more detailed row
                 const trOther = document.createElement('tr');
                 trOther.innerHTML = `
                     <td>${item.name}</td>
@@ -1125,44 +1177,114 @@
         });
     }
 
-    function generateServiceReportPDF() {
+    // START MODIFICATION 2: Helper and Job Completion Functions
+    
+    // Function to collect all data from the General Service form
+    function collectGeneralServiceData() {
         const form = document.getElementById('general-service-form');
-        const { jsPDF } = window.jspdf;
-        const doc = new jsPDF();
         
-        // Data Collation (MODIFIED: Added Plate)
         const data = {};
-        data.clientName = document.getElementById('service-client-name').value || 'N/A';
-        data.clientPhone = document.getElementById('service-client-phone').value || 'N/A';
-        data.plate = document.getElementById('service-plate').value || 'N/A';
-        data.make = document.getElementById('service-make').value || 'N/A';
-        data.model = document.getElementById('service-model').value || 'N/A';
-        data.vin = document.getElementById('service-vin').value || 'N/A';
-        data.currentMileage = document.getElementById('current-mileage').value || 'N/A';
-        data.nextServiceMileage = document.getElementById('next-service-mileage').value || 'N/A';
-        data.servicePerson = document.getElementById('service-person').value || 'N/A';
+        data.clientName = document.getElementById('service-client-name').value.trim() || 'N/A';
+        data.clientPhone = document.getElementById('service-client-phone').value.trim() || 'N/A';
+        data.plate = document.getElementById('service-plate').value.trim() || 'N/A';
+        data.make = document.getElementById('service-make').value.trim() || 'N/A';
+        data.model = document.getElementById('service-model').value.trim() || 'N/A';
+        data.vin = document.getElementById('service-vin').value.trim() || 'N/A';
+        data.currentMileage = document.getElementById('current-mileage').value.trim() || 'N/A';
+        data.nextServiceMileage = document.getElementById('next-service-mileage').value.trim() || 'N/A';
+        data.servicePerson = document.getElementById('service-person').value.trim() || 'N/A';
+        
+        // Simple validation
+        if (data.clientName === 'N/A' || data.clientPhone === 'N/A' || data.plate === 'N/A' || data.make === 'N/A' || data.model === 'N/A' || data.servicePerson === 'N/A') {
+            alert("Please fill in all mandatory fields (Client, Vehicle, and Service Person details) before completing the job.");
+            return null; 
+        }
 
-        // 4. Checklist Items (unchanged logic)
+        // 4. Checklist Items
         data.serviceChecks = SERVICE_ITEMS.map(item => {
             let status = 'OK';
+            let notes = form.querySelector(`[name="${item.name}-notes"]`) ? form.querySelector(`[name="${item.name}-notes"]`).value.trim() : '';
+            
             if (form.querySelector(`[name="${item.name}-faulty"]`) && form.querySelector(`[name="${item.name}-faulty"]`).checked) {
                 status = 'Faulty';
             } else if (form.querySelector(`[name="${item.name}-changed"]`) && form.querySelector(`[name="${item.name}-changed"]`).checked) {
                 status = 'Changed';
             } else if (form.querySelector(`[name="${item.name}-checked"]`) && form.querySelector(`[name="${item.name}-checked"]`).checked) {
-                status = 'Checked';
+                status = 'Checked'; 
+            } else {
+                 status = 'Not Checked';
             }
-            const notes = form.querySelector(`[name="${item.name}-notes"]`) ? form.querySelector(`[name="${item.name}-notes"]`).value : '';
+
             return { item: item.name, status: status, notes: notes };
         });
 
         data.lightChecks = LIGHTS_ITEMS.map(light => {
             const left = form.querySelector(`[name="${light}-left"]`) && form.querySelector(`[name="${light}-left"]`).checked ? 'Yes' : 'No';
             const right = form.querySelector(`[name="${light}-right"]`) && form.querySelector(`[name="${light}-right"]`).checked ? 'Yes' : 'No';
-            const notes = form.querySelector(`[name="${light}-notes"]`) ? form.querySelector(`[name="${light}-notes"]`).value : '';
+            const notes = form.querySelector(`[name="${light}-notes"]`) ? form.querySelector(`[name="${light}-notes"]`).value.trim() : '';
             return { light: light, left: left, right: right, notes: notes };
         });
+        
+        // Add flags and summary to fit the standard job card structure
+        data.jobType = 'GeneralService';
+        data.reportedProblems = 'Standard General Service Check.';
+        data.diagnosticNotes = `Service performed by ${data.servicePerson} on ${new Date().toLocaleDateString()}. See detailed checklist in the General Service Report PDF. Current Mileage: ${data.currentMileage} KM. Next Service Due: ${data.nextServiceMileage} KM.`;
+        data.repairPlanItems = []; // Empty array to satisfy standard job card structure
+        data.errorCodes = 'N/A';
+        data.errorMeanings = 'N/A';
+        data.assignedMechanic = data.servicePerson;
+        data.dueDate = new Date().toISOString().split('T')[0]; // Set due/delivery to today
+        data.deliveryDate = new Date().toISOString().split('T')[0];
+        data.color = 'N/A'; // Fill missing core vehicle details
+        data.engineCC = 'N/A';
+        data.trim = 'N/A';
+        data.engineName = 'N/A';
+        data.transmission = 'N/A';
+        data.driveType = 'N/A';
+        data.year = 'N/A'; 
+        
+        return data;
+    }
 
+    // Function to complete and save the service job (NEW FUNCTION)
+    async function completeServiceJob() {
+        if (!auth.currentUser) {
+            alert("You must be logged in to save an entry.");
+            return;
+        }
+
+        const carData = collectGeneralServiceData();
+        if (!carData) return; // Exit if data collection failed (e.g., missing mandatory fields)
+
+        // Set final status and metadata
+        carData.status = 'Completed';
+        carData.createdAt = serverTimestamp();
+        carData.completedAt = serverTimestamp();
+        carData.createdBy = auth.currentUser ? auth.currentUser.email : 'System';
+        carData.completedBy = auth.currentUser ? auth.currentUser.email : 'System';
+
+        try {
+            await addDoc(carsCollection, carData);
+            alert(`General Service for Plate ${carData.plate} successfully completed and saved!`);
+            document.getElementById('general-service-form').reset();
+            initializeGeneralService();
+            showSection('completed-list');
+        } catch (e) {
+            console.error("Error adding document: ", e);
+            alert(`Error saving service entry: ${e.message}`);
+        }
+    }
+    // END MODIFICATION 2
+
+    // MODIFICATION 6: Refactored generateServiceReportPDF to accept data or collect from form
+    function generateServiceReportPDF(carData = null) {
+        // Get data from DB (via carData) or from the live form
+        const data = carData || collectGeneralServiceData();
+        if (!data) return; 
+
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+        
         // 1. Title
         doc.setFontSize(22);
         doc.setTextColor(30, 58, 138); // blue-800
@@ -1201,6 +1323,7 @@
         doc.setTextColor(0, 0, 0); // black for table text
         y += 5;
 
+        // MODIFICATION 6: Use data.serviceChecks
         const fluidsTableData = data.serviceChecks
             .filter(item => SERVICE_ITEMS.find(s => s.name === item.item && s.type === 'filter'))
             .map(item => [item.item, item.status]);
@@ -1223,6 +1346,7 @@
         doc.setTextColor(0, 0, 0); // black for table text
         y += 5;
 
+        // MODIFICATION 6: Use data.serviceChecks
         const otherChecksTableData = data.serviceChecks
             .filter(item => SERVICE_ITEMS.find(s => s.name === item.item && s.type !== 'filter'))
             .map(item => [item.item, item.status, item.notes]);
@@ -1245,6 +1369,7 @@
         doc.setTextColor(0, 0, 0); // black for table text
         y += 5;
         
+        // MODIFICATION 6: Use data.lightChecks
         const lightsTableData = data.lightChecks.map(item => [item.light, item.left, item.right, item.notes]);
 
         doc.autoTable({
@@ -1281,7 +1406,7 @@
         doc.setTextColor(156, 163, 175); // gray-400
         doc.text(`Generated on: ${new Date().toLocaleDateString()} | Service Performed by: ${data.servicePerson}`, 14, doc.internal.pageSize.height - 10);
 
-        doc.save(`Service_Report_${data.vin}.pdf`);
+        doc.save(`Service_Report_${data.plate || data.vin}.pdf`);
     }
 
     document.addEventListener('DOMContentLoaded', () => {
