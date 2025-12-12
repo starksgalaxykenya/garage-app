@@ -58,13 +58,28 @@
                 <h1 class="text-3xl font-extrabold text-white">Garage Manager PRO</h1>
                 <p class="text-sm text-blue-200">The Ultimate Auto Service Tool</p>
             </div>
-            <nav class="flex space-x-4">
+            <button id="mobile-menu-btn" class="text-white md:hidden p-2 rounded-md hover:bg-blue-700" style="display:none;">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7"></path></svg>
+            </button>
+            
+            <nav id="main-nav-links" class="hidden md:flex space-x-4">
                 <button onclick="showSection('car-entry')" class="text-white hover:text-blue-200 font-medium transition duration-150">New Car Entry</button>
                 <button onclick="showSection('general-service')" class="text-white hover:text-blue-200 font-medium transition duration-150">General Service</button>
                 <button onclick="showSection('car-list')" class="text-white hover:text-blue-200 font-medium transition duration-150">Active Jobs</button>
                 <button onclick="showSection('completed-list')" class="text-white hover:text-blue-200 font-medium transition duration-150">Completed Jobs</button>
+                <a href="lookup_manager.html" target="_blank" class="bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2 px-4 rounded transition duration-150 flex items-center">Manage Error Codes</a>
                 <button id="logoutBtn" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded transition duration-150" style="display:none;">Logout</button>
             </nav>
+        </div>
+        <div id="mobile-menu-items" class="md:hidden hidden bg-blue-700">
+             <div class="px-2 pt-2 pb-3 space-y-1 sm:px-3 flex flex-col">
+                <button onclick="showSection('car-entry'); toggleMobileMenu();" class="text-white hover:bg-blue-800 block px-3 py-2 rounded-md text-base font-medium text-left">New Car Entry</button>
+                <button onclick="showSection('general-service'); toggleMobileMenu();" class="text-white hover:bg-blue-800 block px-3 py-2 rounded-md text-base font-medium text-left">General Service</button>
+                <button onclick="showSection('car-list'); toggleMobileMenu();" class="text-white hover:bg-blue-800 block px-3 py-2 rounded-md text-base font-medium text-left">Active Jobs</button>
+                <button onclick="showSection('completed-list'); toggleMobileMenu();" class="text-white hover:bg-blue-800 block px-3 py-2 rounded-md text-base font-medium text-left">Completed Jobs</button>
+                <a href="lookup_manager.html" target="_blank" class="bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2 px-4 rounded transition duration-150 flex items-center justify-center mt-2">Manage Error Codes</a>
+                <button id="mobileLogoutBtn" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded transition duration-150 mt-2">Logout</button>
+            </div>
         </div>
     </header>
 
@@ -157,7 +172,11 @@
                         </div>
                     <button type="button" onclick="addErrorCodeInput()" class="mt-4 bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg transition duration-150">Add Another Error Code</button>
                     
-                    <textarea id="repair-notes" rows="3" placeholder="Detailed Repair Notes / Action Taken" class="w-full p-3 border rounded-lg mt-6"></textarea>
+                    <h3 class="text-lg font-semibold text-gray-700 border-t pt-4 mt-6">Repair Action Steps</h3>
+                    <div id="repair-action-container" class="space-y-4">
+                        </div>
+                    <button type="button" onclick="addRepairActionInput()" class="mt-4 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition duration-150">Add Repair Step</button>
+                    
                     <textarea id="replacement-parts" rows="3" placeholder="Replacement Parts Needed (e.g., Oil Filter - Qty 1, Spark Plugs - Qty 4)" class="w-full p-3 border rounded-lg mt-4"></textarea>
                 </fieldset>
 
@@ -252,7 +271,7 @@
                     <button type="button" onclick="generateServiceReportPDF()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-lg transition duration-150">Generate Service Report (PDF)</button>
                 </div>
             </form>
-        </section>
+            </section>
         <section id="car-list" style="display:none;">
             <h2 class="text-3xl font-bold text-gray-800 border-b pb-2 mb-6">📋 Active Jobs & Work in Progress</h2>
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="car-list-container">
@@ -275,7 +294,7 @@
                     </div>
                 <div class="flex justify-end space-x-4 mt-6" id="job-card-actions">
                     <button onclick="document.getElementById('jobCardModal').style.display = 'none'" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded transition duration-150 print:hidden">Close</button>
-                    <button id="whatsapp-btn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded transition duration-150 print:hidden">Send via WhatsApp</button>
+                    <button id="whatsapp-btn" onclick="sendJobCardWhatsApp()" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded transition duration-150 print:hidden">Send via WhatsApp</button>
                     <button onclick="window.print()" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded transition duration-150 print:hidden">Print Job Card</button>
                 </div>
             </div>
@@ -289,8 +308,15 @@
 
 <script type="module">
 
-    // NEW: Import the local error code dictionary
-    import { ERROR_CODE_LOOKUP } from "./error_codes_dictionary.js";
+    // ... after all other imports
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
+// ... all other firebase imports
+
+// NEW: Import the local error code dictionary
+import { ERROR_CODE_LOOKUP } from "./error_codes_dictionary.js";
+
+// Your web app's Firebase configuration
+// ...
     
     // ----------------------------------------------------------------------
     // 1. FIREBASE INITIALIZATION & CONFIGURATION (MODULAR)
@@ -299,7 +325,8 @@
     // Import the functions you need from the SDKs
     import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
     import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-auth.js";
-    import { getFirestore, collection, addDoc, doc, updateDoc, deleteDoc, query, orderBy, onSnapshot, getDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js";
+// Note: Removed getDocs, setDoc, and where for local lookup
+import { getFirestore, collection, addDoc, doc, updateDoc, deleteDoc, query, orderBy, onSnapshot, getDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js";
 
     // Your web app's Firebase configuration
     const firebaseConfig = {
@@ -315,40 +342,73 @@
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db = getFirestore(app);
-    const carsCollection = collection(db, 'cars');
-    let currentUserRole = null; // 'admin' or 'mechanic'
-
-    // Expose functions globally for HTML onclick attributes
+    const carsCollection = collection(db, 'cars'); 
+    // NEW: Reference to the error codes collection
+   // const errorCodesCollection = collection(db, 'error_codes'); // No longer needed
+    
+    let currentUserRole = null; 
+    
+    // Helper to attach global functions to the window object (necessary for HTML onclick)
     window.showSection = showSection;
     window.handleLoginSignup = handleLoginSignup;
     window.addErrorCodeInput = addErrorCodeInput;
-    window.removeErrorCodeInput = removeErrorCodeInput;
+    window.removeErrorCode = removeErrorCode;
     window.lookupErrorCode = lookupErrorCode;
-    window.createJobCard = createJobCard;
+    window.createJobCard = createJobCard; 
     window.generateAnalysisReportPDF = generateAnalysisReportPDF;
     window.generateServiceReportPDF = generateServiceReportPDF;
     window.markCarAsCompleted = markCarAsCompleted;
     window.deleteCompletedCar = deleteCompletedCar;
     window.openDetailedReport = openDetailedReport;
-
+    
+    // NEW Global functions for dynamic Repair Actions
+    window.addRepairActionInput = addRepairActionInput; 
+    window.removeRepairAction = removeRepairAction;
+    window.sendJobCardWhatsApp = sendJobCardWhatsApp;
+    
+    // NEW Global function for mobile menu
+    window.toggleMobileMenu = toggleMobileMenu;
+    
     // Global variable to hold current job card data for WhatsApp sending
-    let currentJobCardData = null;
+    let currentJobCardData = null; 
 
     // ----------------------------------------------------------------------
     // 2. VIEW MANAGEMENT & AUTH
     // ----------------------------------------------------------------------
+    
+    function toggleMobileMenu() {
+        const mobileMenu = document.getElementById('mobile-menu-items');
+        mobileMenu.classList.toggle('hidden');
+    }
 
     // Handles the flow after Firebase Auth state changes
     onAuthStateChanged(auth, async (user) => {
-        document.getElementById('logoutBtn').style.display = 'none';
+        const mainNavLinks = document.getElementById('main-nav-links');
+        const mobileMenuBtn = document.getElementById('mobile-menu-btn');
+        const logoutBtn = document.getElementById('logoutBtn');
+        const mobileLogoutBtn = document.getElementById('mobileLogoutBtn');
+        
+        // Hide all navigation elements by default
+        mainNavLinks.style.display = 'none'; 
+        mobileMenuBtn.style.display = 'none'; 
+        document.getElementById('mobile-menu-items').classList.add('hidden'); // Ensure mobile menu is closed
+        
         if (user) {
-            // Logged in: Grant access immediately
+            // Logged in: Show navigation
             currentUserRole = getMockRole(user.email);
-            document.getElementById('logoutBtn').style.display = 'block';
+            mainNavLinks.style.display = 'flex'; // Desktop nav
+            mobileMenuBtn.style.display = 'block'; // Mobile button
+            logoutBtn.style.display = 'block';
+            mobileLogoutBtn.style.display = 'block';
+            
             // Redirect to active jobs list
-            showSection('car-list');
+            showSection('car-list'); 
+
         } else {
-            // Logged out
+            // Logged out: Hide navigation and show auth
+            // Navigation elements are hidden above
+            mobileLogoutBtn.style.display = 'none';
+            logoutBtn.style.display = 'none';
             showSection('auth-section');
         }
     });
@@ -358,7 +418,9 @@
         sections.forEach(id => {
             document.getElementById(id).style.display = 'none';
         });
+
         document.getElementById(sectionId).style.display = 'block';
+
         if (sectionId === 'car-list') fetchCars('Active');
         if (sectionId === 'completed-list') fetchCars('Completed');
         if (sectionId === 'general-service') initializeGeneralService();
@@ -367,12 +429,14 @@
     function getMockRole(email) {
         return email && email.toLowerCase().includes('admin') ? 'admin' : 'mechanic';
     }
-
+    
     async function handleLoginSignup(isLogin) {
         const email = document.getElementById('auth-email').value;
         const password = document.getElementById('auth-password').value;
         const messageEl = document.getElementById('auth-message');
+        
         messageEl.textContent = '';
+
         try {
             if (isLogin) {
                 await signInWithEmailAndPassword(auth, email, password);
@@ -388,86 +452,221 @@
             messageEl.textContent = `Error: ${error.message}`;
         }
     }
-
+    
     document.getElementById('logoutBtn').onclick = () => {
+        signOut(auth).then(() => {
+            currentUserRole = null;
+        });
+    };
+    
+    document.getElementById('mobileLogoutBtn').onclick = () => {
         signOut(auth).then(() => {
             currentUserRole = null;
         });
     };
 
     // ----------------------------------------------------------------------
-    // 3. LOGIN ENHANCEMENT (Make the log in work with Enter key)
+    // 3. DYNAMIC ERROR CODE INPUTS & LOOKUP (REFACTORED)
     // ----------------------------------------------------------------------
-    // Add event listener to the password field to trigger login on 'Enter' key press
-    document.getElementById('auth-password').addEventListener('keypress', function(event) {
-        // 'Enter' key is detected by event.key === 'Enter'
-        if (event.key === 'Enter') {
-            event.preventDefault(); // Prevents accidental form submission/page reload
-            handleLoginSignup(true); // Call the login function directly
+    
+    function addErrorCodeInput() {
+        const container = document.getElementById('error-codes-container');
+        const newGroup = document.createElement('div');
+        newGroup.className = 'error-code-group space-y-2 mb-4 p-3 border border-gray-100 rounded-lg';
+        newGroup.innerHTML = `
+            <div class="flex space-x-2">
+                <input type="text" placeholder="Enter Error Code (e.g., P0300)" class="flex-grow p-3 border rounded-lg uppercase error-code-input" />
+                <button type="button" onclick="lookupErrorCode(this)" class="bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-3 px-6 rounded-lg transition duration-150 text-sm whitespace-nowrap">Lookup Code</button>
+                <button type="button" onclick="removeErrorCode(this)" class="bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-6 rounded-lg transition duration-150 text-sm remove-btn" style="display:none;">Remove</button>
+            </div>
+            <p class="error-code-explanation text-sm p-2 bg-gray-50 text-gray-700 rounded" style="display:none;"></p>
+            <input type="hidden" class="error-code-meaning" value="" />
+        `;
+        container.appendChild(newGroup);
+        
+        updateRemoveButtonVisibility();
+    }
+
+    function removeErrorCode(button) {
+        button.closest('.error-code-group').remove();
+        updateRemoveButtonVisibility();
+    }
+    
+    function updateRemoveButtonVisibility() {
+        const groups = document.querySelectorAll('.error-code-group');
+        const groupsArray = Array.from(groups);
+        
+        groupsArray.forEach(group => {
+            const removeBtn = group.querySelector('.remove-btn');
+            if (removeBtn) {
+                removeBtn.style.display = groupsArray.length > 1 ? 'block' : 'none';
+            }
+        });
+    }
+
+// REVISED: Local Dictionary Lookup (Uses error_codes_dictionary.js)
+// ----------------------------------------------------------------------
+function lookupErrorCode(button) {
+    const group = button.closest('.error-code-group');
+    const inputElement = group.querySelector('.error-code-input');
+    const explanationEl = group.querySelector('.error-code-explanation');
+    const hiddenMeaningEl = group.querySelector('.error-code-meaning');
+
+    const code = inputElement.value.toUpperCase().trim();
+
+    explanationEl.style.display = 'none';
+    hiddenMeaningEl.value = '';
+
+    if (!code) {
+        explanationEl.innerHTML = 'Please enter a code.';
+        explanationEl.style.display = 'block';
+        return;
+    }
+
+    const details = ERROR_CODE_LOOKUP[code];
+
+    if (details) {
+        // Found a match in the local dictionary
+        const fullMeaning = `${code} (${details.issuer}): ${details.meaning}`;
+
+        explanationEl.innerHTML = `**${details.issuer}:** ${details.meaning}`;
+        explanationEl.className = 'error-code-explanation text-sm p-2 bg-indigo-50 text-indigo-800 rounded';
+        explanationEl.style.display = 'block';
+        hiddenMeaningEl.value = fullMeaning; 
+    } else {
+        // No match found
+        explanationEl.innerHTML = `**Code ${code}**: No definition found in the local dictionary.`;
+        explanationEl.className = 'error-code-explanation text-sm p-2 bg-red-50 text-red-800 rounded';
+        explanationEl.style.display = 'block';
+        hiddenMeaningEl.value = `${code}: No definition found.`; 
+    }
+}
+
+    function getAllErrorCodesWithMeaning() {
+        const groups = document.querySelectorAll('.error-code-group');
+        const codesAndMeanings = [];
+        
+        groups.forEach(group => {
+            const codeInput = group.querySelector('.error-code-input').value.toUpperCase().trim();
+            const meaningInput = group.querySelector('.error-code-meaning').value.trim();
+            
+            if (codeInput.length > 0) {
+                 codesAndMeanings.push({
+                    code: codeInput,
+                    meaning: meaningInput || `${codeInput}: Not looked up/No data.`
+                });
+            }
+        });
+        return codesAndMeanings;
+    }
+    
+    // ----------------------------------------------------------------------
+    // 4. DYNAMIC REPAIR ACTION INPUTS (NEW)
+    // ----------------------------------------------------------------------
+    function addRepairActionInput() {
+        const container = document.getElementById('repair-action-container');
+        const newGroup = document.createElement('div');
+        newGroup.className = 'repair-action-group flex space-x-2 mb-2';
+        newGroup.innerHTML = `
+            <input type="text" placeholder="Repair Step Description (e.g., Replace Spark Plugs)" required class="flex-grow p-3 border rounded-lg repair-action-input" />
+            <button type="button" onclick="removeRepairAction(this)" class="bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-6 rounded-lg transition duration-150 text-sm action-remove-btn">Remove</button>
+        `;
+        container.appendChild(newGroup);
+    }
+    
+    function removeRepairAction(button) {
+        button.closest('.repair-action-group').remove();
+    }
+    
+    function getRepairActions() {
+        const actionInputs = document.querySelectorAll('.repair-action-input');
+        const actions = [];
+        actionInputs.forEach(input => {
+            const value = input.value.trim();
+            if (value.length > 0) {
+                actions.push(value);
+            }
+        });
+        return actions;
+    }
+
+
+    document.addEventListener('DOMContentLoaded', () => {
+        if (document.querySelectorAll('.error-code-group').length === 0) {
+            addErrorCodeInput(); 
+        }
+        updateRemoveButtonVisibility(); 
+        
+        // Initialize dynamic repair actions
+        if (document.querySelectorAll('.repair-action-group').length === 0) {
+            addRepairActionInput(); 
         }
     });
 
+
     // ----------------------------------------------------------------------
-    // 4. CRUD OPERATIONS (Firestore)
+    // 5. CAR ENTRY & FIRESTORE LOGIC 
     // ----------------------------------------------------------------------
 
-    // Creates a new car entry
-    async function saveCarEntry(event) {
-        event.preventDefault(); // Stop form from submitting normally
+    document.getElementById('car-entry-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
 
-        // Collect error codes and their meanings
+        if (currentUserRole !== 'admin') {
+            alert('Only Admins can create new car entries.');
+            return;
+        }
+        
         const errorData = getAllErrorCodesWithMeaning();
         const rawErrorCodes = errorData.map(e => e.code).join(', ');
         const fullErrorMeanings = errorData.map(e => e.meaning).join('; ');
+        const repairActions = getRepairActions(); // NEW: Get array of actions
 
         const carData = {
             // CLIENT INFO
-            clientName: document.getElementById('client-name').value || 'N/A',
-            clientPhone: document.getElementById('client-phone').value || 'N/A',
-            clientEmail: document.getElementById('client-email').value || 'N/A',
-            // VEHICLE CORE INFO
-            make: document.getElementById('make').value || 'N/A',
-            model: document.getElementById('model').value || 'N/A',
-            year: document.getElementById('year').value || 'N/A',
-            vin: document.getElementById('vin').value || 'N/A',
-            color: document.getElementById('color').value || 'N/A',
-            engineCC: document.getElementById('engine-cc').value || 'N/A',
-            trim: document.getElementById('trim').value || 'N/A',
-            engineName: document.getElementById('engine-name').value || 'N/A',
-            transmission: document.getElementById('transmission').value || 'N/A',
-            driveType: document.getElementById('drive').value || 'N/A',
-            // JOB DETAILS
-            reportedProblems: document.getElementById('reported-problems').value || 'None specified.',
-            diagnosticNotes: document.getElementById('diagnostic-notes').value || 'No notes yet.',
-            repairNotes: document.getElementById('repair-notes').value || 'Pending assessment.',
-            replacementParts: document.getElementById('replacement-parts').value || 'No parts required yet.',
-            errorCodes: rawErrorCodes,
-            errorMeanings: fullErrorMeanings,
-            assignedMechanic: document.getElementById('assigned-mechanic').value || 'Unassigned',
-            dueDate: document.getElementById('due-date').value || 'TBD',
-            deliveryDate: document.getElementById('delivery-date').value || 'TBD',
-            // STATUS & METADATA
-            status: 'Active', // Default status for new entry
-            createdAt: serverTimestamp(),
-            createdBy: auth.currentUser ? auth.currentUser.email : 'System'
+            clientName: document.getElementById('client-name').value,
+            clientPhone: document.getElementById('client-phone').value,
+            clientEmail: document.getElementById('client-email').value,
+
+            vin: document.getElementById('vin').value,
+            make: document.getElementById('make').value,
+            model: document.getElementById('model').value,
+            year: parseInt(document.getElementById('year').value),
+            color: document.getElementById('color').value,
+            engineCC: document.getElementById('engine-cc').value,
+            trim: document.getElementById('trim').value,
+            engineName: document.getElementById('engine-name').value,
+            transmission: document.getElementById('transmission').value,
+            driveType: document.getElementById('drive').value,
+            reportedProblems: document.getElementById('reported-problems').value,
+            diagnosticNotes: document.getElementById('diagnostic-notes').value,
+            errorCodes: rawErrorCodes, 
+            errorMeanings: fullErrorMeanings, 
+            repairActions: repairActions, // UPDATED: Save as array
+            replacementParts: document.getElementById('replacement-parts').value,
+            assignedMechanic: document.getElementById('assigned-mechanic').value,
+            dueDate: document.getElementById('due-date').value,
+            deliveryDate: document.getElementById('delivery-date').value,
+            status: 'Active', 
+            createdAt: serverTimestamp()
         };
 
         try {
             await addDoc(carsCollection, carData);
-            alert("New Vehicle Entry Saved Successfully!");
+            alert('Vehicle entry saved successfully! Status: Active');
             document.getElementById('car-entry-form').reset();
-            // Automatically switch to the active job list
-            showSection('car-list');
-        } catch (e) {
-            console.error("Error adding document: ", e);
-            alert(`Error saving entry: ${e.message}`);
+            // Re-initialize dynamic inputs for the next entry
+            document.getElementById('error-codes-container').innerHTML = '';
+            addErrorCodeInput(); 
+            document.getElementById('repair-action-container').innerHTML = '';
+            addRepairActionInput(); 
+            fetchCars('Active'); 
+        } catch (error) {
+            console.error('Error adding document: ', error);
+            alert(`Error saving entry: ${error.message}`);
         }
-    }
+    });
 
-    // Attach saveCarEntry to the form submit event
-    document.getElementById('car-entry-form').addEventListener('submit', saveCarEntry);
-
-    // Fetches and displays cars based on status ('Active' or 'Completed')
+    // Fetch and Display Cars based on Status
     function fetchCars(status) {
         if (!auth.currentUser) return; // Only check for authentication
 
@@ -476,24 +675,24 @@
         container.innerHTML = '<p class="text-center text-gray-500">Loading cars...</p>';
 
         const carsQuery = query(
-            carsCollection,
-            // where('status', '==', status), // Commented out 'where' for a simple demo
+            carsCollection, 
+            where('status', '==', status), 
             orderBy('createdAt', 'desc')
         );
-
-        // Real-time listener for updates
+        
         onSnapshot(carsQuery, (snapshot) => {
             container.innerHTML = '';
-            // Filter locally for demo purposes, if needed:
-            const filteredCars = snapshot.docs.map(doc => ({...doc.data(), id: doc.id})).filter(car => car.status === status);
-
-            if (filteredCars.length === 0) {
+            if (snapshot.empty) {
                 container.innerHTML = `<p class="text-center text-xl text-gray-400 p-8">No ${status} jobs currently.</p>`;
                 return;
             }
 
-            filteredCars.forEach(car => {
+            snapshot.forEach(doc => {
+                const car = doc.data();
+                car.id = doc.id;
+                
                 const color = status === 'Active' ? 'border-blue-500' : 'border-green-500';
+                
                 const card = document.createElement('div');
                 card.className = `bg-white p-6 rounded-xl shadow-lg border-l-4 ${color} cursor-pointer hover:shadow-xl transition duration-300`;
                 card.innerHTML = `
@@ -506,166 +705,67 @@
                         <p class="mt-1 text-sm text-gray-700">**Client:** ${car.clientName || 'N/A'}</p>
                     </div>
                     <div class="mt-4">
-                        ${status === 'Active' ? `<button onclick="markCarAsCompleted('${car.id}')" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg transition duration-150">Mark as Completed</button>` : `<button onclick="deleteCompletedCar('${car.id}')" class="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg transition duration-150">Delete History</button>`}
+                        ${status === 'Active' 
+                            ? `<button onclick="markCarAsCompleted('${car.id}')" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg transition duration-150">Repaired - Release</button>` 
+                            : `<button onclick="deleteCompletedCar('${car.id}')" class="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg transition duration-150">Delete from History</button>`
+                        }
                     </div>
                 `;
                 container.appendChild(card);
             });
+        }, (error) => {
+            container.innerHTML = '<p class="text-center text-red-500 p-8">Error fetching data. Check your Firebase Console Security Rules.</p>';
+            console.error("Firestore fetch failed:", error);
         });
     }
 
-    // Function to change status to 'Completed'
+    // Move car from Active to Completed
     async function markCarAsCompleted(carId) {
-        if (!confirm("Are you sure you want to mark this job as COMPLETED and move it to history?")) return;
-
+        if (!confirm('Are you sure you want to mark this car as Repaired and Release?')) return;
+        
         const carRef = doc(db, 'cars', carId);
         try {
             await updateDoc(carRef, {
                 status: 'Completed',
-                completedAt: serverTimestamp()
+                completionDate: serverTimestamp()
             });
-            alert("Job marked as completed!");
+            alert('Car moved to Completed Jobs list.');
         } catch (error) {
-            console.error("Error updating document: ", error);
-            alert("Could not mark job as completed.");
+            console.error('Error updating status: ', error);
+            alert('Failed to mark as completed.');
         }
     }
 
-    // Function to delete a completed car entry
+    // Delete car from Completed List
     async function deleteCompletedCar(carId) {
-        if (!confirm("WARNING: This will permanently delete the job from the system. Are you sure?")) return;
+        if (!confirm('WARNING: This action is permanent. Delete this job history?')) return;
 
         const carRef = doc(db, 'cars', carId);
         try {
             await deleteDoc(carRef);
-            alert("Job history successfully deleted!");
+            alert('Job history deleted permanently.');
         } catch (error) {
-            console.error("Error deleting document: ", error);
-            alert("Could not delete job history.");
+            console.error('Error deleting document: ', error);
+            alert('Failed to delete job history.');
         }
     }
 
     // ----------------------------------------------------------------------
-    // 5. ERROR CODE & DIAGNOSTIC LOGIC
+    // 6. DETAILED REPORT & PDF GENERATION
     // ----------------------------------------------------------------------
-
-    function addErrorCodeInput(initialCode = '') {
-        const container = document.getElementById('error-codes-container');
-        const newGroup = document.createElement('div');
-        newGroup.className = 'error-code-group flex space-x-2 items-center';
-        newGroup.innerHTML = `
-            <input type="text" value="${initialCode}" placeholder="Pxxxx (e.g., P001A)" class="error-code-input p-3 border rounded-lg w-full md:w-1/3" oninput="document.querySelector('#error-codes-container .error-code-explanation').style.display = 'none'" />
-            <button type="button" onclick="lookupErrorCode(this)" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-lg transition duration-150 whitespace-nowrap">Lookup Code</button>
-            <button type="button" onclick="removeErrorCodeInput(this)" class="remove-btn bg-red-400 hover:bg-red-500 text-white font-bold py-2 px-4 rounded-lg transition duration-150" style="display:none;">-</button>
-            <input type="hidden" class="error-code-meaning" value="" />
-        `;
-        container.appendChild(newGroup);
-
-        // Add a placeholder for the explanation below the input group
-        const explanation = document.createElement('p');
-        explanation.className = 'error-code-explanation text-sm p-2 bg-red-50 text-red-800 rounded mt-1 hidden';
-        container.appendChild(explanation);
-
-        updateRemoveButtonsVisibility();
-    }
-
-    function removeErrorCodeInput(button) {
-        const group = button.closest('.error-code-group');
-        const explanation = group.nextElementSibling; // Explanation is the next sibling
-        
-        group.remove();
-        if (explanation && explanation.classList.contains('error-code-explanation')) {
-            explanation.remove();
-        }
-        updateRemoveButtonsVisibility();
-    }
-
-    function updateRemoveButtonsVisibility() {
-        const groupsArray = Array.from(document.querySelectorAll('.error-code-group'));
-        groupsArray.forEach((group, index) => {
-            const removeBtn = group.querySelector('.remove-btn');
-            // Only show the remove button if there is more than one input group
-            removeBtn.style.display = groupsArray.length > 1 ? 'block' : 'none';
-        });
-    }
-
-    // REVISED: Local Dictionary Lookup (Uses error_codes_dictionary.js)
-    function lookupErrorCode(button) {
-        const group = button.closest('.error-code-group');
-        const inputElement = group.querySelector('.error-code-input');
-        const explanationEl = group.querySelector('.error-code-explanation');
-        const hiddenMeaningEl = group.querySelector('.error-code-meaning');
-        const code = inputElement.value.toUpperCase().trim();
-
-        // The explanation element is the *next sibling* in the DOM
-        const displayEl = group.nextElementSibling;
-        
-        // Reset display
-        displayEl.style.display = 'none';
-        hiddenMeaningEl.value = '';
-
-        if (!code) {
-            displayEl.innerHTML = 'Please enter a code.';
-            displayEl.style.display = 'block';
-            return;
-        }
-
-        const details = ERROR_CODE_LOOKUP[code];
-
-        if (details) {
-            // Found a match in the local dictionary
-            const fullMeaning = `${code} (${details.issuer}): ${details.meaning}`;
-            displayEl.innerHTML = `**${details.issuer}:** ${details.meaning}`;
-            displayEl.className = 'error-code-explanation text-sm p-2 bg-indigo-50 text-indigo-800 rounded mt-1';
-            displayEl.style.display = 'block';
-            hiddenMeaningEl.value = fullMeaning;
-        } else {
-            // No match found
-            displayEl.innerHTML = `**Code ${code}**: No definition found in the local dictionary.`;
-            displayEl.className = 'error-code-explanation text-sm p-2 bg-red-50 text-red-800 rounded mt-1';
-            displayEl.style.display = 'block';
-            hiddenMeaningEl.value = `${code}: No definition found.`;
-        }
-    }
-
-    function getAllErrorCodesWithMeaning() {
-        const groups = document.querySelectorAll('.error-code-group');
-        const codesAndMeanings = [];
-        groups.forEach(group => {
-            const codeInput = group.querySelector('.error-code-input').value.toUpperCase().trim();
-            const meaningInput = group.querySelector('.error-code-meaning').value.trim();
-            if (codeInput.length > 0) {
-                codesAndMeanings.push({ code: codeInput, meaning: meaningInput || `${codeInput}: Not looked up/No data.` });
-            }
-        });
-        return codesAndMeanings;
-    }
-
-    document.addEventListener('DOMContentLoaded', () => {
-        // Initialize the first error code input field
-        addErrorCodeInput();
-    });
-
-    // ----------------------------------------------------------------------
-    // 5. JOB CARD & REPORT GENERATION LOGIC (PDF/Modal)
-    // ----------------------------------------------------------------------
-
-    // Generates a mock job card/report data object from the car entry form
+    
     function createJobCard() {
-        // Prevent form submission
-        event.preventDefault();
-
         const errorData = getAllErrorCodesWithMeaning();
         const rawErrorCodes = errorData.map(e => e.code).join(', ');
-        const fullErrorMeanings = errorData.map(e => e.meaning).map((m, i) => `${errorData[i].code}: ${m}`).join('<br>');
+        const fullErrorMeanings = errorData.map(e => e.meaning).join('; ');
+        const repairActions = getRepairActions(); // NEW: Get array of actions
 
-        // Collate data for the modal
         const data = {
             // CLIENT INFO
             clientName: document.getElementById('client-name').value || 'N/A',
             clientPhone: document.getElementById('client-phone').value || 'N/A',
             clientEmail: document.getElementById('client-email').value || 'N/A',
-            // VEHICLE CORE INFO
+
             make: document.getElementById('make').value || 'N/A',
             model: document.getElementById('model').value || 'N/A',
             year: document.getElementById('year').value || 'N/A',
@@ -676,21 +776,24 @@
             engineName: document.getElementById('engine-name').value || 'N/A',
             transmission: document.getElementById('transmission').value || 'N/A',
             driveType: document.getElementById('drive').value || 'N/A',
-            // JOB DETAILS
+            
             reportedProblems: document.getElementById('reported-problems').value || 'None specified.',
             diagnosticNotes: document.getElementById('diagnostic-notes').value || 'No notes yet.',
-            repairNotes: document.getElementById('repair-notes').value || 'Pending assessment.',
+            repairActions: repairActions, // UPDATED: Pass array for draft
             replacementParts: document.getElementById('replacement-parts').value || 'No parts required yet.',
+            
             errorCodes: rawErrorCodes,
             errorMeanings: fullErrorMeanings,
+            
             assignedMechanic: document.getElementById('assigned-mechanic').value || 'Unassigned',
             dueDate: document.getElementById('due-date').value || 'TBD',
             deliveryDate: document.getElementById('delivery-date').value || 'TBD',
-            id: 'TEMPORARY_CARD',
-            status: 'Draft'
+            
+            id: 'TEMPORARY_CARD', 
+            status: 'Draft' 
         };
-
-        displayJobCardModal(data, 'Draft');
+        
+        displayJobCardModal(data, 'Draft'); 
     }
 
     async function openDetailedReport(carId, status) {
@@ -703,6 +806,7 @@
             }
             const data = docSnap.data();
             data.id = docSnap.id;
+
             displayJobCardModal(data, status);
         } catch (error) {
             console.error('Error fetching detailed report: ', error);
@@ -712,52 +816,80 @@
 
     function displayJobCardModal(data, status) {
         // Set the global job card data for WhatsApp
-        currentJobCardData = data;
+        currentJobCardData = data; 
+        
         const jobCardContent = document.getElementById('job-card-content');
-        const errorCodesHtml = data.errorCodes.length > 0 
-            ? `<div class="p-3 bg-red-50 rounded-lg"><h4 class="font-bold text-lg text-red-700 mb-1">Error Codes:</h4><p class="whitespace-pre-wrap">${data.errorMeanings || data.errorCodes}</p></div>`
-            : '<p class="text-gray-500">No error codes logged.</p>';
+        const actionsContainer = document.getElementById('job-card-actions');
+        
+        const statusColor = status === 'Active' ? 'red-500' : (status === 'Completed' ? 'green-600' : 'gray-500');
+        
+        const clientInfoSection = `
+            <fieldset class="border-2 border-orange-200 p-3 rounded-lg bg-orange-50">
+                <legend class="font-semibold text-lg text-orange-700 px-2">Client Details</legend>
+                <div class="grid grid-cols-2 gap-2 text-sm">
+                    <p><strong>Name:</strong> ${data.clientName || 'N/A'}</p>
+                    <p><strong>Phone:</strong> ${data.clientPhone || 'N/A'}</p>
+                    <p class="col-span-2"><strong>Email:</strong> ${data.clientEmail || 'N/A'}</p>
+                </div>
+            </fieldset>
+        `;
+        
+        // Handle repair actions list (can be an array from DB or an array from Draft)
+        const repairActionsList = Array.isArray(data.repairActions) && data.repairActions.length > 0
+            ? data.repairActions.map((action, index) => `<li>${index + 1}. ${action}</li>`).join('')
+            : '<li>No repair actions recorded.</li>';
 
         jobCardContent.innerHTML = `
-            <div class="grid grid-cols-2 gap-4 border-b pb-4">
-                <div><p><span class="font-bold">Client:</span> ${data.clientName}</p></div>
-                <div><p><span class="font-bold">Phone:</span> ${data.clientPhone}</p></div>
-                <div><p><span class="font-bold">Email:</span> ${data.clientEmail || 'N/A'}</p></div>
+            <h3 class="text-2xl font-bold mb-3">${data.make} ${data.model} (${data.year})</h3>
+            
+            ${clientInfoSection}
+            
+            <div class="grid grid-cols-2 gap-2 text-sm mb-4">
+                <p><strong>VIN/Chassis:</strong> ${data.vin}</p>
+                <p><strong>Color:</strong> ${data.color}</p>
+                <p><strong>Transmission:</strong> ${data.transmission}</p>
+                <p><strong>Drive:</strong> ${data.driveType}</p>
+                <p><strong>Engine:</strong> ${data.engineName} (${data.engineCC} CC)</p>
+                <p><strong>Trim:</strong> ${data.trim}</p>
             </div>
-
-            <h3 class="text-xl font-bold text-blue-700 mt-4 border-b-2 pb-1">Vehicle Details</h3>
-            <div class="grid grid-cols-3 gap-4">
-                <p><span class="font-bold">Make:</span> ${data.make}</p>
-                <p><span class="font-bold">Model:</span> ${data.model}</p>
-                <p><span class="font-bold">Year:</span> ${data.year}</p>
-                <p><span class="font-bold">VIN:</span> ${data.vin}</p>
-                <p><span class="font-bold">Engine:</span> ${data.engineName} (${data.engineCC}cc)</p>
-                <p><span class="font-bold">Transmission:</span> ${data.transmission}</p>
+            
+            <div class="border p-3 rounded-lg bg-gray-50">
+                <p class="font-semibold text-lg">Client Reported Issues</p>
+                <p>${data.reportedProblems.replace(/\n/g, '<br>')}</p>
             </div>
-
-            <h3 class="text-xl font-bold text-green-700 mt-4 border-b-2 pb-1">Job Status</h3>
-            <div class="grid grid-cols-2 gap-4">
-                <p><span class="font-bold">Assigned Mechanic:</span> ${data.assignedMechanic}</p>
-                <p><span class="font-bold">Current Status:</span> <span class="text-${status === 'Active' ? 'blue' : 'green'}-600 font-extrabold">${status.toUpperCase()}</span></p>
-                <p><span class="font-bold">Due Date:</span> ${data.dueDate}</p>
-                <p><span class="font-bold">Delivery Date:</span> ${data.deliveryDate}</p>
+            
+            <div class="border p-3 rounded-lg mt-4">
+                <p class="font-semibold text-lg text-blue-700">Diagnostics & Repair</p>
+                <p class="font-mono text-sm text-red-700"><strong>Error Codes:</strong> ${data.errorCodes || 'N/A'}</p>
+                <p class="text-sm"><strong>Code Meanings:</strong> ${data.errorMeanings || 'N/A'}</p>
+                <p><strong>Diagnostic Notes:</strong> ${data.diagnosticNotes.replace(/\n/g, '<br>')}</p>
+                
+                <p class="mt-2 font-semibold">Repair Actions:</p>
+                <ul class="list-disc list-inside ml-4 text-sm">
+                    ${repairActionsList}
+                </ul>
+                
+                <p class="mt-2"><strong>Replacement Parts:</strong> ${data.replacementParts.replace(/\n/g, '<br>')}</p>
             </div>
-
-            <h3 class="text-xl font-bold text-orange-700 mt-4 border-b-2 pb-1">Service Notes</h3>
-            <p><span class="font-bold">Reported Problems:</span> ${data.reportedProblems}</p>
-            <p><span class="font-bold">Diagnostic Notes:</span> ${data.diagnosticNotes}</p>
-
-            ${errorCodesHtml}
-
-            <p><span class="font-bold">Repair Plan/Action Taken:</span> ${data.repairNotes}</p>
-            <p><span class="font-bold">Replacement Parts:</span> ${data.replacementParts}</p>
+            
+            <div class="border p-3 rounded-lg mt-4 bg-yellow-50">
+                <p class="font-semibold text-lg text-green-700">Service Schedule</p>
+                <p><strong>Assigned Mechanic:</strong> ${data.assignedMechanic}</p>
+                <p><strong>Due Date:</strong> ${data.dueDate || 'N/A'}</p>
+                <p><strong>Est. Delivery:</strong> ${data.deliveryDate || 'N/A'}</p>
+                <p><strong>Status:</strong> <span class="font-bold text-${statusColor}">${data.status}</span></p>
+            </div>
         `;
-
-        // Update actions based on status
-        const actionContainer = document.getElementById('job-card-actions');
-        actionContainer.innerHTML = `
-            ${status === 'Active' ? `<button onclick="markCarAsCompleted('${data.id}'); document.getElementById('jobCardModal').style.display = 'none';" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded transition duration-150 print:hidden">Repaired - Release</button>` : (status === 'Completed' ? `<button onclick="deleteCompletedCar('${data.id}'); document.getElementById('jobCardModal').style.display = 'none';" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded transition duration-150 print:hidden">Delete History</button>` : '' // Hide for Draft status
-            )}
+        
+        // Update actions container
+        actionsContainer.innerHTML = `
+            ${status === 'Active' 
+                ? `<button onclick="markCarAsCompleted('${data.id}'); document.getElementById('jobCardModal').style.display = 'none';" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded transition duration-150 print:hidden">Repaired - Release</button>` 
+                : (status === 'Completed' 
+                    ? `<button onclick="deleteCompletedCar('${data.id}'); document.getElementById('jobCardModal').style.display = 'none';" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded transition duration-150 print:hidden">Delete History</button>`
+                    : '' // Hide for Draft status
+                )
+            }
             <button onclick="document.getElementById('jobCardModal').style.display = 'none'" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded transition duration-150 print:hidden">Close</button>
             <button onclick="sendJobCardWhatsApp()" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded transition duration-150 print:hidden">Send via WhatsApp</button>
             <button onclick="window.print()" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded transition duration-150 print:hidden">Print Job Card</button>
@@ -765,8 +897,8 @@
 
         document.getElementById('jobCardModal').style.display = 'flex';
     }
-
-    // NEW: WhatsApp Functionality
+    
+    // NEW/Confirmed: WhatsApp Functionality
     function sendJobCardWhatsApp() {
         if (!currentJobCardData || !currentJobCardData.clientPhone) {
             alert("Client phone number not available or job card data not set.");
@@ -776,87 +908,74 @@
         const data = currentJobCardData;
         const phone = data.clientPhone.replace(/\s|-/g, ''); // Clean phone number
         
-        // Prepare the message text (URL encoded)
+        const repairActionsText = Array.isArray(data.repairActions) 
+            ? data.repairActions.join('; ').substring(0, 150) + (data.repairActions.join('; ').length > 150 ? '...' : '') 
+            : 'Pending assessment.';
+
+
         let message = `*Garage Manager PRO Job Card Update*\n\n`;
         message += `*Vehicle:* ${data.make} ${data.model} (${data.year})\n`;
         message += `*VIN:* ${data.vin}\n`;
+        message += `*Status:* ${data.status}\n`;
         message += `*Assigned Mechanic:* ${data.assignedMechanic}\n`;
-        message += `*Est. Delivery:* ${data.deliveryDate}\n\n`;
-        
-        message += `*Reported Problems:*\n${data.reportedProblems}\n\n`;
-        
-        if (data.repairNotes) {
-            message += `*Repair Plan:*\n${data.repairNotes}\n\n`;
-        }
-        
-        if (data.errorCodes) {
-            message += `*Error Codes:*\n${data.errorCodes}\n\n`;
-        }
-        
-        message += `*Status:* ${data.status.toUpperCase()}\n`;
+        message += `*Due Date:* ${data.dueDate || 'N/A'}\n\n`;
+        message += `*Reported Problems:*\n${data.reportedProblems.substring(0, 150)}...\n\n`;
+        message += `*Repair Actions:*\n${repairActionsText}\n\n`;
+        message += `For full details, please contact us or see the printed report.`;
 
-        const whatsappURL = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
-        window.open(whatsappURL, '_blank');
+        const whatsappUrl = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+        window.open(whatsappUrl, '_blank');
     }
 
-    // PDF Report Generation for Car Entry/Diagnostic
-    function generateAnalysisReportPDF() {
-        // Prevent form submission
-        event.preventDefault();
 
+    function generateAnalysisReportPDF() {
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF();
         
+        const repairActions = getRepairActions().join('\n'); // Join for PDF table
+        
         const data = {
-            // CLIENT INFO
-            clientName: document.getElementById('client-name').value || 'N/A',
-            clientPhone: document.getElementById('client-phone').value || 'N/A',
-            clientEmail: document.getElementById('client-email').value || 'N/A',
-            // VEHICLE CORE INFO
             make: document.getElementById('make').value || 'N/A',
             model: document.getElementById('model').value || 'N/A',
             year: document.getElementById('year').value || 'N/A',
             vin: document.getElementById('vin').value || 'N/A',
-            color: document.getElementById('color').value || 'N/A',
-            engineCC: document.getElementById('engine-cc').value || 'N/A',
-            trim: document.getElementById('trim').value || 'N/A',
-            engineName: document.getElementById('engine-name').value || 'N/A',
-            transmission: document.getElementById('transmission').value || 'N/A',
-            driveType: document.getElementById('drive').value || 'N/A',
-            // JOB DETAILS
             reportedProblems: document.getElementById('reported-problems').value || 'None specified.',
             diagnosticNotes: document.getElementById('diagnostic-notes').value || 'No notes yet.',
-            repairNotes: document.getElementById('repair-notes').value || 'Pending assessment.',
+            repairNotes: repairActions || 'Pending assessment.', // <-- UPDATED, reusing repairNotes var for table data
             replacementParts: document.getElementById('replacement-parts').value || 'No parts required yet.',
+            assignedMechanic: document.getElementById('assigned-mechanic').value || 'Unassigned',
+            dueDate: document.getElementById('due-date').value || 'TBD',
+            deliveryDate: document.getElementById('delivery-date').value || 'TBD'
         };
+        
         const errorData = getAllErrorCodesWithMeaning();
 
-        // 1. Title
-        doc.setFontSize(22);
-        doc.setTextColor(30, 58, 138); // blue-800
-        doc.text("Vehicle Analysis & Diagnostic Report", 14, 20);
-
-        doc.setFontSize(10);
-        doc.setTextColor(107, 114, 128); // gray-500
-        doc.text("Report Generated by Garage Manager PRO", 14, 25);
-        doc.line(14, 27, 196, 27); // Separator line
-
-        let y = 35;
+        let y = 10;
         
-        // 2. General Details Table
+        // Header
+        doc.setFontSize(18);
+        doc.text("Vehicle Health Analysis Report", 105, y, null, null, "center");
+        y += 7;
+        doc.setFontSize(10);
+        doc.text("Garage Manager PRO - The Ultimate Auto Service Tool", 105, y, null, null, "center");
+        y += 14;
+        
+        // Vehicle Info Table
+        doc.setFontSize(12);
+        doc.text(`Vehicle: ${data.make} ${data.model} (${data.year})`, 14, y);
+        y += 7;
+        doc.text(`VIN: ${data.vin}`, 14, y);
+        y += 7;
+
+        // Collect general data for the table
         const generalData = [
-            ['Client Name', data.clientName],
-            ['Phone/Email', `${data.clientPhone} / ${data.clientEmail}`],
-            ['Make/Model/Year', `${data.make} ${data.model} (${data.year})`],
-            ['VIN / Chassis No.', data.vin],
-            ['Engine Details', `${data.engineName} ${data.engineCC}cc`],
-            ['Transmission/Drive', `${data.transmission} / ${data.driveType}`],
-            ['Assigned Mechanic', document.getElementById('assigned-mechanic').value || 'Unassigned'],
-            ['Service Dates', `Due: ${data.dueDate} | Delivery: ${data.deliveryDate}`],
-            ['Client Reported Problems', data.reportedProblems],
-            ['Diagnostic Notes', data.diagnosticNotes],
-            ['Repair Plan', data.repairNotes],
+            ['Reported Problems', data.reportedProblems],
+            ['Diagnostic Findings', data.diagnosticNotes],
+            ['Repair Actions', data.repairNotes], // UPDATED to show repair actions
             ['Parts Needed', data.replacementParts],
+            ['Assigned Mechanic', data.assignedMechanic],
+            ['Service Due Date', data.dueDate],
+            ['Est. Delivery Date', data.deliveryDate],
         ];
 
         doc.autoTable({
@@ -865,96 +984,89 @@
             body: generalData,
             theme: 'striped',
             styles: { fontSize: 10, cellPadding: 2 },
-            columnStyles: { 0: { fontStyle: 'bold', cellWidth: 40 }, 1: { cellWidth: 150 } },
+            columnStyles: {
+                0: { fontStyle: 'bold', cellWidth: 40 },
+                1: { cellWidth: 150 }
+            },
             didDrawPage: function (hookData) {
                 doc.setFontSize(8);
                 doc.text('Report Generated: ' + new Date().toLocaleDateString(), 14, doc.internal.pageSize.height - 10);
             }
         });
-
+        
         // Error Code Specific Table
         if (errorData.length > 0) {
-            y = doc.autoTable.previous.finalY + 10;
+            const errorTableData = errorData.map(e => [e.code, e.meaning]);
+
             doc.addPage();
             doc.setFontSize(14);
-            doc.setTextColor(185, 28, 28); // red-700
             doc.text("Error Codes and Meanings", 14, 15);
-            doc.setTextColor(0, 0, 0); // black for table text
-            
-            const errorTableData = errorData.map(e => [e.code, e.meaning]);
+
             doc.autoTable({
                 startY: 20,
                 head: [['Code', 'Meaning / Explanation']],
                 body: errorTableData,
                 theme: 'grid',
                 styles: { fontSize: 9, cellPadding: 2 },
-                columnStyles: { 0: { fontStyle: 'bold', cellWidth: 30 }, 1: { cellWidth: 160 } },
+                columnStyles: {
+                    0: { fontStyle: 'bold', cellWidth: 30 },
+                    1: { cellWidth: 160 }
+                },
                 didDrawPage: function (hookData) {
                     doc.setFontSize(8);
                     doc.text('Report Generated: ' + new Date().toLocaleDateString(), 14, doc.internal.pageSize.height - 10);
                 }
             });
         }
-
+        
         doc.save(`Report_${data.vin}.pdf`);
     }
 
     // ----------------------------------------------------------------------
-    // 6. GENERAL SERVICE CHECKLIST LOGIC
+    // 7. GENERAL SERVICE CHECKLIST LOGIC
     // ----------------------------------------------------------------------
-
     const SERVICE_ITEMS = [
         { name: 'Oil Change', type: 'filter' },
         { name: 'Oil Filter', type: 'filter' },
         { name: 'Air Filter', type: 'filter' },
         { name: 'AC Gas', type: 'filter' },
-        { name: 'Transmission Fluid', type: 'filter' },
-        { name: 'Brake Fluid', type: 'filter' },
-        { name: 'Power Steering Fluid', type: 'filter' },
-        { name: 'Coolant Level', type: 'filter' },
-        { name: 'Windshield Wiper Fluid', type: 'filter' },
-        { name: 'Wiper Blades', type: 'other' },
-        { name: 'Tyre Pressure & Tread', type: 'other' },
-        { name: 'Brake Pads (F)', type: 'other' },
-        { name: 'Brake Pads (R)', type: 'other' },
-        { name: 'Battery Health', type: 'other' },
-        { name: 'Suspension System', type: 'other' },
-        { name: 'Horn Function', type: 'other' },
-        { name: 'Spare Tyre/Kit', type: 'other' }
+        { name: 'AC Cabin Filter', type: 'filter' },
+        { name: 'Spark Plugs', type: 'filter' },
+        
+        { name: 'Battery Condition', type: 'other' },
+        { name: 'Brake Pads Front', type: 'other' },
+        { name: 'Brake Pads Rear', type: 'other' },
+        { name: 'Wiper Check Front', type: 'other' }, 
+        { name: 'Wiper Check Rear', type: 'other' },  
+        { name: 'Tyre Pressure', type: 'other' },     
+        { name: 'Tyre Condition Front L/R', type: 'other' }, 
+        { name: 'Tyre Condition Rear L/R', type: 'other' }  
     ];
 
     const LIGHTS_ITEMS = [
-        'Headlights (Low Beam)',
-        'Headlights (High Beam)',
-        'Fog Lights',
-        'Turn Signals (F)',
-        'Turn Signals (R)',
-        'Brake Lights',
-        'Reverse Lights',
-        'Interior Lights',
-        'Hazard Lights'
+        'Head Lights', 'Tail Lights', 'Fog Lights', 'Hazard Lights', 'Indicator Lights', 'Cabin Lights'
     ];
 
     function initializeGeneralService() {
         const fluidsBody = document.getElementById('fluids-filters-body');
         const lightsBody = document.getElementById('lights-body');
         const otherChecksBody = document.getElementById('other-checks-body');
-
-        if (!fluidsBody || fluidsBody.children.length > 0) return; // Prevent re-initialization
-
+        
         fluidsBody.innerHTML = '';
         lightsBody.innerHTML = '';
         otherChecksBody.innerHTML = '';
 
-        // Dynamically create rows for Fluids, Filters, and Other Checks
         SERVICE_ITEMS.forEach(item => {
-            let rowContent = `<td><input type="checkbox" name="${item.name}-faulty" class="faulty-checkbox" value="Faulty"></td>
-                              <td><input type="checkbox" name="${item.name}-checked" class="checked-checkbox" value="Checked"></td>
-                              <td><input type="checkbox" name="${item.name}-changed" class="changed-checkbox" value="Changed"></td>`;
-
-            if (item.type === 'other') {
-                 rowContent += `<td><input type="text" name="${item.name}-notes" placeholder="Notes" class="p-1 border rounded w-full text-xs"></td>`;
-            }
+            // Note: Removed the extra notes field for fluids/filters for brevity and kept it only for other-checks
+            let rowContent = item.type === 'filter' ? 
+                `<td><input type="checkbox" name="${item.name}-faulty" class="service-checkbox" value="Faulty"></td>
+                 <td><input type="checkbox" name="${item.name}-checked" class="service-checkbox" value="Checked"></td>
+                 <td><input type="checkbox" name="${item.name}-changed" class="service-checkbox" value="Changed"></td>`
+                 : 
+                `<td><input type="checkbox" name="${item.name}-faulty" class="service-checkbox" value="Faulty"></td>
+                 <td><input type="checkbox" name="${item.name}-checked" class="service-checkbox" value="Checked"></td>
+                 <td><input type="checkbox" name="${item.name}-changed" class="service-checkbox" value="Changed"></td>
+                 <td><input type="text" name="${item.name}-notes" placeholder="Notes" class="p-1 border rounded w-full text-xs"></td>`;
 
             let row = `<tr><td>${item.name}</td>${rowContent}</tr>`;
 
@@ -965,7 +1077,7 @@
             }
         });
 
-        // Dynamically create rows for Lights
+
         LIGHTS_ITEMS.forEach(item => {
             lightsBody.innerHTML += `
                 <tr>
@@ -978,7 +1090,7 @@
         });
     }
 
-    document.addEventListener('DOMContentLoaded', initializeGeneralService);
+    document.addEventListener('DOMContentLoaded', initializeGeneralService); 
 
     function getGeneralServiceData() {
         const form = document.getElementById('general-service-form');
@@ -987,104 +1099,76 @@
         // 1. Client Info
         data.clientName = document.getElementById('service-client-name').value || 'N/A';
         data.clientPhone = document.getElementById('service-client-phone').value || 'N/A';
-        
+
         // 2. Vehicle Info
         data.make = document.getElementById('service-make').value || 'N/A';
         data.model = document.getElementById('service-model').value || 'N/A';
         data.vin = document.getElementById('service-vin').value || 'N/A';
-
-        // 3. Mileage & Person
         data.currentMileage = document.getElementById('current-mileage').value || 'N/A';
         data.nextServiceMileage = document.getElementById('next-service-mileage').value || 'N/A';
         data.servicePerson = document.getElementById('service-person').value || 'N/A';
 
-        // 4. Checklist Items
+        // 3. Service Items (Fluids, Filters, Brakes, etc.)
         data.serviceChecks = SERVICE_ITEMS.map(item => {
-            let status = 'OK';
-            if (form.querySelector(`[name="${item.name}-faulty"]`) && form.querySelector(`[name="${item.name}-faulty"]`).checked) {
-                status = 'Faulty';
-            } else if (form.querySelector(`[name="${item.name}-changed"]`) && form.querySelector(`[name="${item.name}-changed"]`).checked) {
-                status = 'Changed';
-            } else if (form.querySelector(`[name="${item.name}-checked"]`) && form.querySelector(`[name="${item.name}-checked"]`).checked) {
-                status = 'Checked';
-            }
-            
-            const notes = form.querySelector(`[name="${item.name}-notes"]`) ? form.querySelector(`[name="${item.name}-notes"]`).value : '';
+            const faulty = form.querySelector(`input[name="${item.name}-faulty"]`).checked;
+            const checked = form.querySelector(`input[name="${item.name}-checked"]`).checked;
+            const changed = form.querySelector(`input[name="${item.name}-changed"]`).checked;
+            // Notes is optional and only present for 'other' checks in the UI structure
+            const notesInput = form.querySelector(`input[name="${item.name}-notes"]`);
+            const notes = notesInput ? notesInput.value : '';
 
-            return {
-                item: item.name,
-                status: status,
-                notes: notes
-            };
+            let status = 'OK';
+            if (changed) status = 'Changed';
+            else if (faulty) status = 'Faulty/Requires Change';
+            else if (checked) status = 'Checked OK';
+            else status = 'Not Checked';
+
+            return { item: item.name, status: status, notes: notes };
         });
 
+        // 4. Lights
         data.lightChecks = LIGHTS_ITEMS.map(item => {
-            const left = form.querySelector(`[name="${item}-left"]`).checked ? 'Working' : 'Faulty';
-            const right = form.querySelector(`[name="${item}-right"]`).checked ? 'Working' : 'Faulty';
-            const notes = form.querySelector(`[name="${item}-notes"]`).value;
+            const left = form.querySelector(`input[name="${item}-left"]`).checked ? 'Working' : 'Faulty';
+            const right = form.querySelector(`input[name="${item}-right"]`).checked ? 'Working' : 'Faulty';
+            const notes = form.querySelector(`input[name="${item}-notes"]`).value;
 
-            return {
-                light: item,
-                left: left,
-                right: right,
-                notes: notes
-            };
+            return { light: item, left: left, right: right, notes: notes };
         });
 
         return data;
     }
 
-    // PDF Report Generation for General Service
+    // Function to generate the General Service PDF
     function generateServiceReportPDF() {
-        event.preventDefault();
-
+        const data = getGeneralServiceData();
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF();
-        const data = getGeneralServiceData();
+        let y = 15;
 
-        // 1. Title
-        doc.setFontSize(22);
-        doc.setTextColor(30, 58, 138); // blue-800
-        doc.text("Vehicle General Service Report", 14, 20);
-
-        doc.setFontSize(10);
-        doc.setTextColor(107, 114, 128); // gray-500
-        doc.text("Report Generated by Garage Manager PRO", 14, 25);
-        doc.line(14, 27, 196, 27); // Separator line
-
-        let y = 35;
+        // Header
+        doc.setFontSize(18);
+        doc.text("General Service Report", 105, y, null, null, "center");
+        y += 7;
+        doc.setFontSize(12);
+        doc.text(`${data.make} ${data.model} - VIN: ${data.vin}`, 105, y, null, null, "center");
+        y += 10;
         
-        // 2. Client and Vehicle Details
-        doc.setFontSize(14);
-        doc.setTextColor(234, 88, 12); // orange-700
-        doc.text("Vehicle & Client Details", 14, y);
-        doc.setTextColor(0, 0, 0); // black for table text
+        // Client Info 
+        doc.setFontSize(10);
+        doc.text(`Client Name: ${data.clientName}`, 14, y);
+        doc.text(`Client Phone: ${data.clientPhone}`, 105, y);
         y += 5;
+        
+        // Mileage and Service Person Info
+        doc.text(`Current Mileage: ${data.currentMileage} KM`, 14, y);
+        doc.text(`Next Service Est.: ${data.nextServiceMileage} KM`, 105, y);
+        y += 5;
+        doc.text(`Service Person: ${data.servicePerson}`, 14, y);
+        y += 10;
 
-        const generalData = [
-            ['Client Name', data.clientName],
-            ['Phone', data.clientPhone],
-            ['Vehicle ID', `${data.make} ${data.model} (VIN: ${data.vin})`],
-            ['Mileage (IN/NEXT)', `${data.currentMileage} KM / ${data.nextServiceMileage} KM`],
-            ['Service Person', data.servicePerson],
-        ];
-
-        doc.autoTable({
-            startY: y + 2,
-            head: [['Field', 'Value']],
-            body: generalData,
-            theme: 'plain',
-            styles: { fontSize: 10, cellPadding: 2, lineWidth: 0 },
-            columnStyles: { 0: { fontStyle: 'bold', cellWidth: 40 }, 1: { cellWidth: 150 } }
-        });
-
-        y = doc.autoTable.previous.finalY + 10;
-
-        // 3. Fluids/Filters/Other Items Table
+        // 1. Service Items Table
         doc.setFontSize(14);
-        doc.setTextColor(4, 120, 87); // green-700
         doc.text("Fluids, Filters & Brakes Checklist", 14, y);
-        doc.setTextColor(0, 0, 0); // black for table text
         y += 5;
         
         const serviceTableData = data.serviceChecks.map(item => [item.item, item.status, item.notes]);
@@ -1100,11 +1184,9 @@
 
         y = doc.autoTable.previous.finalY + 10;
         
-        // 4. Lights Check Table
+        // 2. Lights Check Table
         doc.setFontSize(14);
-        doc.setTextColor(202, 138, 4); // yellow-700
         doc.text("Lights & Electrical Check", 14, y);
-        doc.setTextColor(0, 0, 0); // black for table text
         y += 5;
         
         const lightsTableData = data.lightChecks.map(item => [item.light, item.left, item.right, item.notes]);
@@ -1118,18 +1200,15 @@
             columnStyles: { 0: { fontStyle: 'bold', cellWidth: 40 }, 1: { cellWidth: 30 }, 2: { cellWidth: 30 }, 3: { cellWidth: 90 } }
         });
         
-        doc.autoTable.previous.finalY = doc.autoTable.previous.finalY; // Reset Y position for the footer
-        
-        // Footer
+        doc.autoTable.previous.finalY = doc.autoTable.previous.finalY || 10; 
         doc.setFontSize(8);
-        doc.setTextColor(107, 114, 128); // gray-500
         doc.text('Report Generated: ' + new Date().toLocaleDateString(), 14, doc.internal.pageSize.height - 10);
-        doc.text('This is a checklist report and does not constitute a final invoice.', 14, doc.internal.pageSize.height - 5);
 
 
-        doc.save(`ServiceReport_${data.vin}.pdf`);
+        // Save the PDF
+        const filename = `${data.make}_${data.model}_General_Service.pdf`.replace(/\s/g, '_');
+        doc.save(filename);
     }
-
 </script>
 </body>
 </html>
