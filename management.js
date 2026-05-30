@@ -915,15 +915,15 @@ invoiceCreationForm.addEventListener('submit', async (e) => {
     }
 
     const invoice = {
-        invoiceNo: `INV-${Date.now().toString().slice(-6)}`,
-        clientName: document.getElementById('invoice-client-name').value,
-        clientPhone: document.getElementById('invoice-client-phone').value,
-        carPlate: document.getElementById('invoice-car-plate').value,
-        items: items,
-        total: totalAmount,
-        date: getUTCDateString()
-        timestamp: firebase.firestore.FieldValue.serverTimestamp()
-    };
+    invoiceNo: `INV-${Date.now().toString().slice(-6)}`,
+    clientName: document.getElementById('invoice-client-name').value,
+    clientPhone: document.getElementById('invoice-client-phone').value,
+    carPlate: document.getElementById('invoice-car-plate').value,
+    items: items,
+    total: totalAmount,
+    date: getUTCDateString(),
+    timestamp: firebase.firestore.FieldValue.serverTimestamp()
+};
 
     try {
         await invoicesRef.add(invoice);
@@ -1128,16 +1128,16 @@ quoteCreationForm.addEventListener('submit', async (e) => {
     }
 
     const quote = {
-        quoteNo: `QUO-${Date.now().toString().slice(-6)}`,
-        clientName: document.getElementById('quote-client-name').value,
-        clientPhone: document.getElementById('quote-client-phone').value,
-        carPlate: document.getElementById('quote-car-plate').value,
-        carMake: document.getElementById('quote-car-make').value,
-        items: items,
-        total: totalAmount,
-        date: getUTCDateString()
-        timestamp: firebase.firestore.FieldValue.serverTimestamp()
-    };
+    quoteNo: `QUO-${Date.now().toString().slice(-6)}`,
+    clientName: document.getElementById('quote-client-name').value,
+    clientPhone: document.getElementById('quote-client-phone').value,
+    carPlate: document.getElementById('quote-car-plate').value,
+    carMake: document.getElementById('quote-car-make').value,
+    items: items,
+    total: totalAmount,
+    date: getUTCDateString(),
+    timestamp: firebase.firestore.FieldValue.serverTimestamp()
+};
 
     try {
         await quotesRef.add(quote);
