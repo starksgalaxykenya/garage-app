@@ -65,6 +65,7 @@
                 <button id="nav-car-list" class="text-white hover:text-blue-200 font-medium transition duration-150">Active Jobs</button>
                 <button id="nav-completed-list" class="text-white hover:text-blue-200 font-medium transition duration-150">Completed Jobs</button>
                 <button id="nav-reports-section" class="text-white hover:text-blue-200 font-bold py-2 px-4 rounded-lg bg-yellow-600 hover:bg-yellow-700 transition duration-150">Reports</button>
+                <button id="nav-garage-manager" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded transition duration-150 ml-2">Enter Garage Manager</button>
                 <button id="logoutBtn" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded transition duration-150" style="display:none;">Logout</button>
             </nav>
         </div>
@@ -2276,6 +2277,10 @@ function lookupClientDetails(section) {
         }
         
         attachNavHandlers();
+
+        document.getElementById('nav-garage-manager').addEventListener('click', () => {
+    window.location.href = 'management.html';
+});
         
         // Initialize the first error code input field
         addErrorCodeInput(); 
