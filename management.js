@@ -195,7 +195,7 @@ jobForm.addEventListener('submit', async (e) => {
         profit: profit,
         timestamp: firebase.firestore.FieldValue.serverTimestamp(),
         isJob: true,
-        date: new Date().getUTCDateString() // YYYY-MM-DD
+        date: getUTCDateString() // YYYY-MM-DD
     };
 
     try {
@@ -228,7 +228,7 @@ generalForm.addEventListener('submit', async (e) => {
         profit: isIncome ? amount : -amount,
         timestamp: firebase.firestore.FieldValue.serverTimestamp(),
         isJob: false,
-        date: new Date().getUTCDateString() // YYYY-MM-DD
+        date: getUTCDateString() // YYYY-MM-DD
     };
 
     try {
@@ -245,7 +245,7 @@ generalForm.addEventListener('submit', async (e) => {
  * Real-time listener for today's transactions.
  */
 function listenForDailyTransactions() {
-    const today = new Date().getUTCDateString();
+    const today = getUTCDateString();
 
     dailyTransactionsRef
         .where('date', '==', today)
@@ -308,7 +308,7 @@ endDayBtn.addEventListener('click', async () => {
     if (currentDailyTransactions.length === 0) return;
     if (!confirm('Are you sure you want to end the day and save the P&L report? This action cannot be undone for today\'s transactions.')) return;
 
-    const date = new Date().getUTCDateString();
+    const date = getUTCDateString();
     const totalIncome = currentDailyTransactions.reduce((sum, t) => sum + t.income, 0);
     const totalExpense = currentDailyTransactions.reduce((sum, t) => sum + t.expense, 0);
     const netProfit = totalIncome - totalExpense;
@@ -636,7 +636,7 @@ sellPartForm.addEventListener('submit', async (e) => {
             profit: totalProfit,
             timestamp: firebase.firestore.FieldValue.serverTimestamp(),
             isJob: true,
-            date: new Date().getUTCDateString()
+            date: getUTCDateString()
         };
         batch.set(dailyTransactionsRef.doc(), financeTransaction);
 
@@ -921,7 +921,7 @@ invoiceCreationForm.addEventListener('submit', async (e) => {
         carPlate: document.getElementById('invoice-car-plate').value,
         items: items,
         total: totalAmount,
-        date: new Date().getUTCDateString(),
+        date: getUTCDateString()
         timestamp: firebase.firestore.FieldValue.serverTimestamp()
     };
 
@@ -939,7 +939,7 @@ invoiceCreationForm.addEventListener('submit', async (e) => {
             profit: totalAmount,
             timestamp: firebase.firestore.FieldValue.serverTimestamp(),
             isJob: true,
-            date: new Date().getUTCDateString()
+            date: getUTCDateString()
         };
         await dailyTransactionsRef.add(financeTransaction);
         
@@ -1135,7 +1135,7 @@ quoteCreationForm.addEventListener('submit', async (e) => {
         carMake: document.getElementById('quote-car-make').value,
         items: items,
         total: totalAmount,
-        date: new Date().getUTCDateString(),
+        date: getUTCDateString()
         timestamp: firebase.firestore.FieldValue.serverTimestamp()
     };
 
