@@ -261,9 +261,9 @@ function listenForDailyTransactions() {
                 const data = doc.data();
                 
                 // ✅ Safe extraction with defaults
-                const income = data.income !== undefined ? data.income : 0;
-                const expense = data.expense !== undefined ? data.expense : 0;
-                const profit = data.profit !== undefined ? data.profit : (income - expense);
+                const income = (typeof data.income === 'number') ? data.income : 0;
+                const expense = (typeof data.expense === 'number') ? data.expense : 0;
+                let profit = (typeof data.profit === 'number') ? data.profit : (income - expense);
                 
                 totalIncome += income;
                 totalExpense += expense;
@@ -303,10 +303,13 @@ function listenForDailyTransactions() {
                 dailyTransactionsBody.appendChild(tr);
             });
 
-            // Update summary
-            const netProfit = totalIncome - totalExpense;
-            summaryIncome.textContent = `$${totalIncome.toFixed(2)}`;
-            summaryExpense.textContent = `$${totalExpense.toFixed(2)}`;
+            // ✅ Ensure totals are valid numbers
+            const safeTotalIncome = totalIncome || 0;
+            const safeTotalExpense = totalExpense || 0;
+            const netProfit = safeTotalIncome - safeTotalExpense;
+            
+            summaryIncome.textContent = `$${safeTotalIncome.toFixed(2)}`;
+            summaryExpense.textContent = `$${safeTotalExpense.toFixed(2)}`;
             summaryProfit.textContent = `$${netProfit.toFixed(2)}`;
             summaryProfit.className = netProfit >= 0 ? 'font-bold text-indigo-600' : 'font-bold text-red-600';
             
