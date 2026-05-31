@@ -259,27 +259,42 @@ function listenForDailyTransactions() {
 
             snapshot.forEach(doc => {
                 const data = doc.data();
-                currentDailyTransactions.push({ id: doc.id, ...data });
-
-                totalIncome += data.income;
-                totalExpense += data.expense;
                 
-                const profitText = data.profit.toFixed(2);
-                const profitClass = data.profit >= 0 ? 'text-green-600 font-medium' : 'text-red-600 font-medium';
+                // ✅ Safe extraction with defaults
+                const income = data.income !== undefined ? data.income : 0;
+                const expense = data.expense !== undefined ? data.expense : 0;
+                const profit = data.profit !== undefined ? data.profit : (income - expense);
                 
-                // FIX: Check if timestamp exists before calling .toDate()
+                totalIncome += income;
+                totalExpense += expense;
+                
+                const profitText = profit.toFixed(2);
+                const profitClass = profit >= 0 ? 'text-green-600 font-medium' : 'text-red-600 font-medium';
+                
                 const displayTime = data.timestamp 
                     ? new Date(data.timestamp.toDate()).toLocaleTimeString() 
                     : 'Pending...';
+                
+                // Store normalized data for later use (e.g., endDay)
+                currentDailyTransactions.push({ 
+                    id: doc.id, 
+                    income, 
+                    expense, 
+                    profit,
+                    description: data.description || '',
+                    subtype: data.subtype || 'Other',
+                    plate: data.plate || 'N/A',
+                    timestamp: data.timestamp
+                });
 
                 const tr = document.createElement('tr');
                 tr.className = 'hover:bg-gray-50';
                 tr.innerHTML = `
                     <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500">${displayTime}</td>
-                    <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900">${data.subtype}</td>
-                    <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500">${data.plate}</td>
-                    <td class="px-3 py-2 whitespace-nowrap text-sm text-green-600">$${data.income.toFixed(2)}</td>
-                    <td class="px-3 py-2 whitespace-nowrap text-sm text-red-600">$${data.expense.toFixed(2)}</td>
+                    <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900">${data.subtype || 'Other'}</td>
+                    <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500">${data.plate || 'N/A'}</td>
+                    <td class="px-3 py-2 whitespace-nowrap text-sm text-green-600">$${income.toFixed(2)}</td>
+                    <td class="px-3 py-2 whitespace-nowrap text-sm text-red-600">$${expense.toFixed(2)}</td>
                     <td class="px-3 py-2 whitespace-nowrap text-sm ${profitClass}">$${profitText}</td>
                     <td class="px-3 py-2 whitespace-nowrap text-sm">
                         <button onclick="deleteTransaction('${doc.id}')" class="text-red-500 hover:text-red-700">Delete</button>
@@ -288,7 +303,7 @@ function listenForDailyTransactions() {
                 dailyTransactionsBody.appendChild(tr);
             });
 
-            // Update Summary Stats
+            // Update summary
             const netProfit = totalIncome - totalExpense;
             summaryIncome.textContent = `$${totalIncome.toFixed(2)}`;
             summaryExpense.textContent = `$${totalExpense.toFixed(2)}`;
