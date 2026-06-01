@@ -284,15 +284,14 @@
 
                             <h4 class="font-medium text-gray-700 mt-4">Items (Labor/Parts)</h4>
                             <div id="invoice-items-container" class="space-y-2">
-                                <div class="flex space-x-2 item-row mb-2">
-                                    <input type="text" placeholder="Description" class="p-2 border rounded-lg w-5/12 item-desc" required/>
-                                    <input type="number" value="1" min="1" placeholder="Qty" class="p-2 border rounded-lg w-2/12 item-quantity text-center" oninput="calculateTotal('invoice')" required/>
-                                    <input type="number" placeholder="Amount ($)" class="p-2 border rounded-lg w-4/12 item-amount text-right" step="0.01" min="0" required/>
-                                    <button type="button" class="w-1/12 text-red-500 hover:text-red-700 font-bold flex justify-center items-center" onclick="this.closest('.item-row').remove(); calculateTotal('invoice')">
-                                        <i class="fas fa-trash"></i>
-                                    </button>
-                                </div>
-                            </div>
+    <div class="flex space-x-2 invoice-item-row mb-2">
+        <input type="text" placeholder="Description" class="invoice-item-desc form-input flex-grow" required/>
+        <input type="number" value="1" min="1" placeholder="Qty" class="invoice-item-qty form-input w-24" oninput="calculateTotal('invoice')" required/>
+        <input type="number" placeholder="Unit Price ($)" value="0.00" min="0" step="0.01" class="invoice-item-unit-price form-input w-36" oninput="calculateTotal('invoice')" required/>
+        <input type="text" placeholder="Total Amount ($)" value="0.00" class="invoice-item-amount form-input w-40 bg-gray-100" readonly>
+        <button type="button" onclick="this.parentNode.remove(); calculateTotal('invoice');" class="delete-item-btn p-2 text-red-500 hover:text-red-700">X</button>
+    </div>
+</div>
                             
                             <button type="button" onclick="addInvoiceItemRow()" class="w-full bg-indigo-100 text-indigo-700 hover:bg-indigo-200 font-bold py-2 rounded-lg transition duration-150 mb-4"><i class="fas fa-plus mr-2"></i>Add Item/Labor</button>
                             
@@ -339,15 +338,14 @@
 
                             <h4 class="font-medium text-gray-700 mt-4">Estimated Items (Parts/Labor)</h4>
                             <div id="quote-items-container" class="space-y-2">
-                                <div class="flex space-x-2 quote-item-row mb-2">
-                                    <input type="text" placeholder="Description" class="p-2 border rounded-lg w-5/12 quote-item-desc" required/>
-                                    <input type="number" value="1" min="1" placeholder="Qty" class="p-2 border rounded-lg w-2/12 quote-item-quantity text-center" oninput="calculateTotal('quote')" required/>
-                                    <input type="number" placeholder="Cost ($)" class="p-2 border rounded-lg w-4/12 quote-item-amount text-right" step="0.01" min="0" required/>
-                                    <button type="button" class="w-1/12 text-red-500 hover:text-red-700 font-bold flex justify-center items-center" onclick="this.closest('.quote-item-row').remove(); calculateTotal('quote')">
-                                        <i class="fas fa-trash"></i>
-                                    </button>
-                                </div>
-                            </div>
+    <div class="flex space-x-2 quote-item-row mb-2">
+        <input type="text" placeholder="Description" class="quote-item-desc form-input flex-grow" required/>
+        <input type="number" value="1" min="1" placeholder="Qty" class="quote-item-qty form-input w-24" oninput="calculateTotal('quote')" required/>
+        <input type="number" placeholder="Unit Price ($)" value="0.00" min="0" step="0.01" class="quote-item-unit-price form-input w-36" oninput="calculateTotal('quote')" required/>
+        <input type="text" placeholder="Total Amount ($)" value="0.00" class="quote-item-amount form-input w-40 bg-gray-100" readonly>
+        <button type="button" onclick="this.parentNode.remove(); calculateTotal('quote');" class="delete-item-btn p-2 text-red-500 hover:text-red-700">X</button>
+    </div>
+</div>
                             
                             <button type="button" onclick="addQuoteItemRow()" class="w-full bg-indigo-100 text-indigo-700 hover:bg-indigo-200 font-bold py-2 rounded-lg transition duration-150 mb-4"><i class="fas fa-plus mr-2"></i>Add Item/Labor Estimate</button>
 
