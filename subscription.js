@@ -3,17 +3,22 @@
 // Description: Subscription gate for Garage Manager PRO SaaS
 // Flow: Login → Check Subscription → Active/FreeTrial → Access
 //                                  → Inactive → Payment Page
+//
+// NOTE: Uses Firebase Modular SDK v9+ (imported via index.html's
+//       type="module" script). Receives `db` as a Firestore instance
+//       obtained from getFirestore(), and uses doc/getDoc functions
+//       imported from firebase-firestore.js.
 // =================================================================
 
-const PAYMENT_PAGE_URL = 'payment.html'; // Change to your payment URL
+const PAYMENT_PAGE_URL = 'payment.html';
 const FREE_TRIAL_DAYS = 14;
 
 /**
  * Called on login AND once per day (via daily interval check).
  * Returns the subscription status object or redirects as needed.
  *
- * @param {string} garageCode - The garage code (LLL-NNNNN format)
- * @param {object} db - Firestore db instance
+ * @param {string} garageCode       - The garage code (LLL-NNNNN format)
+ * @param {object} db               - Firestore db instance (from getFirestore())
  * @param {function} onAccessGranted - Callback when access is allowed
  */
 async function checkSubscription(garageCode, db, onAccessGranted) {
@@ -25,9 +30,13 @@ async function checkSubscription(garageCode, db, onAccessGranted) {
     }
 
     try {
-        const snap = await db.collection('garages').doc(garageCode.toUpperCase()).get();
+        // ✅ Modular v9+ SDK: use doc() + getDoc() instead of .collection().doc().get()
+        const { doc, getDoc } = await import("https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js");
 
-        if (!snap.exists) {
+        const garageRef = doc(db, 'garages', garageCode.toUpperCase());
+        const snap = await getDoc(garageRef);
+
+        if (!snap.exists()) {
             showSubscriptionError('Garage code not found. Please contact your administrator.');
             return;
         }
@@ -88,7 +97,6 @@ function showSubscriptionError(msg) {
 }
 
 function showTrialBanner(daysLeft) {
-    // Inject a banner at top of page if not already present
     if (document.getElementById('trial-banner')) return;
     const banner = document.createElement('div');
     banner.id = 'trial-banner';
@@ -98,11 +106,11 @@ function showTrialBanner(daysLeft) {
 }
 
 /**
- * Sets up a daily interval check (runs every 24 hours while the app is open).
+ * Sets up a daily interval check (runs every hour, catches day rollover).
  * If the date has changed since last check, re-validates subscription.
  */
 function setupDailySubscriptionCheck(garageCode, db, onAccessGranted) {
-    const INTERVAL_MS = 60 * 60 * 1000; // Check every hour (catches day rollover)
+    const INTERVAL_MS = 60 * 60 * 1000;
     setInterval(() => {
         const lastChecked = sessionStorage.getItem('lastChecked');
         const today = new Date().toDateString();
@@ -113,7 +121,7 @@ function setupDailySubscriptionCheck(garageCode, db, onAccessGranted) {
     }, INTERVAL_MS);
 }
 
-// Expose globally
+// Expose globally (loaded as a classic script from index.html's <head>)
 window.checkSubscription = checkSubscription;
 window.setupDailySubscriptionCheck = setupDailySubscriptionCheck;
 window.storeSessionGarage = storeSessionGarage;
