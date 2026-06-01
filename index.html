@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Garage Manager PRO</title>
-    <link rel="icon" href="data:,">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
@@ -508,14 +507,14 @@
             return;
         }
  
-        checkSubscription(garageCode, db, (garageData) => {
+        checkSubscription(garageCode, db, doc, getDoc, (garageData) => {
             // ✅ Access granted — show the app
             document.getElementById('auth-section').style.display = 'none';
             document.getElementById('logoutBtn').style.display = 'inline-block';
             showSection('car-entry'); // or whichever is your default section
  
             // Start daily re-check
-            setupDailySubscriptionCheck(garageCode, db, (gData) => {
+            setupDailySubscriptionCheck(garageCode, db, doc, getDoc, (gData) => {
                 // On daily re-validation success, do nothing extra
                 console.log('[Daily Check] Subscription still valid.');
             });
@@ -2347,32 +2346,6 @@ function backToCodeStep() {
         document.getElementById('monthlyDownloadBtn').onclick = () => generateReportPDF('monthly');
     });
 
-    // ----------------------------------------------------------------------
-    // GLOBAL EXPORTS — required because this script uses type="module",
-    // which creates a private scope. Inline onclick="fn()" attributes look
-    // for functions on window, so every function they reference must be
-    // explicitly exported here.
-    // ----------------------------------------------------------------------
-    window.proceedToLogin         = proceedToLogin;
-    window.backToCodeStep         = backToCodeStep;
-    window.handleLoginSignup      = handleLoginSignup;
-    window.addErrorCodeInput      = addErrorCodeInput;
-    window.removeErrorCodeInput   = removeErrorCodeInput;
-    window.addRepairPlanCard      = addRepairPlanCard;
-    window.removeRepairPlanCard   = removeRepairPlanCard;
-    window.lookupErrorCode        = lookupErrorCode;
-    window.createJobCard          = createJobCard;
-    window.generateAnalysisReportPDF = generateAnalysisReportPDF;
-    window.generateServiceReportPDF  = generateServiceReportPDF;
-    window.generateDailyReport    = generateDailyReport;
-    window.generateMonthlyReport  = generateMonthlyReport;
-    window.completeServiceJob     = completeServiceJob;
-    window.markCarAsCompleted     = markCarAsCompleted;
-    window.deleteCompletedCar     = deleteCompletedCar;
-    window.openDetailedReport     = openDetailedReport;
-    window.openClientVehiclesModal = openClientVehiclesModal;
-    window.lookupClientDetails    = lookupClientDetails;
-    window.autofillVehicleDetails = autofillVehicleDetails;
 
 </script>
 
