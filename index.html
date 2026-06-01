@@ -7,6 +7,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
+    <script src="subscription.js"></script>
     
     <style>
         /* Custom scrollbar for better look */
@@ -74,16 +75,30 @@
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 
         <section id="auth-section" class="flex justify-center items-center py-16" style="display:none;">
-            <div class="bg-white p-8 rounded-xl shadow-2xl w-full max-w-md">
-                <h2 class="text-2xl font-bold mb-6 text-center text-blue-800">Welcome to Garage Manager PRO</h2>
-                <input id="auth-email" type="email" placeholder="Email" class="w-full p-3 mb-4 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" />
-                <input id="auth-password" type="password" placeholder="Password" class="w-full p-3 mb-6 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" />
-                <button id="loginBtn" onclick="handleLoginSignup(true)" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition duration-150 mb-3">Login</button>
-                <button id="signupBtn" onclick="handleLoginSignup(false)" class="w-full bg-gray-500 hover:bg-gray-600 text-white font-bold py-3 rounded-lg transition duration-150">Sign Up (Admin Only)</button>
-                <p id="auth-message" class="text-red-500 text-sm mt-3 text-center"></p>
-            </div>
-        </section>
-
+    <div class="bg-white p-8 rounded-xl shadow-2xl w-full max-w-md">
+        <h2 class="text-2xl font-bold mb-6 text-center text-blue-800">Welcome to Garage Manager PRO</h2>
+        
+        <!-- Step 1: Garage Code -->
+        <div id="garage-code-step">
+            <label class="block text-sm font-medium text-gray-700 mb-1">Garage Code</label>
+            <input id="garage-code-input" type="text" placeholder="e.g. ABC-12345" maxlength="9"
+                   class="w-full p-3 mb-4 border border-gray-300 rounded-lg uppercase tracking-widest text-center text-xl font-mono" />
+            <button onclick="proceedToLogin()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg mb-3">Continue</button>
+            <p id="garage-code-message" class="text-red-500 text-sm mt-1 text-center"></p>
+        </div>
+ 
+        <!-- Step 2: Email/Password (shown after valid code) -->
+        <div id="credentials-step" style="display:none;">
+            <p id="garage-code-display" class="text-center text-blue-700 font-bold mb-4"></p>
+            <input id="auth-email" type="email" placeholder="Email" class="w-full p-3 mb-4 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" />
+            <input id="auth-password" type="password" placeholder="Password" class="w-full p-3 mb-6 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" />
+            <button id="loginBtn" onclick="handleLoginSignup(true)" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition duration-150 mb-3">Login</button>
+            <button id="signupBtn" onclick="handleLoginSignup(false)" class="w-full bg-gray-500 hover:bg-gray-600 text-white font-bold py-3 rounded-lg transition duration-150">Sign Up</button>
+            <button onclick="backToCodeStep()" class="w-full mt-2 text-gray-500 hover:text-gray-700 text-sm">← Change garage code</button>
+            <p id="auth-message" class="text-red-500 text-sm mt-3 text-center"></p>
+        </div>
+    </div>
+</section>
         <section id="car-entry" class="space-y-8" style="display:none;">
             <h2 class="text-3xl font-bold text-gray-800 border-b pb-2">🚗 New Vehicle Check-in</h2>
             <form id="car-entry-form" class="space-y-6 bg-white p-6 rounded-xl shadow-lg">
@@ -484,20 +499,30 @@
     onAuthStateChanged(auth, (user) => {
         const headerNav = document.querySelector('header nav');
         if (user) {
-            currentUserRole = getMockRole(user.email);
-            document.getElementById('logoutBtn').style.display = 'block';
-            headerNav.style.display = 'flex';
-            // NEW: Start listening to clients and cars immediately after login
-            listenForClients();
-            listenForCarsForCache(); 
-            // Redirect to active jobs list
-            showSection('car-list');
-        } else {
-            // Logged out
-            document.getElementById('logoutBtn').style.display = 'none';
-            headerNav.style.display = 'none'; // Hide nav bar when logged out
-            showSection('auth-section');
+        const garageCode = sessionStorage.getItem('pendingGarageCode') || sessionStorage.getItem('garageCode');
+        
+        if (!garageCode) {
+            // No garage code in session — force re-login
+            auth.signOut();
+            return;
         }
+ 
+        checkSubscription(garageCode, db, (garageData) => {
+            // ✅ Access granted — show the app
+            document.getElementById('auth-section').style.display = 'none';
+            document.getElementById('logoutBtn').style.display = 'inline-block';
+            showSection('car-entry'); // or whichever is your default section
+ 
+            // Start daily re-check
+            setupDailySubscriptionCheck(garageCode, db, (gData) => {
+                // On daily re-validation success, do nothing extra
+                console.log('[Daily Check] Subscription still valid.');
+            });
+        });
+    } else {
+        document.getElementById('auth-section').style.display = 'flex';
+        document.getElementById('logoutBtn').style.display = 'none';
+    }
     });
 
     function showSection(sectionId) {
@@ -2253,6 +2278,26 @@ function lookupClientDetails(section) {
     // ----------------------------------------------------------------------
     // 10. INITIALIZATION
     // ----------------------------------------------------------------------
+
+    function proceedToLogin() {
+    const code = document.getElementById('garage-code-input').value.trim().toUpperCase();
+    const codeRegex = /^[A-Za-z]{3}-\d{5}$/;
+    const msg = document.getElementById('garage-code-message');
+    if (!codeRegex.test(code)) {
+        msg.textContent = 'Invalid format. Must be ABC-12345 (3 letters, dash, 5 numbers)';
+        return;
+    }
+    msg.textContent = '';
+    sessionStorage.setItem('pendingGarageCode', code);
+    document.getElementById('garage-code-step').style.display = 'none';
+    document.getElementById('credentials-step').style.display = 'block';
+    document.getElementById('garage-code-display').textContent = `Garage: ${code}`;
+}
+ 
+function backToCodeStep() {
+    document.getElementById('garage-code-step').style.display = 'block';
+    document.getElementById('credentials-step').style.display = 'none';
+}
     
     document.addEventListener('DOMContentLoaded', () => {
         
