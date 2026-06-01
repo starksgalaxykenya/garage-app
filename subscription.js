@@ -4,25 +4,29 @@
 // Flow: Login → Check Subscription → Active/FreeTrial → Access
 //                                  → Inactive → Payment Page
 //
-// NOTE: Uses Firebase Modular SDK v9+ (imported via index.html's
-//       type="module" script). Receives `db` as a Firestore instance
-//       obtained from getFirestore(), and uses doc/getDoc functions
-//       imported from firebase-firestore.js.
+// IMPORTANT: This file is loaded as a classic <script> (no type="module").
+// It must NOT import Firebase itself. Instead, callers pass in the
+// already-initialised `db`, `doc`, and `getDoc` from their own module.
+//
+// Usage from index.html / management.js (inside type="module" script):
+//
+//   import { getFirestore, doc, getDoc } from "...firebase-firestore.js";
+//   const db = getFirestore(app);
+//   checkSubscription(garageCode, db, doc, getDoc, onAccessGranted);
+//   setupDailySubscriptionCheck(garageCode, db, doc, getDoc, onAccessGranted);
 // =================================================================
 
 const PAYMENT_PAGE_URL = 'payment.html';
 const FREE_TRIAL_DAYS = 14;
 
 /**
- * Called on login AND once per day (via daily interval check).
- * Returns the subscription status object or redirects as needed.
- *
- * @param {string} garageCode       - The garage code (LLL-NNNNN format)
- * @param {object} db               - Firestore db instance (from getFirestore())
- * @param {function} onAccessGranted - Callback when access is allowed
+ * @param {string}   garageCode       - e.g. "ABC-12345"
+ * @param {object}   db               - Firestore instance from getFirestore()
+ * @param {function} docFn            - The `doc` function from firebase-firestore
+ * @param {function} getDocFn         - The `getDoc` function from firebase-firestore
+ * @param {function} onAccessGranted  - Callback(garageData) on success
  */
 async function checkSubscription(garageCode, db, docFn, getDocFn, onAccessGranted) {
-    // 1. Validate garage code format: LLL-NNNNN
     const codeRegex = /^[A-Za-z]{3}-\d{5}$/;
     if (!codeRegex.test(garageCode)) {
         showSubscriptionError('Invalid garage code format. Expected format: ABC-12345');
@@ -30,11 +34,8 @@ async function checkSubscription(garageCode, db, docFn, getDocFn, onAccessGrante
     }
 
     try {
-        // ✅ Modular v9+ SDK: use doc() + getDoc() instead of .collection().doc().get()
-        const { doc, getDoc } = await import("https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js");
-
-        const garageRef = doc(db, 'garages', garageCode.toUpperCase());
-        const snap = await getDoc(garageRef);
+        const garageRef = docFn(db, 'garages', garageCode.toUpperCase());
+        const snap = await getDocFn(garageRef);
 
         if (!snap.exists()) {
             showSubscriptionError('Garage code not found. Please contact your administrator.');
@@ -45,12 +46,10 @@ async function checkSubscription(garageCode, db, docFn, getDocFn, onAccessGrante
         const status = (data.subscriptionStatus || '').toLowerCase();
 
         if (status === 'active') {
-            // ✅ Active → grant access
             storeSessionGarage(garageCode, 'active');
             onAccessGranted(data);
 
         } else if (status === 'trial') {
-            // ✅ Free Trial → check if still within trial period
             const trialStart = data.trialStartDate ? new Date(data.trialStartDate) : new Date();
             const now = new Date();
             const daysDiff = Math.floor((now - trialStart) / (1000 * 60 * 60 * 24));
@@ -61,12 +60,10 @@ async function checkSubscription(garageCode, db, docFn, getDocFn, onAccessGrante
                 showTrialBanner(daysLeft);
                 onAccessGranted(data);
             } else {
-                // Trial expired — treat as inactive
                 redirectToPayment(garageCode, 'Your free trial has expired.');
             }
 
         } else if (status === 'inactive') {
-            // ❌ Inactive → Payment Page
             redirectToPayment(garageCode, 'Your subscription is inactive.');
 
         } else {
@@ -77,6 +74,25 @@ async function checkSubscription(garageCode, db, docFn, getDocFn, onAccessGrante
         console.error('Subscription check error:', err);
         showSubscriptionError('Could not verify subscription. Check your connection.');
     }
+}
+
+/**
+ * @param {string}   garageCode
+ * @param {object}   db
+ * @param {function} docFn
+ * @param {function} getDocFn
+ * @param {function} onAccessGranted
+ */
+function setupDailySubscriptionCheck(garageCode, db, docFn, getDocFn, onAccessGranted) {
+    const INTERVAL_MS = 60 * 60 * 1000; // hourly — catches day rollover
+    setInterval(() => {
+        const lastChecked = sessionStorage.getItem('lastChecked');
+        const today = new Date().toDateString();
+        if (lastChecked !== today) {
+            console.log('[Subscription] Day changed — re-checking subscription...');
+            checkSubscription(garageCode, db, docFn, getDocFn, onAccessGranted);
+        }
+    }, INTERVAL_MS);
 }
 
 function storeSessionGarage(code, status) {
@@ -105,23 +121,7 @@ function showTrialBanner(daysLeft) {
     document.body.prepend(banner);
 }
 
-/**
- * Sets up a daily interval check (runs every hour, catches day rollover).
- * If the date has changed since last check, re-validates subscription.
- */
-function setupDailySubscriptionCheck(garageCode, db, docFn, getDocFn, onAccessGranted) {
-    const INTERVAL_MS = 60 * 60 * 1000;
-    setInterval(() => {
-        const lastChecked = sessionStorage.getItem('lastChecked');
-        const today = new Date().toDateString();
-        if (lastChecked !== today) {
-            console.log('[Subscription] Day changed — re-checking subscription...');
-            checkSubscription(garageCode, db, onAccessGranted);
-        }
-    }, INTERVAL_MS);
-}
-
-// Expose globally (loaded as a classic script from index.html's <head>)
-window.checkSubscription = checkSubscription;
+// Expose globally
+window.checkSubscription          = checkSubscription;
 window.setupDailySubscriptionCheck = setupDailySubscriptionCheck;
-window.storeSessionGarage = storeSessionGarage;
+window.storeSessionGarage         = storeSessionGarage;
