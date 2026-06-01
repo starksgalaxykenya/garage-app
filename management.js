@@ -271,6 +271,12 @@ function listenForDailyTransactions() {
     const today = getUTCDateString();
     const q = query(dailyTransactionsRef, where('date', '==', today), orderBy('timestamp', 'asc'));
 
+    // Helper to safely convert any value to a number
+    function toSafeNumber(value) {
+        const num = parseFloat(value);
+        return isNaN(num) ? 0 : num;
+    }
+
     onSnapshot(q, snapshot => {
         currentDailyTransactions = [];
         let totalIncome = 0, totalExpense = 0;
@@ -279,21 +285,29 @@ function listenForDailyTransactions() {
         snapshot.forEach(docSnap => {
             const data = docSnap.data();
             
-            // SAFE: Convert any value to number, default to 0
-            const income = Number(data.income) || 0;
-            const expense = Number(data.expense) || 0;
-            let profit = Number(data.profit);
-            if (isNaN(profit)) profit = income - expense; // fallback to calculated if profit missing/invalid
-            
-            // Ensure profit is a valid number (if NaN becomes 0)
+            // Safe number extraction
+            const income = toSafeNumber(data.income);
+            const expense = toSafeNumber(data.expense);
+            let profit = toSafeNumber(data.profit);
+            // If profit is explicitly 0 but missing, use calculated
+            if (profit === 0 && (data.profit === undefined || data.profit === null)) {
+                profit = income - expense;
+            }
+            // Final sanity check
+            if (isNaN(profit)) profit = income - expense;
             if (isNaN(profit)) profit = 0;
             
             totalIncome += income;
             totalExpense += expense;
 
-            const displayTime = data.timestamp && typeof data.timestamp.toDate === 'function'
-                ? new Date(data.timestamp.toDate()).toLocaleTimeString()
-                : 'Pending...';
+            let displayTime = 'Pending...';
+            if (data.timestamp && typeof data.timestamp.toDate === 'function') {
+                try {
+                    displayTime = new Date(data.timestamp.toDate()).toLocaleTimeString();
+                } catch(e) {
+                    console.warn('Invalid timestamp:', data.timestamp);
+                }
+            }
 
             currentDailyTransactions.push({
                 id: docSnap.id, income, expense, profit,
@@ -307,11 +321,11 @@ function listenForDailyTransactions() {
             tr.className = 'hover:bg-gray-50';
             const profitClass = profit >= 0 ? 'text-green-600 font-medium' : 'text-red-600 font-medium';
             
-            // SAFE: Use toFixed(2) only after ensuring profit is a number
+            // All toFixed() calls are now safe because income, expense, profit are numbers
             tr.innerHTML = `
                 <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500">${displayTime}</td>
-                <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900">${data.subtype || 'Other'}</td>
-                <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500">${data.plate || 'N/A'}</td>
+                <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900">${escapeHtml(data.subtype || 'Other')}</td>
+                <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500">${escapeHtml(data.plate || 'N/A')}</td>
                 <td class="px-3 py-2 whitespace-nowrap text-sm text-green-600">$${income.toFixed(2)}</td>
                 <td class="px-3 py-2 whitespace-nowrap text-sm text-red-600">$${expense.toFixed(2)}</td>
                 <td class="px-3 py-2 whitespace-nowrap text-sm ${profitClass}">$${profit.toFixed(2)}</td>
@@ -331,43 +345,17 @@ function listenForDailyTransactions() {
 
     }, error => console.error("Error listening to daily transactions: ", error));
 }
-endDayBtn.addEventListener('click', async () => {
-    if (currentDailyTransactions.length === 0) return;
-    if (!confirm('Are you sure you want to end the day and save the P&L report? This action cannot be undone for today\'s transactions.')) return;
 
-    const date         = getUTCDateString();
-    const totalIncome  = currentDailyTransactions.reduce((sum, t) => sum + t.income,  0);
-    const totalExpense = currentDailyTransactions.reduce((sum, t) => sum + t.expense, 0);
-    const netProfit    = totalIncome - totalExpense;
-
-    const report = {
-        date, totalIncome, totalExpense, netProfit,
-        transactions: currentDailyTransactions.map(t => ({
-            description: t.description,
-            income:      t.income,
-            expense:     t.expense,
-            profit:      t.profit,
-            timestamp:   t.timestamp
-        })),
-        createdAt: serverTimestamp()
-    };
-
-    try {
-        await addDoc(pastReportsRef, report);
-
-        const batch = writeBatch(db);
-        currentDailyTransactions.forEach(t => {
-            batch.delete(doc(db, 'dailyTransactions', t.id));
-        });
-        await batch.commit();
-
-        alert(`Day ended successfully. Net Profit for ${date}: $${netProfit.toFixed(2)}`);
-    } catch (error) {
-        alert('Failed to end day and save report.');
-        console.error('End Day Error: ', error);
-    }
-});
-
+// Add a simple escape function to prevent XSS (optional but good)
+function escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/[&<>]/g, function(m) {
+        if (m === '&') return '&amp;';
+        if (m === '<') return '&lt;';
+        if (m === '>') return '&gt;';
+        return m;
+    });
+}
 async function deleteTransaction(id) {
     if (confirm('Are you sure you want to delete this transaction?')) {
         try {
