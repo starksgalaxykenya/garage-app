@@ -118,21 +118,33 @@ function handleManagementLogin() {
 
 auth.onAuthStateChanged((user) => {
     if (user) {
-        authSection.style.display = 'none';
-        dashboardSection.style.display = 'block';
-        logoutBtn.style.display = 'block';
-        authMessage.textContent = '';
-        
-        // Load data for all modules on login
-        listenForDailyTransactions();
-        listenForSuppliers();
-        listenForPartsInventory(); // Load Inventory (Requirement 1)
-        listenForInvoices();
-        listenForQuotes();
-
+        const garageCode = sessionStorage.getItem('garageCode');
+        if (!garageCode) {
+            // Redirect back to main login if no garage code
+            window.location.href = 'index.html';
+            return;
+        }
+ 
+        checkSubscription(garageCode, db, (garageData) => {
+            // ✅ Access granted
+            authSection.style.display = 'none';
+            dashboardSection.classList.remove('hidden');
+            logoutBtn.style.display = 'block';
+            authMessage.textContent = '';
+ 
+            listenForDailyTransactions();
+            listenForSuppliers();
+            listenForPartsInventory();
+            listenForInvoices();
+            listenForQuotes();
+ 
+            setupDailySubscriptionCheck(garageCode, db, () => {
+                console.log('[Daily Check] Management subscription still valid.');
+            });
+        });
     } else {
         authSection.style.display = 'flex';
-        dashboardSection.style.display = 'none';
+        dashboardSection.classList.add('hidden');
         logoutBtn.style.display = 'none';
     }
 });
