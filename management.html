@@ -383,62 +383,7 @@
         </main>
     </div>
 
-    <script src="management.js"></script>
+    <script type="module" src="management.js"></script>
     
-    <script>
-        // Global functions for dynamic rows
-        function addInvoiceItemRow() {
-            const container = document.getElementById('invoice-items-container');
-            const newRow = document.createElement('div');
-            // Class 'mb-2' provides vertical spacing between rows
-            newRow.className = 'flex space-x-2 item-row mb-2'; 
-            newRow.innerHTML = `
-                <input type="text" placeholder="Description" 
-                       class="p-2 border rounded-lg w-5/12 item-desc" required/>
-                
-                <input type="number" value="1" min="1" placeholder="Qty" 
-                       class="p-2 border rounded-lg w-2/12 item-quantity text-center" 
-                       oninput="calculateTotal('invoice')" required/>
-                
-                <input type="number" placeholder="Price ($)" 
-                       class="p-2 border rounded-lg w-4/12 item-amount text-right" 
-                       step="0.01" min="0" oninput="calculateTotal('invoice')" required/>
-                
-                <button type="button" 
-                        class="w-1/12 text-red-500 hover:text-red-700 font-bold flex justify-center items-center" 
-                        onclick="this.closest('.item-row').remove(); calculateTotal('invoice')">
-                    <i class="fas fa-trash"></i>
-                </button>
-            `;
-            container.appendChild(newRow);
-            // attachAmountListeners call removed to prevent ReferenceError
-        }
-
-        function addQuoteItemRow() {
-            const container = document.getElementById('quote-items-container');
-            const newRow = document.createElement('div');
-            newRow.className = 'flex space-x-2 quote-item-row mb-2';
-            newRow.innerHTML = `
-                <input type="text" placeholder="Description" 
-                       class="p-2 border rounded-lg w-5/12 quote-item-desc" required/>
-                
-                <input type="number" value="1" min="1" placeholder="Qty" 
-                       class="p-2 border rounded-lg w-2/12 quote-item-quantity text-center" 
-                       oninput="calculateTotal('quote')" required/>
-                       
-                <input type="number" placeholder="Cost ($)" 
-                       class="p-2 border rounded-lg w-4/12 quote-item-amount text-right" 
-                       step="0.01" min="0" oninput="calculateTotal('quote')" required/>
-                       
-                <button type="button" 
-                        class="w-1/12 text-red-500 hover:text-red-700 font-bold flex justify-center items-center" 
-                        onclick="this.closest('.quote-item-row').remove(); calculateTotal('quote')">
-                    <i class="fas fa-trash"></i>
-                </button>
-            `;
-            container.appendChild(newRow);
-            // attachAmountListeners call removed to prevent ReferenceError
-        }
-    </script>
 </body>
 </html>
