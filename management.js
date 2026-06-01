@@ -277,29 +277,37 @@ function listenForDailyTransactions() {
         dailyTransactionsBody.innerHTML = '';
 
         snapshot.forEach(docSnap => {
-            const data  = docSnap.data();
-            const income  = (typeof data.income  === 'number') ? data.income  : 0;
-            const expense = (typeof data.expense === 'number') ? data.expense : 0;
-            const profit  = (typeof data.profit  === 'number') ? data.profit  : (income - expense);
-
-            totalIncome  += income;
+            const data = docSnap.data();
+            
+            // SAFE: Convert any value to number, default to 0
+            const income = Number(data.income) || 0;
+            const expense = Number(data.expense) || 0;
+            let profit = Number(data.profit);
+            if (isNaN(profit)) profit = income - expense; // fallback to calculated if profit missing/invalid
+            
+            // Ensure profit is a valid number (if NaN becomes 0)
+            if (isNaN(profit)) profit = 0;
+            
+            totalIncome += income;
             totalExpense += expense;
 
-            const displayTime = data.timestamp
+            const displayTime = data.timestamp && typeof data.timestamp.toDate === 'function'
                 ? new Date(data.timestamp.toDate()).toLocaleTimeString()
                 : 'Pending...';
 
             currentDailyTransactions.push({
                 id: docSnap.id, income, expense, profit,
                 description: data.description || '',
-                subtype:     data.subtype || 'Other',
-                plate:       data.plate || 'N/A',
-                timestamp:   data.timestamp
+                subtype: data.subtype || 'Other',
+                plate: data.plate || 'N/A',
+                timestamp: data.timestamp
             });
 
             const tr = document.createElement('tr');
             tr.className = 'hover:bg-gray-50';
             const profitClass = profit >= 0 ? 'text-green-600 font-medium' : 'text-red-600 font-medium';
+            
+            // SAFE: Use toFixed(2) only after ensuring profit is a number
             tr.innerHTML = `
                 <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500">${displayTime}</td>
                 <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900">${data.subtype || 'Other'}</td>
@@ -315,15 +323,14 @@ function listenForDailyTransactions() {
         });
 
         const netProfit = totalIncome - totalExpense;
-        summaryIncome.textContent  = `$${totalIncome.toFixed(2)}`;
+        summaryIncome.textContent = `$${totalIncome.toFixed(2)}`;
         summaryExpense.textContent = `$${totalExpense.toFixed(2)}`;
-        summaryProfit.textContent  = `$${netProfit.toFixed(2)}`;
-        summaryProfit.className    = netProfit >= 0 ? 'font-bold text-indigo-600' : 'font-bold text-red-600';
+        summaryProfit.textContent = `$${netProfit.toFixed(2)}`;
+        summaryProfit.className = netProfit >= 0 ? 'font-bold text-indigo-600' : 'font-bold text-red-600';
         endDayBtn.disabled = currentDailyTransactions.length === 0;
 
     }, error => console.error("Error listening to daily transactions: ", error));
 }
-
 endDayBtn.addEventListener('click', async () => {
     if (currentDailyTransactions.length === 0) return;
     if (!confirm('Are you sure you want to end the day and save the P&L report? This action cannot be undone for today\'s transactions.')) return;
