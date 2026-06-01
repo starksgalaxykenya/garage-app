@@ -21,7 +21,7 @@ const FREE_TRIAL_DAYS = 14;
  * @param {object} db               - Firestore db instance (from getFirestore())
  * @param {function} onAccessGranted - Callback when access is allowed
  */
-async function checkSubscription(garageCode, db, onAccessGranted) {
+async function checkSubscription(garageCode, db, docFn, getDocFn, onAccessGranted) {
     // 1. Validate garage code format: LLL-NNNNN
     const codeRegex = /^[A-Za-z]{3}-\d{5}$/;
     if (!codeRegex.test(garageCode)) {
@@ -109,7 +109,7 @@ function showTrialBanner(daysLeft) {
  * Sets up a daily interval check (runs every hour, catches day rollover).
  * If the date has changed since last check, re-validates subscription.
  */
-function setupDailySubscriptionCheck(garageCode, db, onAccessGranted) {
+function setupDailySubscriptionCheck(garageCode, db, docFn, getDocFn, onAccessGranted) {
     const INTERVAL_MS = 60 * 60 * 1000;
     setInterval(() => {
         const lastChecked = sessionStorage.getItem('lastChecked');
