@@ -271,12 +271,6 @@ function listenForDailyTransactions() {
     const today = getUTCDateString();
     const q = query(dailyTransactionsRef, where('date', '==', today), orderBy('timestamp', 'asc'));
 
-    // Helper to safely convert any value to a number
-    function toSafeNumber(value) {
-        const num = parseFloat(value);
-        return isNaN(num) ? 0 : num;
-    }
-
     onSnapshot(q, snapshot => {
         currentDailyTransactions = [];
         let totalIncome = 0, totalExpense = 0;
@@ -284,30 +278,19 @@ function listenForDailyTransactions() {
 
         snapshot.forEach(docSnap => {
             const data = docSnap.data();
-            
-            // Safe number extraction
-            const income = toSafeNumber(data.income);
-            const expense = toSafeNumber(data.expense);
-            let profit = toSafeNumber(data.profit);
-            // If profit is explicitly 0 but missing, use calculated
-            if (profit === 0 && (data.profit === undefined || data.profit === null)) {
-                profit = income - expense;
-            }
-            // Final sanity check
+            // Force numbers with fallback 0
+            const income = Number(data.income) || 0;
+            const expense = Number(data.expense) || 0;
+            let profit = Number(data.profit);
             if (isNaN(profit)) profit = income - expense;
-            if (isNaN(profit)) profit = 0;
-            
+            if (isNaN(profit)) profit = 0;   // final safeguard
+
             totalIncome += income;
             totalExpense += expense;
 
-            let displayTime = 'Pending...';
-            if (data.timestamp && typeof data.timestamp.toDate === 'function') {
-                try {
-                    displayTime = new Date(data.timestamp.toDate()).toLocaleTimeString();
-                } catch(e) {
-                    console.warn('Invalid timestamp:', data.timestamp);
-                }
-            }
+            const displayTime = data.timestamp && typeof data.timestamp.toDate === 'function'
+                ? new Date(data.timestamp.toDate()).toLocaleTimeString()
+                : 'Pending...';
 
             currentDailyTransactions.push({
                 id: docSnap.id, income, expense, profit,
@@ -321,14 +304,14 @@ function listenForDailyTransactions() {
             tr.className = 'hover:bg-gray-50';
             const profitClass = profit >= 0 ? 'text-green-600 font-medium' : 'text-red-600 font-medium';
             
-            // All toFixed() calls are now safe because income, expense, profit are numbers
+            // ✅ SAFE: profit may be undefined/NaN but (profit || 0) fixes it
             tr.innerHTML = `
                 <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500">${displayTime}</td>
-                <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900">${escapeHtml(data.subtype || 'Other')}</td>
-                <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500">${escapeHtml(data.plate || 'N/A')}</td>
-                <td class="px-3 py-2 whitespace-nowrap text-sm text-green-600">$${income.toFixed(2)}</td>
-                <td class="px-3 py-2 whitespace-nowrap text-sm text-red-600">$${expense.toFixed(2)}</td>
-                <td class="px-3 py-2 whitespace-nowrap text-sm ${profitClass}">$${profit.toFixed(2)}</td>
+                <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900">${data.subtype || 'Other'}</td>
+                <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500">${data.plate || 'N/A'}</td>
+                <td class="px-3 py-2 whitespace-nowrap text-sm text-green-600">$${(income || 0).toFixed(2)}</td>
+                <td class="px-3 py-2 whitespace-nowrap text-sm text-red-600">$${(expense || 0).toFixed(2)}</td>
+                <td class="px-3 py-2 whitespace-nowrap text-sm ${profitClass}">$${(profit || 0).toFixed(2)}</td>
                 <td class="px-3 py-2 whitespace-nowrap text-sm">
                     <button onclick="deleteTransaction('${docSnap.id}')" class="text-red-500 hover:text-red-700">Delete</button>
                 </td>
@@ -337,12 +320,11 @@ function listenForDailyTransactions() {
         });
 
         const netProfit = totalIncome - totalExpense;
-        summaryIncome.textContent = `$${totalIncome.toFixed(2)}`;
-        summaryExpense.textContent = `$${totalExpense.toFixed(2)}`;
-        summaryProfit.textContent = `$${netProfit.toFixed(2)}`;
+        summaryIncome.textContent = `$${(totalIncome || 0).toFixed(2)}`;
+        summaryExpense.textContent = `$${(totalExpense || 0).toFixed(2)}`;
+        summaryProfit.textContent = `$${(netProfit || 0).toFixed(2)}`;
         summaryProfit.className = netProfit >= 0 ? 'font-bold text-indigo-600' : 'font-bold text-red-600';
         endDayBtn.disabled = currentDailyTransactions.length === 0;
-
     }, error => console.error("Error listening to daily transactions: ", error));
 }
 
