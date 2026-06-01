@@ -2302,6 +2302,12 @@ function backToCodeStep() {
     document.addEventListener('DOMContentLoaded', () => {
         
         function attachNavHandlers() {
+            const codeInput = document.getElementById('garage-code-input');
+    if (codeInput) {
+        codeInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') proceedToLogin();
+        });
+    }
             const navButtons = [
                 { id: 'nav-car-entry', section: 'car-entry' },
                 { id: 'nav-general-service', section: 'general-service' },
@@ -2339,6 +2345,26 @@ function backToCodeStep() {
         document.getElementById('dailyDownloadBtn').onclick = () => generateReportPDF('daily');
         document.getElementById('monthlyDownloadBtn').onclick = () => generateReportPDF('monthly');
     });
+
+    function proceedToLogin() {
+        const code = document.getElementById('garage-code-input').value.trim().toUpperCase();
+        const codeRegex = /^[A-Za-z]{3}-\d{5}$/;
+        const msg = document.getElementById('garage-code-message');
+        if (!codeRegex.test(code)) {
+            msg.textContent = 'Invalid format. Must be ABC-12345 (3 letters, dash, 5 numbers)';
+            return;
+        }
+        msg.textContent = '';
+        sessionStorage.setItem('pendingGarageCode', code);
+        document.getElementById('garage-code-step').style.display = 'none';
+        document.getElementById('credentials-step').style.display = 'block';
+        document.getElementById('garage-code-display').textContent = `Garage: ${code}`;
+    }
+
+    function backToCodeStep() {
+        document.getElementById('garage-code-step').style.display = 'block';
+        document.getElementById('credentials-step').style.display = 'none';
+    }
 
 </script>
 
