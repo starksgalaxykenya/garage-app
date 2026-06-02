@@ -29,6 +29,8 @@ let isSavingQuote = false;
 // 1. FIREBASE INITIALIZATION (Modular v9+ SDK)
 // =================================================================
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
+import { getFirestore, collection, addDoc, doc, updateDoc, deleteDoc, setDoc, query, where, orderBy, onSnapshot, getDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js";
+import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-storage.js";
 import {
     getAuth,
     signInWithEmailAndPassword,
@@ -64,6 +66,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
+const storage = getStorage(app);
 
 // Firestore Collection References (v9: collection() is a function)
 const dailyTransactionsRef = collection(db, 'dailyTransactions');
