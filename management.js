@@ -26,6 +26,22 @@ let isSavingInvoice = false;
 let isSavingQuote = false;
 
 // =================================================================
+// 0. BRANDING MODULE IMPORT
+// =================================================================
+import {
+    getBranding,
+    drawPdfHeader,
+    drawPdfFooter,
+    loadBrandingForm,
+    saveBrandingSettings,
+    updateColorPreviews
+} from './garage-branding.js';
+
+// Expose branding functions globally for inline onclick handlers
+window.saveBrandingSettings = saveBrandingSettings;
+window.updateColorPreviews  = updateColorPreviews;
+
+// =================================================================
 // 1. FIREBASE INITIALIZATION (Modular v9+ SDK)
 // =================================================================
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
@@ -434,16 +450,19 @@ async function generateDailyReportPDF(reportId) {
         const docSnap = await getDoc(doc(db, 'financialReports', reportId));
         if (!docSnap.exists()) { alert("Report not found."); return; }
         const report = docSnap.data();
+        const branding = await getBranding();
 
         const pdfDoc = new window.jspdf.jsPDF();
-        pdfDoc.setFontSize(18);
-        pdfDoc.text("Daily P&L Report", 14, 22);
-        pdfDoc.setFontSize(12);
-        pdfDoc.text(`Date: ${report.date}`, 14, 30);
-        pdfDoc.text(`Generated: ${new Date().toLocaleString()}`, 14, 36);
+        let y = drawPdfHeader(pdfDoc, branding, "Daily P&L Report");
+
+        pdfDoc.setFontSize(10);
+        pdfDoc.setTextColor(60, 60, 60);
+        pdfDoc.text(`Date: ${report.date}`, 14, y);
+        pdfDoc.text(`Generated: ${new Date().toLocaleString()}`, 14, y + 5);
+        y += 14;
 
         pdfDoc.autoTable({
-            startY: 45,
+            startY: y,
             head: [['Metric', 'Amount ($)']],
             body: [
                 ['Total Income',  report.totalIncome.toFixed(2)],
@@ -451,7 +470,7 @@ async function generateDailyReportPDF(reportId) {
                 ['NET PROFIT',    report.netProfit.toFixed(2)],
             ],
             theme: 'grid', styles: { fontSize: 10 },
-            headStyles: { fillColor: [50, 50, 100] }
+            headStyles: { fillColor: hexToRgbArr(branding.primaryColor) }
         });
 
         pdfDoc.setFontSize(14);
@@ -471,9 +490,10 @@ async function generateDailyReportPDF(reportId) {
             head: [['Time', 'Description', 'Income ($)', 'Expense ($)', 'Profit ($)']],
             body: transactionBody,
             theme: 'striped', styles: { fontSize: 8 },
-            headStyles: { fillColor: [100, 100, 150] }
+            headStyles: { fillColor: hexToRgbArr(branding.primaryColor) }
         });
 
+        drawPdfFooter(pdfDoc, branding);
         pdfDoc.save(`Report_${report.date}.pdf`);
     } catch (error) {
         console.error("PDF Generation Error: ", error);
@@ -849,15 +869,21 @@ async function generateInvoicePDF(invoiceId, clientPhone) {
         const docSnap = await getDoc(doc(db, 'invoices', invoiceId));
         if (!docSnap.exists()) { alert("Invoice not found."); return; }
         const invoice = docSnap.data();
+        const branding = await getBranding();
 
         const pdfDoc = new window.jspdf.jsPDF();
-        pdfDoc.setFontSize(22); pdfDoc.text("INVOICE / RECEIPT", 14, 25);
+        let y = drawPdfHeader(pdfDoc, branding, "INVOICE / RECEIPT");
+
         pdfDoc.setFontSize(10);
-        pdfDoc.text(`Invoice No: ${invoice.invoiceNo}`, 14, 35);
-        pdfDoc.text(`Date: ${invoice.date}`, 14, 40);
-        pdfDoc.text(`Client: ${invoice.clientName}`, 14, 50);
-        pdfDoc.text(`Phone: ${invoice.clientPhone}`, 14, 55);
-        pdfDoc.text(`Vehicle Plate: ${invoice.carPlate}`, 14, 60);
+        pdfDoc.setTextColor(60, 60, 60);
+        pdfDoc.text(`Invoice No: ${invoice.invoiceNo}`, 14, y);
+        pdfDoc.text(`Date: ${invoice.date}`, 110, y);
+        y += 6;
+        pdfDoc.text(`Client: ${invoice.clientName}`, 14, y);
+        pdfDoc.text(`Phone: ${invoice.clientPhone}`, 110, y);
+        y += 6;
+        pdfDoc.text(`Vehicle Plate: ${invoice.carPlate}`, 14, y);
+        y += 8;
 
         const itemBody = invoice.items.map(item => [
             item.description,
@@ -867,17 +893,19 @@ async function generateInvoicePDF(invoiceId, clientPhone) {
         ]);
 
         pdfDoc.autoTable({
-            startY: 70,
+            startY: y,
             head: [['Description', 'Qty', 'Unit Price ($)', 'Line Total ($)']],
             body: itemBody,
             foot: [['', '', 'Total', `$${invoice.total.toFixed(2)}`]],
             theme: 'grid', styles: { fontSize: 10 },
-            headStyles: { fillColor: [50, 50, 100] },
-            footStyles: { fillColor: [200, 200, 250], textColor: [0, 0, 0], fontSize: 12, fontStyle: 'bold' }
+            headStyles: { fillColor: hexToRgbArr(branding.primaryColor) },
+            footStyles: { fillColor: [230, 230, 255], textColor: [0, 0, 0], fontSize: 12, fontStyle: 'bold' }
         });
 
+        drawPdfFooter(pdfDoc, branding);
+
         if (confirm('PDF is generated. Do you want to share a text summary via WhatsApp?')) {
-            const message = `*Garage Manager PRO Invoice* (No. ${invoice.invoiceNo})\n\nDear ${invoice.clientName},\n\nYour invoice is ready. Total amount: *$${invoice.total.toFixed(2)}*.\n\nThank you for your business!`;
+            const message = `*${branding.garageName || 'Garage Manager PRO'} Invoice* (No. ${invoice.invoiceNo})\n\nDear ${invoice.clientName},\n\nYour invoice is ready. Total amount: *$${invoice.total.toFixed(2)}*.\n\nThank you for your business!`;
             window.open(`https://wa.me/${cleanPhoneNumber(clientPhone)}?text=${encodeURIComponent(message)}`, '_blank');
         }
 
@@ -985,16 +1013,22 @@ async function generateQuotePDF(quoteId, clientPhone) {
         const docSnap = await getDoc(doc(db, 'quotes', quoteId));
         if (!docSnap.exists()) { alert("Quote not found."); return; }
         const quote = docSnap.data();
+        const branding = await getBranding();
 
         const pdfDoc = new window.jspdf.jsPDF();
-        pdfDoc.setFontSize(22); pdfDoc.text("REPAIR QUOTE", 14, 25);
+        let y = drawPdfHeader(pdfDoc, branding, "REPAIR QUOTE");
+
         pdfDoc.setFontSize(10);
-        pdfDoc.text(`Quote No: ${quote.quoteNo}`, 14, 35);
-        pdfDoc.text(`Date: ${quote.date}`, 14, 40);
-        pdfDoc.text(`Client: ${quote.clientName}`, 14, 50);
-        pdfDoc.text(`Phone: ${quote.clientPhone}`, 14, 55);
-        pdfDoc.text(`Vehicle: ${quote.carMake}`, 14, 60);
-        pdfDoc.text(`Vehicle Plate: ${quote.carPlate}`, 14, 65);
+        pdfDoc.setTextColor(60, 60, 60);
+        pdfDoc.text(`Quote No: ${quote.quoteNo}`, 14, y);
+        pdfDoc.text(`Date: ${quote.date}`, 110, y);
+        y += 6;
+        pdfDoc.text(`Client: ${quote.clientName}`, 14, y);
+        pdfDoc.text(`Phone: ${quote.clientPhone}`, 110, y);
+        y += 6;
+        pdfDoc.text(`Vehicle: ${quote.carMake}`, 14, y);
+        pdfDoc.text(`Plate: ${quote.carPlate}`, 110, y);
+        y += 8;
 
         const itemBody = quote.items.map(item => [
             item.description,
@@ -1004,20 +1038,23 @@ async function generateQuotePDF(quoteId, clientPhone) {
         ]);
 
         pdfDoc.autoTable({
-            startY: 75,
+            startY: y,
             head: [['Item/Service', 'Qty', 'Est. Unit Cost ($)', 'Est. Line Total ($)']],
             body: itemBody,
             foot: [['', '', 'Estimated Total', `$${quote.total.toFixed(2)}`]],
             theme: 'grid', styles: { fontSize: 10 },
-            headStyles: { fillColor: [100, 100, 150] },
-            footStyles: { fillColor: [200, 200, 250], textColor: [0, 0, 0], fontSize: 12, fontStyle: 'bold' }
+            headStyles: { fillColor: hexToRgbArr(branding.primaryColor) },
+            footStyles: { fillColor: [230, 230, 255], textColor: [0, 0, 0], fontSize: 12, fontStyle: 'bold' }
         });
 
         pdfDoc.setFontSize(9);
+        pdfDoc.setTextColor(120, 120, 120);
         pdfDoc.text("NOTE: This is an estimate. Final costs may vary based on unforeseen repairs.", 14, pdfDoc.autoTable.previous.finalY + 8);
 
+        drawPdfFooter(pdfDoc, branding);
+
         if (confirm('PDF is generated. Do you want to share a text summary via WhatsApp?')) {
-            const message = `*Garage Manager PRO Repair Quote* (No. ${quote.quoteNo})\n\nDear ${quote.clientName},\n\nYour repair quote for the ${quote.carMake} is *$${quote.total.toFixed(2)}* (Estimated).\n\nPlease reply to confirm the repair.`;
+            const message = `*${branding.garageName || 'Garage Manager PRO'} Repair Quote* (No. ${quote.quoteNo})\n\nDear ${quote.clientName},\n\nYour repair quote for the ${quote.carMake} is *$${quote.total.toFixed(2)}* (Estimated).\n\nPlease reply to confirm the repair.`;
             window.open(`https://wa.me/${cleanPhoneNumber(clientPhone)}?text=${encodeURIComponent(message)}`, '_blank');
         }
 
@@ -1027,7 +1064,6 @@ async function generateQuotePDF(quoteId, clientPhone) {
         alert("Failed to generate or share quote.");
     }
 }
-
 function deleteQuote(id) {
     if (confirm("Are you sure you want to delete this quote?")) {
         deleteDoc(doc(db, 'quotes', id)).catch(e => console.error("Delete Error", e));
@@ -1048,3 +1084,105 @@ document.addEventListener('DOMContentLoaded', () => {
 window.addInvoiceItemRow = addInvoiceItemRow;
 window.addQuoteItemRow   = addQuoteItemRow;
 window.calculateTotal    = calculateTotal;
+
+// =================================================================
+// 10. BRANDING TAB INITIALIZATION & LIVE PREVIEW
+// =================================================================
+
+/** Hex to [R,G,B] array for jsPDF headStyles */
+function hexToRgbArr(hex) {
+    const r = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex || '#1d4ed8');
+    return r ? [parseInt(r[1],16), parseInt(r[2],16), parseInt(r[3],16)] : [29,78,216];
+}
+
+function setupBrandingTab() {
+    // Live preview: name / tagline / contacts
+    const fields = ['garageName','tagline','phone','email','address'];
+    fields.forEach(f => {
+        const el = document.getElementById(`branding-${f}`);
+        if (!el) return;
+        el.addEventListener('input', updateBrandingPreview);
+    });
+
+    // Color inputs → hex span update
+    ['primaryColor','secondaryColor','accentColor'].forEach(f => {
+        const el = document.getElementById(`branding-${f}`);
+        if (!el) return;
+        el.addEventListener('input', () => {
+            const span = document.getElementById(`branding-${f}-hex`);
+            if (span) span.textContent = el.value;
+            updateColorPreviews();
+            updateBrandingPreview();
+        });
+    });
+
+    // Logo file input → preview
+    const logoInput = document.getElementById('branding-logo-input');
+    if (logoInput) {
+        logoInput.addEventListener('change', () => {
+            const file = logoInput.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const prev = document.getElementById('branding-logo-preview');
+                const placeholder = document.getElementById('branding-logo-placeholder');
+                const previewImg = document.getElementById('branding-preview-logo-img');
+                const previewWrap = document.getElementById('branding-preview-logo-wrap');
+                if (prev) { prev.src = e.target.result; prev.classList.remove('hidden'); }
+                if (placeholder) placeholder.style.display = 'none';
+                if (previewImg) { previewImg.src = e.target.result; }
+                if (previewWrap) previewWrap.classList.remove('hidden');
+            };
+            reader.readAsDataURL(file);
+        });
+    }
+
+    // Load saved branding into form
+    loadBrandingForm().then(updateBrandingPreview);
+}
+
+function updateBrandingPreview() {
+    const name    = document.getElementById('branding-garageName')?.value || 'Your Garage Name';
+    const tagline = document.getElementById('branding-tagline')?.value    || 'Your tagline appears here';
+    const phone   = document.getElementById('branding-phone')?.value      || '';
+    const email   = document.getElementById('branding-email')?.value      || '';
+    const address = document.getElementById('branding-address')?.value    || '';
+    const primary = document.getElementById('branding-primaryColor')?.value || '#1d4ed8';
+
+    const nameEl = document.getElementById('branding-preview-name');
+    const tagEl  = document.getElementById('branding-preview-tagline');
+    const phoneEl = document.getElementById('branding-preview-phone');
+    const emailEl = document.getElementById('branding-preview-email');
+    const footerEl = document.getElementById('branding-preview-footer-left');
+    const footerBar = document.getElementById('branding-footer-preview');
+
+    if (nameEl)   nameEl.textContent   = name;
+    if (tagEl)    tagEl.textContent    = tagline;
+    if (phoneEl)  phoneEl.textContent  = phone ? `📞 ${phone}` : '';
+    if (emailEl)  emailEl.textContent  = email ? `✉ ${email}` : '';
+    if (footerEl) footerEl.textContent = `${name}${address ? '  |  ' + address : ''}`;
+    if (footerBar) footerBar.style.background = primary;
+
+    updateColorPreviews();
+}
+
+window.applyColorPreset = function(primary, secondary, accent) {
+    const p = document.getElementById('branding-primaryColor');
+    const s = document.getElementById('branding-secondaryColor');
+    const a = document.getElementById('branding-accentColor');
+    if (p) { p.value = primary;   document.getElementById('branding-primaryColor-hex').textContent = primary; }
+    if (s) { s.value = secondary; document.getElementById('branding-secondaryColor-hex').textContent = secondary; }
+    if (a) { a.value = accent;    document.getElementById('branding-accentColor-hex').textContent = accent; }
+    updateColorPreviews();
+    updateBrandingPreview();
+};
+
+// Hook into tab switching to load branding form when tab is clicked
+document.addEventListener('DOMContentLoaded', () => {
+    const brandingTabBtn = document.getElementById('tab-branding');
+    if (brandingTabBtn) {
+        brandingTabBtn.addEventListener('click', () => {
+            setupBrandingTab();
+        });
+    }
+});
