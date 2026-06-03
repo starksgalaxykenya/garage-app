@@ -523,14 +523,17 @@
         }
  
         checkSubscription(garageCode, db, doc, getDoc, (garageData) => {
-            // ✅ Access granted — show the app
+            // ✅ Access granted — promote pendingGarageCode to garageCode so
+            //    management.html can read it reliably from sessionStorage
+            sessionStorage.setItem('garageCode', garageCode);
+            sessionStorage.removeItem('pendingGarageCode');
+
             document.getElementById('auth-section').style.display = 'none';
             document.getElementById('logoutBtn').style.display = 'inline-block';
-            showSection('car-entry'); // or whichever is your default section
- 
+            showSection('car-entry');
+
             // Start daily re-check
             setupDailySubscriptionCheck(garageCode, db, doc, getDoc, (gData) => {
-                // On daily re-validation success, do nothing extra
                 console.log('[Daily Check] Subscription still valid.');
             });
         });
