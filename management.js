@@ -44,7 +44,7 @@ window.updateColorPreviews  = updateColorPreviews;
 // =================================================================
 // 1. FIREBASE INITIALIZATION (Modular v9+ SDK)
 // =================================================================
-import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
+import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
 import {
     getAuth,
     signInWithEmailAndPassword,
@@ -77,62 +77,9 @@ const firebaseConfig = {
     appId: "1:226684256206:web:13d600d6db4c603506759f"
 };
 
-// Guard against duplicate app when hot-reloading or if any compat script ran first
-import { getApps } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
 const app  = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db   = getFirestore(app);
-
-// =================================================================
-// 2a. SUBSCRIPTION HELPERS  (no external subscription.js needed)
-//     Uses the same db/auth instances — no second Firebase app.
-// =================================================================
-
-async function checkSubscription(garageCode, onSuccess) {
-    try {
-        const snap = await getDoc(doc(db, 'garages', garageCode));
-        if (!snap.exists()) {
-            _showSubscriptionError('Garage not found. Please contact support.');
-            return;
-        }
-        const data   = snap.data();
-        const expiry = data.subscriptionExpiry?.toDate?.() ?? null;
-        if (data.subscriptionStatus === 'active' && (!expiry || expiry > new Date())) {
-            onSuccess(data);
-        } else {
-            const msg = expiry && expiry <= new Date()
-                ? `Subscription expired on ${expiry.toLocaleDateString()}. Please renew.`
-                : 'Subscription inactive. Please contact support.';
-            _showSubscriptionError(msg);
-        }
-    } catch (err) {
-        console.error('[Subscription] Check error:', err);
-        // Network error — let the user in rather than locking out a paying customer
-        onSuccess({});
-    }
-}
-
-function setupDailySubscriptionCheck(garageCode, onValid) {
-    setInterval(async () => {
-        try {
-            const snap = await getDoc(doc(db, 'garages', garageCode));
-            if (!snap.exists()) return;
-            const data   = snap.data();
-            const expiry = data.subscriptionExpiry?.toDate?.() ?? null;
-            if (data.subscriptionStatus === 'active' && (!expiry || expiry > new Date())) {
-                onValid(data);
-            } else {
-                _showSubscriptionError('Your subscription has expired. Please renew.');
-            }
-        } catch (_) { /* silent — don't kick user on transient network error */ }
-    }, 6 * 60 * 60 * 1000);
-}
-
-function _showSubscriptionError(message) {
-    if (dashboardSection) dashboardSection.classList.add('hidden');
-    if (authSection)      authSection.style.display = 'flex';
-    if (authMessage)      { authMessage.textContent = message; authMessage.style.color = '#dc2626'; }
-}
 
 // Firestore Collection References (v9: collection() is a function)
 const dailyTransactionsRef = collection(db, 'dailyTransactions');
@@ -211,10 +158,21 @@ function handleManagementLogin() {
         });
 }
 
+// Prevent the initial onAuthStateChanged(null) from flashing the login screen.
+// Firebase always fires once with null while it checks IndexedDB persistence.
+let _authInitialized = false;
+
 onAuthStateChanged(auth, (user) => {
+    if (!_authInitialized && !user) {
+        // First fire with null = Firebase still loading from IndexedDB. Wait.
+        _authInitialized = true;
+        return;
+    }
+    _authInitialized = true;
+
     if (user) {
-        // Read whichever key index.html stored — 'garageCode' after our fix,
-        // 'pendingGarageCode' as a fallback for older sessions
+        // Accept both keys: 'garageCode' (set by subscription.js storeSessionGarage)
+        // and 'pendingGarageCode' (set by index.html before login completes)
         const garageCode = sessionStorage.getItem('garageCode')
                         || sessionStorage.getItem('pendingGarageCode');
 
@@ -223,10 +181,7 @@ onAuthStateChanged(auth, (user) => {
             return;
         }
 
-        // Canonicalise to 'garageCode' so it survives tab refreshes
-        sessionStorage.setItem('garageCode', garageCode);
-
-        checkSubscription(garageCode, (garageData) => {
+        checkSubscription(garageCode, db, doc, getDoc, (garageData) => {
             authSection.style.display = 'none';
             dashboardSection.classList.remove('hidden');
             logoutBtn.style.display = 'block';
@@ -238,7 +193,7 @@ onAuthStateChanged(auth, (user) => {
             listenForInvoices();
             listenForQuotes();
 
-            setupDailySubscriptionCheck(garageCode, () => {
+            setupDailySubscriptionCheck(garageCode, db, doc, getDoc, () => {
                 console.log('[Daily Check] Management subscription still valid.');
             });
         });
