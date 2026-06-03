@@ -81,6 +81,77 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
+// =================================================================
+// 2a. SUBSCRIPTION HELPERS (inlined — replaces compat subscription.js)
+//     These use the same modular SDK instances as the rest of this
+//     file, eliminating the dual-SDK conflict that caused logouts.
+// =================================================================
+
+async function checkSubscription(garageCode, onSuccess) {
+    try {
+        const garageRef = doc(db, 'garages', garageCode);
+        const garageSnap = await getDoc(garageRef);
+
+        if (!garageSnap.exists()) {
+            console.warn('[Subscription] Garage document not found:', garageCode);
+            showSubscriptionError('Garage not found. Please contact support.');
+            return;
+        }
+
+        const garageData = garageSnap.data();
+        const status = garageData.subscriptionStatus;
+        const expiry = garageData.subscriptionExpiry?.toDate?.() || null;
+        const now = new Date();
+
+        if (status === 'active' && (!expiry || expiry > now)) {
+            onSuccess(garageData);
+        } else {
+            const msg = expiry && expiry <= now
+                ? `Your subscription expired on ${expiry.toLocaleDateString()}. Please renew to continue.`
+                : 'Your subscription is inactive. Please contact support.';
+            showSubscriptionError(msg);
+        }
+    } catch (err) {
+        console.error('[Subscription] Check failed:', err);
+        // Network error — allow access rather than locking out a paying user
+        onSuccess({});
+    }
+}
+
+function setupDailySubscriptionCheck(garageCode, onValid) {
+    // Re-check once every 6 hours while the tab is open
+    const SIX_HOURS = 6 * 60 * 60 * 1000;
+    setInterval(async () => {
+        try {
+            const garageRef = doc(db, 'garages', garageCode);
+            const garageSnap = await getDoc(garageRef);
+            if (!garageSnap.exists()) return;
+            const garageData = garageSnap.data();
+            const status = garageData.subscriptionStatus;
+            const expiry = garageData.subscriptionExpiry?.toDate?.() || null;
+            const now = new Date();
+            if (status === 'active' && (!expiry || expiry > now)) {
+                onValid(garageData);
+            } else {
+                showSubscriptionError('Your subscription has expired. Please renew.');
+            }
+        } catch (err) {
+            console.warn('[Daily Check] Subscription re-check failed silently:', err);
+        }
+    }, SIX_HOURS);
+}
+
+function showSubscriptionError(message) {
+    const dashboard = document.getElementById('management-dashboard');
+    const auth      = document.getElementById('auth-section-management');
+    if (dashboard) dashboard.classList.add('hidden');
+    if (auth) {
+        auth.style.display = 'flex';
+        const msg = document.getElementById('management-auth-message');
+        if (msg) { msg.textContent = message; msg.style.color = '#dc2626'; }
+    }
+}
+
 // Firestore Collection References (v9: collection() is a function)
 const dailyTransactionsRef = collection(db, 'dailyTransactions');
 const pastReportsRef       = collection(db, 'financialReports');
@@ -166,8 +237,7 @@ onAuthStateChanged(auth, (user) => {
             return;
         }
 
-        // Pass doc + getDoc so subscription.js doesn't re-import Firebase
-        checkSubscription(garageCode, db, doc, getDoc, (garageData) => {
+        checkSubscription(garageCode, (garageData) => {
             authSection.style.display = 'none';
             dashboardSection.classList.remove('hidden');
             logoutBtn.style.display = 'block';
@@ -179,7 +249,7 @@ onAuthStateChanged(auth, (user) => {
             listenForInvoices();
             listenForQuotes();
 
-            setupDailySubscriptionCheck(garageCode, db, doc, getDoc, () => {
+            setupDailySubscriptionCheck(garageCode, () => {
                 console.log('[Daily Check] Management subscription still valid.');
             });
         });
