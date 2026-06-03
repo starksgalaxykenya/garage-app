@@ -24,10 +24,9 @@
 </head>
 <body class="bg-gray-100 font-sans">
 
-    <!-- Firebase is loaded via ES module imports in management.js (v9 modular SDK).
-         The compat SDK scripts have been removed to prevent dual-SDK conflicts
-         that caused auth state to reset and log users out. subscription.js logic
-         is now called directly from management.js using the modular SDK instances. -->
+    <!-- Firebase loaded via ES module imports in management.js (v9 modular SDK).
+         Compat SDK scripts removed — they created a second Firebase app instance
+         which reset auth state and caused the auto-logout. -->
     
     <section id="auth-section-management" class="flex items-center justify-center min-h-screen">
         <div class="bg-white p-8 rounded-lg shadow-xl w-full max-w-sm">
