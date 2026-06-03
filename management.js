@@ -82,73 +82,57 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 
 // =================================================================
-// 2a. SUBSCRIPTION HELPERS (inlined — replaces compat subscription.js)
-//     These use the same modular SDK instances as the rest of this
-//     file, eliminating the dual-SDK conflict that caused logouts.
+// 2a. SUBSCRIPTION HELPERS (inlined — no subscription.js needed)
 // =================================================================
 
 async function checkSubscription(garageCode, onSuccess) {
     try {
         const garageRef = doc(db, 'garages', garageCode);
         const garageSnap = await getDoc(garageRef);
-
         if (!garageSnap.exists()) {
-            console.warn('[Subscription] Garage document not found:', garageCode);
             showSubscriptionError('Garage not found. Please contact support.');
             return;
         }
-
         const garageData = garageSnap.data();
         const status = garageData.subscriptionStatus;
         const expiry = garageData.subscriptionExpiry?.toDate?.() || null;
-        const now = new Date();
-
-        if (status === 'active' && (!expiry || expiry > now)) {
+        if (status === 'active' && (!expiry || expiry > new Date())) {
             onSuccess(garageData);
         } else {
-            const msg = expiry && expiry <= now
-                ? `Your subscription expired on ${expiry.toLocaleDateString()}. Please renew to continue.`
-                : 'Your subscription is inactive. Please contact support.';
+            const msg = expiry && expiry <= new Date()
+                ? `Subscription expired on ${expiry.toLocaleDateString()}. Please renew.`
+                : 'Subscription inactive. Please contact support.';
             showSubscriptionError(msg);
         }
     } catch (err) {
         console.error('[Subscription] Check failed:', err);
-        // Network error — allow access rather than locking out a paying user
-        onSuccess({});
+        onSuccess({}); // allow access on network error so paying users aren't locked out
     }
 }
 
 function setupDailySubscriptionCheck(garageCode, onValid) {
-    // Re-check once every 6 hours while the tab is open
-    const SIX_HOURS = 6 * 60 * 60 * 1000;
     setInterval(async () => {
         try {
-            const garageRef = doc(db, 'garages', garageCode);
-            const garageSnap = await getDoc(garageRef);
-            if (!garageSnap.exists()) return;
-            const garageData = garageSnap.data();
-            const status = garageData.subscriptionStatus;
-            const expiry = garageData.subscriptionExpiry?.toDate?.() || null;
-            const now = new Date();
-            if (status === 'active' && (!expiry || expiry > now)) {
-                onValid(garageData);
+            const snap = await getDoc(doc(db, 'garages', garageCode));
+            if (!snap.exists()) return;
+            const d = snap.data();
+            const expiry = d.subscriptionExpiry?.toDate?.() || null;
+            if (d.subscriptionStatus === 'active' && (!expiry || expiry > new Date())) {
+                onValid(d);
             } else {
                 showSubscriptionError('Your subscription has expired. Please renew.');
             }
         } catch (err) {
-            console.warn('[Daily Check] Subscription re-check failed silently:', err);
+            console.warn('[Daily Check] Silent fail:', err);
         }
-    }, SIX_HOURS);
+    }, 6 * 60 * 60 * 1000); // every 6 hours
 }
 
 function showSubscriptionError(message) {
-    const dashboard = document.getElementById('management-dashboard');
-    const auth      = document.getElementById('auth-section-management');
-    if (dashboard) dashboard.classList.add('hidden');
-    if (auth) {
-        auth.style.display = 'flex';
-        const msg = document.getElementById('management-auth-message');
-        if (msg) { msg.textContent = message; msg.style.color = '#dc2626'; }
+    if (dashboardSection) dashboardSection.classList.add('hidden');
+    if (authSection) {
+        authSection.style.display = 'flex';
+        if (authMessage) { authMessage.textContent = message; authMessage.style.color = '#dc2626'; }
     }
 }
 
@@ -231,11 +215,19 @@ function handleManagementLogin() {
 
 onAuthStateChanged(auth, (user) => {
     if (user) {
-        const garageCode = sessionStorage.getItem('garageCode');
+        // Accept either key — garageCode is set by index.html after login,
+        // pendingGarageCode is the fallback if the page is opened directly
+        const garageCode = sessionStorage.getItem('garageCode')
+                        || sessionStorage.getItem('pendingGarageCode');
+
         if (!garageCode) {
+            // No garage code anywhere — send back to login
             window.location.href = 'index.html';
             return;
         }
+
+        // Ensure it's stored under the canonical key for this session
+        sessionStorage.setItem('garageCode', garageCode);
 
         checkSubscription(garageCode, (garageData) => {
             authSection.style.display = 'none';
