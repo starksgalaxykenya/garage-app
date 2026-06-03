@@ -420,7 +420,7 @@ viewReportsBtn.addEventListener('click', () => {
             listItem.className = 'flex justify-between items-center p-2 bg-gray-50 rounded-lg shadow-sm';
             listItem.innerHTML = `
                 <span class="font-medium">${data.date}</span>
-                <span class="${data.netProfit >= 0 ? 'text-green-600' : 'text-red-600'} font-bold">$${data.netProfit.toFixed(2)}</span>
+                <span class="${data.netProfit >= 0 ? 'text-green-600' : 'text-red-600'} font-bold">$${(data.netProfit ?? 0).toFixed(2)}</span>
                 <button onclick="generateDailyReportPDF('${docSnap.id}')" class="text-blue-500 hover:text-blue-700 text-sm">Print/View</button>
             `;
             pastReportsList.appendChild(listItem);
@@ -479,9 +479,9 @@ async function generateDailyReportPDF(reportId) {
             startY: y,
             head: [['Metric', 'Amount ($)']],
             body: [
-                ['Total Income',  report.totalIncome.toFixed(2)],
-                ['Total Expense', report.totalExpense.toFixed(2)],
-                ['NET PROFIT',    report.netProfit.toFixed(2)],
+                ['Total Income',  (report.totalIncome ?? 0).toFixed(2)],
+                ['Total Expense', (report.totalExpense ?? 0).toFixed(2)],
+                ['NET PROFIT',    (report.netProfit ?? 0).toFixed(2)],
             ],
             theme: 'grid', styles: { fontSize: 10 },
             headStyles: { fillColor: hexToRgbArr(branding.primaryColor) }
@@ -646,8 +646,8 @@ function listenForPartsInventory() {
             tr.innerHTML = `
                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${data.name} (${data.sku || 'N/A'})</td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm ${quantityClass}">${data.quantity}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-red-600">$${data.supplierPrice.toFixed(2)}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-green-600">$${data.sellingPrice.toFixed(2)}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-red-600">$${(data.supplierPrice ?? 0).toFixed(2)}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-green-600">$${(data.sellingPrice ?? 0).toFixed(2)}</td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <button onclick="deletePart('${docSnap.id}')" class="text-red-600 hover:text-red-900">Delete</button>
                 </td>
@@ -717,7 +717,7 @@ function listenForSuppliers() {
                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${data.name}</td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${data.type}</td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${data.contact}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm ${data.owed > 0 ? 'text-red-600 font-bold' : 'text-green-600'}">$${data.owed.toFixed(2)}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm ${data.owed > 0 ? 'text-red-600 font-bold' : 'text-green-600'}">$${(data.owed ?? 0).toFixed(2)}</td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <button onclick="editSupplier('${docSnap.id}')" class="text-indigo-600 hover:text-indigo-900 mr-2">Edit</button>
                     <button onclick="deleteSupplier('${docSnap.id}')" class="text-red-600 hover:text-red-900">Delete</button>
@@ -867,7 +867,7 @@ function listenForInvoices() {
                 <td class="px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-900">${data.invoiceNo}</td>
                 <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500">${data.date}</td>
                 <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500">${data.clientName} / ${data.carPlate}</td>
-                <td class="px-3 py-2 whitespace-nowrap text-sm text-green-600 font-bold">$${data.total.toFixed(2)}</td>
+                <td class="px-3 py-2 whitespace-nowrap text-sm text-green-600 font-bold">$${(data.total ?? 0).toFixed(2)}</td>
                 <td class="px-3 py-2 whitespace-nowrap text-sm">
                     <button onclick="generateInvoicePDF('${docSnap.id}', '${data.clientPhone}')" class="text-blue-500 hover:text-blue-700 mr-2">PDF/Share</button>
                     <button onclick="deleteInvoice('${docSnap.id}')" class="text-red-500 hover:text-red-700">Delete</button>
@@ -910,7 +910,7 @@ async function generateInvoicePDF(invoiceId, clientPhone) {
             startY: y,
             head: [['Description', 'Qty', 'Unit Price ($)', 'Line Total ($)']],
             body: itemBody,
-            foot: [['', '', 'Total', `$${invoice.total.toFixed(2)}`]],
+            foot: [['', '', 'Total', `$${(invoice.total ?? 0).toFixed(2)}`]],
             theme: 'grid', styles: { fontSize: 10 },
             headStyles: { fillColor: hexToRgbArr(branding.primaryColor) },
             footStyles: { fillColor: [230, 230, 255], textColor: [0, 0, 0], fontSize: 12, fontStyle: 'bold' }
@@ -919,7 +919,7 @@ async function generateInvoicePDF(invoiceId, clientPhone) {
         drawPdfFooter(pdfDoc, branding);
 
         if (confirm('PDF is generated. Do you want to share a text summary via WhatsApp?')) {
-            const message = `*${branding.garageName || 'Garage Manager PRO'} Invoice* (No. ${invoice.invoiceNo})\n\nDear ${invoice.clientName},\n\nYour invoice is ready. Total amount: *$${invoice.total.toFixed(2)}*.\n\nThank you for your business!`;
+            const message = `*${branding.garageName || 'Garage Manager PRO'} Invoice* (No. ${invoice.invoiceNo})\n\nDear ${invoice.clientName},\n\nYour invoice is ready. Total amount: *$${(invoice.total ?? 0).toFixed(2)}*.\n\nThank you for your business!`;
             window.open(`https://wa.me/${cleanPhoneNumber(clientPhone)}?text=${encodeURIComponent(message)}`, '_blank');
         }
 
@@ -1011,7 +1011,7 @@ function listenForQuotes() {
                 <td class="px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-900">${data.quoteNo}</td>
                 <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500">${data.date}</td>
                 <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500">${data.clientName} / ${data.carPlate}</td>
-                <td class="px-3 py-2 whitespace-nowrap text-sm text-indigo-600 font-bold">$${data.total.toFixed(2)} (Est.)</td>
+                <td class="px-3 py-2 whitespace-nowrap text-sm text-indigo-600 font-bold">$${(data.total ?? 0).toFixed(2)} (Est.)</td>
                 <td class="px-3 py-2 whitespace-nowrap text-sm">
                     <button onclick="generateQuotePDF('${docSnap.id}', '${data.clientPhone}')" class="text-blue-500 hover:text-blue-700 mr-2">PDF/Share</button>
                     <button onclick="deleteQuote('${docSnap.id}')" class="text-red-500 hover:text-red-700">Delete</button>
@@ -1055,7 +1055,7 @@ async function generateQuotePDF(quoteId, clientPhone) {
             startY: y,
             head: [['Item/Service', 'Qty', 'Est. Unit Cost ($)', 'Est. Line Total ($)']],
             body: itemBody,
-            foot: [['', '', 'Estimated Total', `$${quote.total.toFixed(2)}`]],
+            foot: [['', '', 'Estimated Total', `$${(quote.total ?? 0).toFixed(2)}`]],
             theme: 'grid', styles: { fontSize: 10 },
             headStyles: { fillColor: hexToRgbArr(branding.primaryColor) },
             footStyles: { fillColor: [230, 230, 255], textColor: [0, 0, 0], fontSize: 12, fontStyle: 'bold' }
@@ -1068,7 +1068,7 @@ async function generateQuotePDF(quoteId, clientPhone) {
         drawPdfFooter(pdfDoc, branding);
 
         if (confirm('PDF is generated. Do you want to share a text summary via WhatsApp?')) {
-            const message = `*${branding.garageName || 'Garage Manager PRO'} Repair Quote* (No. ${quote.quoteNo})\n\nDear ${quote.clientName},\n\nYour repair quote for the ${quote.carMake} is *$${quote.total.toFixed(2)}* (Estimated).\n\nPlease reply to confirm the repair.`;
+            const message = `*${branding.garageName || 'Garage Manager PRO'} Repair Quote* (No. ${quote.quoteNo})\n\nDear ${quote.clientName},\n\nYour repair quote for the ${quote.carMake} is *$${(quote.total ?? 0).toFixed(2)}* (Estimated).\n\nPlease reply to confirm the repair.`;
             window.open(`https://wa.me/${cleanPhoneNumber(clientPhone)}?text=${encodeURIComponent(message)}`, '_blank');
         }
 
