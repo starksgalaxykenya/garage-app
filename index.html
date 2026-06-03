@@ -511,36 +511,46 @@
     // 2. AUTHENTICATION LOGIC
     // ----------------------------------------------------------------------
 
+    // Prevent the initial onAuthStateChanged(null) from flashing the login screen.
+    // Firebase always fires once synchronously with null while it reads IndexedDB.
+    let _authInitialized = false;
+
     onAuthStateChanged(auth, (user) => {
-        const headerNav = document.querySelector('header nav');
-        if (user) {
-        const garageCode = sessionStorage.getItem('pendingGarageCode') || sessionStorage.getItem('garageCode');
-        
-        if (!garageCode) {
-            // No garage code in session — force re-login
-            auth.signOut();
+        if (!_authInitialized && !user) {
+            // First fire with null = Firebase still resolving persisted session. Ignore.
+            _authInitialized = true;
             return;
         }
- 
-        checkSubscription(garageCode, db, doc, getDoc, (garageData) => {
-            // ✅ Access granted — promote pendingGarageCode to garageCode so
-            //    management.html can read it reliably from sessionStorage
-            sessionStorage.setItem('garageCode', garageCode);
-            sessionStorage.removeItem('pendingGarageCode');
+        _authInitialized = true;
 
-            document.getElementById('auth-section').style.display = 'none';
-            document.getElementById('logoutBtn').style.display = 'inline-block';
-            showSection('car-entry');
+        if (user) {
+            // subscription.js storeSessionGarage() sets 'garageCode'.
+            // 'pendingGarageCode' is set by proceedToLogin() before auth completes.
+            const garageCode = sessionStorage.getItem('garageCode')
+                            || sessionStorage.getItem('pendingGarageCode');
 
-            // Start daily re-check
-            setupDailySubscriptionCheck(garageCode, db, doc, getDoc, (gData) => {
-                console.log('[Daily Check] Subscription still valid.');
+            if (!garageCode) {
+                signOut(auth);
+                return;
+            }
+
+            checkSubscription(garageCode, db, doc, getDoc, (garageData) => {
+                // subscription.js storeSessionGarage already saved 'garageCode'
+                // Remove the pending key to keep sessionStorage clean
+                sessionStorage.removeItem('pendingGarageCode');
+
+                document.getElementById('auth-section').style.display = 'none';
+                document.getElementById('logoutBtn').style.display = 'inline-block';
+                showSection('car-entry');
+
+                setupDailySubscriptionCheck(garageCode, db, doc, getDoc, (gData) => {
+                    console.log('[Daily Check] Subscription still valid.');
+                });
             });
-        });
-    } else {
-        document.getElementById('auth-section').style.display = 'flex';
-        document.getElementById('logoutBtn').style.display = 'none';
-    }
+        } else {
+            document.getElementById('auth-section').style.display = 'flex';
+            document.getElementById('logoutBtn').style.display = 'none';
+        }
     });
 
     function showSection(sectionId) {
