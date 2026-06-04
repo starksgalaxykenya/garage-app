@@ -1,7 +1,7 @@
 // =================================================================
-// FILE: management.js
-// Description: Logic for the secure Garage Management Console (GMC)
-// Migrated: Firebase v8 legacy SDK → v9 Modular SDK
+// FILE: management.js  
+// Description: Garage Management Console — full logic
+// Auth: PIN-based via auth.js (no Firebase email/password)
 // =================================================================
 
 // ========== UTILITY FUNCTIONS ==========
@@ -26,7 +26,7 @@ let isSavingInvoice = false;
 let isSavingQuote = false;
 
 // =================================================================
-// 0. BRANDING MODULE IMPORT
+// 0. MODULE IMPORTS
 // =================================================================
 import {
     getBranding,
@@ -37,20 +37,26 @@ import {
     updateColorPreviews
 } from './garage-branding.js';
 
-// Expose branding functions globally for inline onclick handlers
+import {
+    getSession,
+    setSession,
+    clearSession,
+    can,
+    verifyPin,
+    showTrialBanner,
+    ROLES,
+    savePins,
+    PERMISSIONS
+} from './auth.js';
+
+// Expose branding functions globally
 window.saveBrandingSettings = saveBrandingSettings;
 window.updateColorPreviews  = updateColorPreviews;
 
 // =================================================================
-// 1. FIREBASE INITIALIZATION (Modular v9+ SDK)
+// 1. FIREBASE INITIALIZATION
 // =================================================================
 import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
-import {
-    getAuth,
-    signInWithEmailAndPassword,
-    onAuthStateChanged,
-    signOut
-} from "https://www.gstatic.com/firebasejs/12.6.0/firebase-auth.js";
 import {
     getFirestore,
     collection,
@@ -77,11 +83,10 @@ const firebaseConfig = {
     appId: "1:226684256206:web:13d600d6db4c603506759f"
 };
 
-const app  = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db   = getFirestore(app);
+const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
+const db  = getFirestore(app);
 
-// Firestore Collection References (v9: collection() is a function)
+// Firestore Collection References
 const dailyTransactionsRef = collection(db, 'dailyTransactions');
 const pastReportsRef       = collection(db, 'financialReports');
 const suppliersRef         = collection(db, 'suppliers');
@@ -141,71 +146,131 @@ let allSuppliers = [];
 let allPartsInventory = [];
 
 // =================================================================
-// 2. AUTHENTICATION LOGIC
+// 2. PIN-BASED AUTHENTICATION LOGIC
 // =================================================================
 
-function handleManagementLogin() {
-    const email    = document.getElementById('management-email').value;
-    const password = document.getElementById('management-password').value;
-    if (!email || !password) {
-        authMessage.textContent = "Please enter both email and password.";
-        return;
+let _mgmtPinBuffer = '';
+const MGMT_PIN_MAX = 6;
+
+function mgmtPinKey(val) {
+    document.getElementById('mgmt-pin-message').textContent = '';
+    if (val === 'back') {
+        _mgmtPinBuffer = _mgmtPinBuffer.slice(0, -1);
+    } else if (_mgmtPinBuffer.length < MGMT_PIN_MAX) {
+        _mgmtPinBuffer += val;
     }
-    signInWithEmailAndPassword(auth, email, password)
-        .catch(error => {
-            console.error("Management Login Error: ", error);
-            authMessage.textContent = `Login failed: ${error.message}`;
-        });
+    updateMgmtPinDots();
+    if (_mgmtPinBuffer.length === MGMT_PIN_MAX) enterPinAndLogin();
+}
+window.mgmtPinKey = mgmtPinKey;
+
+function updateMgmtPinDots() {
+    const dots = document.querySelectorAll('.mgmt-pin-dot');
+    dots.forEach((d, i) => {
+        d.classList.toggle('bg-indigo-600',    i < _mgmtPinBuffer.length);
+        d.classList.toggle('border-indigo-600', i < _mgmtPinBuffer.length);
+        d.classList.toggle('bg-white',         i >= _mgmtPinBuffer.length);
+        d.classList.toggle('border-gray-300',  i >= _mgmtPinBuffer.length);
+    });
 }
 
-// Prevent the initial onAuthStateChanged(null) from flashing the login screen.
-// Firebase always fires once with null while it checks IndexedDB persistence.
-let _authInitialized = false;
+async function enterPinAndLogin() {
+    const codeInput = document.getElementById('mgmt-garage-code');
+    const roleInput = document.getElementById('mgmt-role-select');
+    const msg       = document.getElementById('mgmt-pin-message');
 
-onAuthStateChanged(auth, (user) => {
-    if (!_authInitialized && !user) {
-        // First fire with null = Firebase still loading from IndexedDB. Wait.
-        _authInitialized = true;
+    const garageCode = (codeInput?.value || sessionStorage.getItem('garageCode') || '').trim().toUpperCase();
+    const role       = roleInput?.value || 'manager';
+
+    if (!garageCode) { msg.textContent = 'Enter your garage code first.'; return; }
+    if (_mgmtPinBuffer.length < 4) { msg.textContent = 'PIN must be at least 4 digits.'; return; }
+
+    msg.textContent = '⏳ Verifying…';
+    document.querySelectorAll('.mgmt-pin-key').forEach(b => b.disabled = true);
+
+    const result = await verifyPin(garageCode, role, _mgmtPinBuffer, db, doc, getDoc);
+
+    document.querySelectorAll('.mgmt-pin-key').forEach(b => b.disabled = false);
+    _mgmtPinBuffer = '';
+    updateMgmtPinDots();
+
+    if (!result.ok) {
+        msg.textContent = result.error || 'Incorrect PIN.';
         return;
     }
-    _authInitialized = true;
 
-    if (user) {
-        // Accept both keys: 'garageCode' (set by subscription.js storeSessionGarage)
-        // and 'pendingGarageCode' (set by index.html before login completes)
-        const garageCode = sessionStorage.getItem('garageCode')
-                        || sessionStorage.getItem('pendingGarageCode');
-
-        if (!garageCode) {
-            window.location.href = 'index.html';
-            return;
-        }
-
-        checkSubscription(garageCode, db, doc, getDoc, (garageData) => {
-            authSection.style.display = 'none';
-            dashboardSection.classList.remove('hidden');
-            logoutBtn.style.display = 'block';
-            authMessage.textContent = '';
-
-            listenForDailyTransactions();
-            listenForSuppliers();
-            listenForPartsInventory();
-            listenForInvoices();
-            listenForQuotes();
-
-            setupDailySubscriptionCheck(garageCode, db, doc, getDoc, () => {
-                console.log('[Daily Check] Management subscription still valid.');
-            });
-        });
-    } else {
-        authSection.style.display = 'flex';
-        dashboardSection.classList.add('hidden');
-        logoutBtn.style.display = 'none';
+    if (result.firstSetup) {
+        msg.textContent = '';
+        alert('Welcome! Default manager PIN is 0000. Please set your PINs in Settings immediately.');
     }
-});
 
-loginBtn.addEventListener('click', handleManagementLogin);
-logoutBtn.addEventListener('click', () => signOut(auth));
+    setSession(garageCode, role);
+    if (result.garageData) showTrialBanner(result.garageData);
+    grantManagementAccess(role);
+}
+window.enterPinAndLogin = enterPinAndLogin;
+
+function grantManagementAccess(role) {
+    authSection.style.display = 'none';
+    dashboardSection.classList.remove('hidden');
+    logoutBtn.style.display = 'block';
+
+    // Role badge
+    const badge = document.getElementById('mgmt-role-badge');
+    if (badge) {
+        const cfg = {
+            manager: { label: '💼 Manager', cls: 'bg-green-100 text-green-800' },
+            admin:   { label: '👤 Admin',   cls: 'bg-purple-100 text-purple-800' },
+        };
+        const c = cfg[role] || cfg.admin;
+        badge.textContent = c.label;
+        badge.className = `text-xs font-bold px-3 py-1 rounded-full ${c.cls}`;
+    }
+
+    // PIN management tab/section visible to manager only
+    const pinSection = document.getElementById('pin-management-section');
+    if (pinSection) pinSection.style.display = can('managePins') ? '' : 'none';
+
+    listenForDailyTransactions();
+    listenForSuppliers();
+    listenForPartsInventory();
+    listenForInvoices();
+    listenForQuotes();
+
+    // Hourly subscription re-check
+    const garageCode = sessionStorage.getItem('garageCode');
+    setInterval(async () => {
+        const today = new Date().toDateString();
+        if (sessionStorage.getItem('lastChecked') === today) return;
+        const snap = await getDoc(doc(db, 'garages', garageCode)).catch(() => null);
+        if (!snap || !snap.exists()) return;
+        const status = (snap.data().subscriptionStatus || '').toLowerCase();
+        if (status === 'inactive') {
+            alert('Subscription expired. Please renew.');
+            clearSession();
+            location.reload();
+        }
+        sessionStorage.setItem('lastChecked', new Date().toDateString());
+    }, 60 * 60 * 1000);
+}
+
+// Boot: check for existing session or show login
+function bootManagement() {
+    const { garageCode, role, authed } = getSession();
+    if (authed && garageCode && (role === 'manager' || role === 'admin')) {
+        grantManagementAccess(role);
+        return;
+    }
+    authSection.style.display = 'flex';
+    dashboardSection.classList.add('hidden');
+    logoutBtn.style.display = 'none';
+    // Pre-fill garage code if available
+    const codeInput = document.getElementById('mgmt-garage-code');
+    if (codeInput && garageCode) codeInput.value = garageCode;
+}
+bootManagement();
+
+logoutBtn.addEventListener('click', () => { clearSession(); location.reload(); });
 
 // =================================================================
 // 3. TAB SWITCHING LOGIC
@@ -297,7 +362,6 @@ generalForm.addEventListener('submit', async (e) => {
     }
 });
 
-// Helper: safely convert any value to a number, then format with toFixed
 function safeToFixed(value, decimals = 2) {
     let num = parseFloat(value);
     if (isNaN(num)) num = 0;
@@ -315,22 +379,16 @@ function listenForDailyTransactions() {
 
         snapshot.forEach(docSnap => {
             const data = docSnap.data();
-            
-            // Safe number extraction
-            const income = parseFloat(data.income);
+
+            const income  = parseFloat(data.income);
             const expense = parseFloat(data.expense);
-            let profit = parseFloat(data.profit);
-            
-            // Fallback to calculated if profit is NaN
+            let profit    = parseFloat(data.profit);
             if (isNaN(profit)) profit = (isNaN(income) ? 0 : income) - (isNaN(expense) ? 0 : expense);
             if (isNaN(profit)) profit = 0;
-            
-            // Use safe numbers for totals
-            const safeIncome = isNaN(income) ? 0 : income;
+
+            const safeIncome  = isNaN(income)  ? 0 : income;
             const safeExpense = isNaN(expense) ? 0 : expense;
-            const safeProfit = profit;
-            
-            totalIncome += safeIncome;
+            totalIncome  += safeIncome;
             totalExpense += safeExpense;
 
             const displayTime = data.timestamp && typeof data.timestamp.toDate === 'function'
@@ -338,27 +396,22 @@ function listenForDailyTransactions() {
                 : 'Pending...';
 
             currentDailyTransactions.push({
-                id: docSnap.id,
-                income: safeIncome,
-                expense: safeExpense,
-                profit: safeProfit,
-                description: data.description || '',
-                subtype: data.subtype || 'Other',
-                plate: data.plate || 'N/A',
+                id: docSnap.id, income: safeIncome, expense: safeExpense,
+                profit, description: data.description || '',
+                subtype: data.subtype || 'Other', plate: data.plate || 'N/A',
                 timestamp: data.timestamp
             });
 
             const tr = document.createElement('tr');
             tr.className = 'hover:bg-gray-50';
-            const profitClass = safeProfit >= 0 ? 'text-green-600 font-medium' : 'text-red-600 font-medium';
-            
+            const profitClass = profit >= 0 ? 'text-green-600 font-medium' : 'text-red-600 font-medium';
             tr.innerHTML = `
                 <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500">${displayTime}</td>
                 <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900">${escapeHtml(data.subtype || 'Other')}</td>
                 <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500">${escapeHtml(data.plate || 'N/A')}</td>
                 <td class="px-3 py-2 whitespace-nowrap text-sm text-green-600">$${safeToFixed(safeIncome)}</td>
                 <td class="px-3 py-2 whitespace-nowrap text-sm text-red-600">$${safeToFixed(safeExpense)}</td>
-                <td class="px-3 py-2 whitespace-nowrap text-sm ${profitClass}">$${safeToFixed(safeProfit)}</td>
+                <td class="px-3 py-2 whitespace-nowrap text-sm ${profitClass}">$${safeToFixed(profit)}</td>
                 <td class="px-3 py-2 whitespace-nowrap text-sm">
                     <button onclick="deleteTransaction('${docSnap.id}')" class="text-red-500 hover:text-red-700">Delete</button>
                 </td>
@@ -367,24 +420,19 @@ function listenForDailyTransactions() {
         });
 
         const netProfit = totalIncome - totalExpense;
-        summaryIncome.textContent = `$${safeToFixed(totalIncome)}`;
+        summaryIncome.textContent  = `$${safeToFixed(totalIncome)}`;
         summaryExpense.textContent = `$${safeToFixed(totalExpense)}`;
-        summaryProfit.textContent = `$${safeToFixed(netProfit)}`;
-        summaryProfit.className = netProfit >= 0 ? 'font-bold text-indigo-600' : 'font-bold text-red-600';
-        endDayBtn.disabled = currentDailyTransactions.length === 0;
+        summaryProfit.textContent  = `$${safeToFixed(netProfit)}`;
+        summaryProfit.className    = netProfit >= 0 ? 'font-bold text-indigo-600' : 'font-bold text-red-600';
+        endDayBtn.disabled         = currentDailyTransactions.length === 0;
     }, error => console.error("Error listening to daily transactions: ", error));
 }
 
-// Simple escape to avoid HTML injection
 function escapeHtml(str) {
     if (!str) return '';
-    return str.replace(/[&<>]/g, function(m) {
-        if (m === '&') return '&amp;';
-        if (m === '<') return '&lt;';
-        if (m === '>') return '&gt;';
-        return m;
-    });
+    return str.replace(/[&<>]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[m] || m));
 }
+
 async function deleteTransaction(id) {
     if (confirm('Are you sure you want to delete this transaction?')) {
         try {
@@ -463,7 +511,7 @@ async function generateDailyReportPDF(reportId) {
     try {
         const docSnap = await getDoc(doc(db, 'financialReports', reportId));
         if (!docSnap.exists()) { alert("Report not found."); return; }
-        const report = docSnap.data();
+        const report  = docSnap.data();
         const branding = await getBranding();
 
         const pdfDoc = new window.jspdf.jsPDF();
@@ -479,9 +527,9 @@ async function generateDailyReportPDF(reportId) {
             startY: y,
             head: [['Metric', 'Amount ($)']],
             body: [
-                ['Total Income',  (report.totalIncome ?? 0).toFixed(2)],
+                ['Total Income',  (report.totalIncome  ?? 0).toFixed(2)],
                 ['Total Expense', (report.totalExpense ?? 0).toFixed(2)],
-                ['NET PROFIT',    (report.netProfit ?? 0).toFixed(2)],
+                ['NET PROFIT',    (report.netProfit    ?? 0).toFixed(2)],
             ],
             theme: 'grid', styles: { fontSize: 10 },
             headStyles: { fillColor: hexToRgbArr(branding.primaryColor) }
@@ -490,13 +538,13 @@ async function generateDailyReportPDF(reportId) {
         pdfDoc.setFontSize(14);
         pdfDoc.text("Detailed Transactions", 14, pdfDoc.autoTable.previous.finalY + 10);
 
-        const transactionBody = report.transactions.map(t => [
+        const transactionBody = (report.transactions || []).map(t => [
             (t.timestamp && typeof t.timestamp.toDate === 'function')
                 ? t.timestamp.toDate().toLocaleTimeString() : 'N/A',
             t.description,
-            t.income.toFixed(2),
-            t.expense.toFixed(2),
-            t.profit.toFixed(2)
+            (t.income  ?? 0).toFixed(2),
+            (t.expense ?? 0).toFixed(2),
+            (t.profit  ?? 0).toFixed(2)
         ]);
 
         pdfDoc.autoTable({
@@ -586,7 +634,7 @@ sellPartForm.addEventListener('submit', async (e) => {
 
     if (!partId || quantitySold <= 0) return alert("Please select a part and specify quantity.");
 
-    const stock         = parseInt(partOption.dataset.stock);
+    const stock = parseInt(partOption.dataset.stock);
     if (quantitySold > stock) return alert(`Cannot sell ${quantitySold}. Only ${stock} in stock.`);
 
     const supplierPrice = parseFloat(partOption.dataset.supplierPrice);
@@ -599,26 +647,20 @@ sellPartForm.addEventListener('submit', async (e) => {
     if (!confirm(`Confirm sale of ${quantitySold} x ${partName} for $${totalIncome.toFixed(2)} (Profit: $${totalProfit.toFixed(2)})?`)) return;
 
     try {
-        const batch    = writeBatch(db);
-        const partRef  = doc(db, 'partsInventory', partId);
+        const batch   = writeBatch(db);
+        const partRef = doc(db, 'partsInventory', partId);
         batch.update(partRef, { quantity: stock - quantitySold });
 
-        const newTransRef = doc(dailyTransactionsRef); // auto-id
+        const newTransRef = doc(dailyTransactionsRef);
         batch.set(newTransRef, {
-            type:        'PART SALE',
-            subtype:     partName,
-            plate:       carPlate,
+            type: 'PART SALE', subtype: partName, plate: carPlate,
             description: `${quantitySold} x ${partName} sold (Plate: ${carPlate})`,
-            income:      totalIncome,
-            expense:     totalExpense,
-            profit:      totalProfit,
-            timestamp:   serverTimestamp(),
-            isJob:       true,
-            date:        getUTCDateString()
+            income: totalIncome, expense: totalExpense, profit: totalProfit,
+            timestamp: serverTimestamp(), isJob: true, date: getUTCDateString()
         });
 
         await batch.commit();
-        alert(`Sale committed successfully! Stock updated. Profit: $${totalProfit.toFixed(2)} recorded in Finance.`);
+        alert(`Sale committed! Profit: $${totalProfit.toFixed(2)} recorded in Finance.`);
         sellPartForm.reset();
         partSaleProfitDisplay.textContent = '$0.00';
     } catch (error) {
@@ -638,7 +680,7 @@ function listenForPartsInventory() {
             const data = docSnap.data();
             allPartsInventory.push({ id: docSnap.id, ...data });
 
-            const profitPerUnit = data.sellingPrice - data.supplierPrice;
+            const profitPerUnit = (data.sellingPrice ?? 0) - (data.supplierPrice ?? 0);
             const quantityClass = data.quantity < 5 ? 'text-red-600 font-bold' : 'text-gray-900';
 
             const tr = document.createElement('tr');
@@ -670,7 +712,7 @@ function listenForPartsInventory() {
 }
 
 window.deletePart = (id) => {
-    if (confirm("Are you sure you want to delete this part from inventory? This cannot be undone.")) {
+    if (confirm("Delete this part from inventory? This cannot be undone.")) {
         deleteDoc(doc(db, 'partsInventory', id))
             .catch(e => { alert('Failed to delete part.'); console.error("Delete Part Error", e); });
     }
@@ -765,11 +807,10 @@ orderWhatsappBtn.addEventListener('click', () => {
 function editSupplier(id) { alert(`Editing supplier ${id}...`); }
 function deleteSupplier(id) {
     if (confirm("Are you sure you want to delete this supplier?")) {
-        deleteDoc(doc(db, 'suppliers', id))
-            .catch(e => console.error("Delete Error", e));
+        deleteDoc(doc(db, 'suppliers', id)).catch(e => console.error("Delete Error", e));
     }
 }
-window.editSupplier  = editSupplier;
+window.editSupplier   = editSupplier;
 window.deleteSupplier = deleteSupplier;
 
 // =================================================================
@@ -796,8 +837,8 @@ function calculateTotal(type) {
     const itemRows  = container.querySelectorAll(`.${type}-item-row`);
     let total = 0;
     itemRows.forEach(row => {
-        const qty       = parseFloat(row.querySelector(`.${type}-item-qty`).value) || 0;
-        const unitPrice = parseFloat(row.querySelector(`.${type}-item-unit-price`).value) || 0;
+        const qty        = parseFloat(row.querySelector(`.${type}-item-qty`).value) || 0;
+        const unitPrice  = parseFloat(row.querySelector(`.${type}-item-unit-price`).value) || 0;
         const itemAmount = qty * unitPrice;
         const lineTotal  = row.querySelector(`.${type}-item-amount`);
         if (lineTotal) lineTotal.value = itemAmount.toFixed(2);
@@ -832,15 +873,13 @@ invoiceCreationForm.addEventListener('submit', async (e) => {
         clientPhone: document.getElementById('invoice-client-phone').value,
         carPlate:    document.getElementById('invoice-car-plate').value,
         items, total: totalAmount,
-        date:      getUTCDateString(),
-        timestamp: serverTimestamp()
+        date: getUTCDateString(), timestamp: serverTimestamp()
     };
 
     try {
         await addDoc(invoicesRef, invoice);
         await addDoc(dailyTransactionsRef, {
-            type: 'JOB', subtype: 'Invoice/Receipt',
-            plate: invoice.carPlate,
+            type: 'JOB', subtype: 'Invoice/Receipt', plate: invoice.carPlate,
             description: `Invoice #${invoice.invoiceNo} paid by ${invoice.clientName}`,
             income: totalAmount, expense: 0, profit: totalAmount,
             timestamp: serverTimestamp(), isJob: true, date: getUTCDateString()
@@ -848,7 +887,7 @@ invoiceCreationForm.addEventListener('submit', async (e) => {
         invoiceCreationForm.reset();
         document.getElementById('invoice-items-container').innerHTML = '';
         addInvoiceItemRow();
-        alert('Invoice committed and amount reflected in Finance successfully!');
+        alert('Invoice committed and amount reflected in Finance!');
     } catch (error) {
         alert('Failed to generate or commit invoice.');
         console.error('Invoice Creation Error: ', error);
@@ -882,34 +921,28 @@ async function generateInvoicePDF(invoiceId, clientPhone) {
     try {
         const docSnap = await getDoc(doc(db, 'invoices', invoiceId));
         if (!docSnap.exists()) { alert("Invoice not found."); return; }
-        const invoice = docSnap.data();
+        const invoice  = docSnap.data();
         const branding = await getBranding();
 
         const pdfDoc = new window.jspdf.jsPDF();
         let y = drawPdfHeader(pdfDoc, branding, "INVOICE / RECEIPT");
 
-        pdfDoc.setFontSize(10);
-        pdfDoc.setTextColor(60, 60, 60);
+        pdfDoc.setFontSize(10); pdfDoc.setTextColor(60, 60, 60);
         pdfDoc.text(`Invoice No: ${invoice.invoiceNo}`, 14, y);
-        pdfDoc.text(`Date: ${invoice.date}`, 110, y);
-        y += 6;
+        pdfDoc.text(`Date: ${invoice.date}`, 110, y); y += 6;
         pdfDoc.text(`Client: ${invoice.clientName}`, 14, y);
-        pdfDoc.text(`Phone: ${invoice.clientPhone}`, 110, y);
-        y += 6;
-        pdfDoc.text(`Vehicle Plate: ${invoice.carPlate}`, 14, y);
-        y += 8;
-
-        const itemBody = invoice.items.map(item => [
-            item.description,
-            (item.quantity ?? 0).toString(),
-            `$${(item.unitPrice ?? 0).toFixed(2)}`,
-            `$${(item.amount ?? 0).toFixed(2)}`
-        ]);
+        pdfDoc.text(`Phone: ${invoice.clientPhone}`, 110, y); y += 6;
+        pdfDoc.text(`Vehicle Plate: ${invoice.carPlate}`, 14, y); y += 8;
 
         pdfDoc.autoTable({
             startY: y,
             head: [['Description', 'Qty', 'Unit Price ($)', 'Line Total ($)']],
-            body: itemBody,
+            body: invoice.items.map(item => [
+                item.description,
+                (item.quantity ?? 0).toString(),
+                `$${(item.unitPrice ?? 0).toFixed(2)}`,
+                `$${(item.amount   ?? 0).toFixed(2)}`
+            ]),
             foot: [['', '', 'Total', `$${(invoice.total ?? 0).toFixed(2)}`]],
             theme: 'grid', styles: { fontSize: 10 },
             headStyles: { fillColor: hexToRgbArr(branding.primaryColor) },
@@ -918,8 +951,8 @@ async function generateInvoicePDF(invoiceId, clientPhone) {
 
         drawPdfFooter(pdfDoc, branding);
 
-        if (confirm('PDF is generated. Do you want to share a text summary via WhatsApp?')) {
-            const message = `*${branding.garageName || 'Garage Manager PRO'} Invoice* (No. ${invoice.invoiceNo})\n\nDear ${invoice.clientName},\n\nYour invoice is ready. Total amount: *$${(invoice.total ?? 0).toFixed(2)}*.\n\nThank you for your business!`;
+        if (confirm('Share summary via WhatsApp?')) {
+            const message = `*${branding.garageName || 'Garage Manager PRO'} Invoice* (No. ${invoice.invoiceNo})\n\nDear ${invoice.clientName},\n\nYour invoice total: *$${(invoice.total ?? 0).toFixed(2)}*.\n\nThank you!`;
             window.open(`https://wa.me/${cleanPhoneNumber(clientPhone)}?text=${encodeURIComponent(message)}`, '_blank');
         }
 
@@ -931,7 +964,7 @@ async function generateInvoicePDF(invoiceId, clientPhone) {
 }
 
 function deleteInvoice(id) {
-    if (confirm("Are you sure you want to delete this invoice?")) {
+    if (confirm("Delete this invoice?")) {
         deleteDoc(doc(db, 'invoices', id)).catch(e => console.error("Delete Error", e));
     }
 }
@@ -972,7 +1005,7 @@ quoteCreationForm.addEventListener('submit', async (e) => {
     });
 
     if (items.length === 0) {
-        alert("Please add at least one item to the quote with an estimated total amount greater than zero.");
+        alert("Please add at least one item with an estimated total greater than zero.");
         return;
     }
 
@@ -983,8 +1016,7 @@ quoteCreationForm.addEventListener('submit', async (e) => {
         carPlate:    document.getElementById('quote-car-plate').value,
         carMake:     document.getElementById('quote-car-make').value,
         items, total: totalAmount,
-        date:      getUTCDateString(),
-        timestamp: serverTimestamp()
+        date: getUTCDateString(), timestamp: serverTimestamp()
     };
 
     try {
@@ -992,7 +1024,7 @@ quoteCreationForm.addEventListener('submit', async (e) => {
         quoteCreationForm.reset();
         document.getElementById('quote-items-container').innerHTML = '';
         addQuoteItemRow();
-        alert('Quote generated and saved successfully!');
+        alert('Quote saved successfully!');
     } catch (error) {
         alert('Failed to save quote.');
         console.error('Quote Creation Error: ', error);
@@ -1024,51 +1056,44 @@ function listenForQuotes() {
 
 async function generateQuotePDF(quoteId, clientPhone) {
     try {
-        const docSnap = await getDoc(doc(db, 'quotes', quoteId));
+        const docSnap  = await getDoc(doc(db, 'quotes', quoteId));
         if (!docSnap.exists()) { alert("Quote not found."); return; }
-        const quote = docSnap.data();
+        const quote    = docSnap.data();
         const branding = await getBranding();
 
         const pdfDoc = new window.jspdf.jsPDF();
         let y = drawPdfHeader(pdfDoc, branding, "REPAIR QUOTE");
 
-        pdfDoc.setFontSize(10);
-        pdfDoc.setTextColor(60, 60, 60);
+        pdfDoc.setFontSize(10); pdfDoc.setTextColor(60, 60, 60);
         pdfDoc.text(`Quote No: ${quote.quoteNo}`, 14, y);
-        pdfDoc.text(`Date: ${quote.date}`, 110, y);
-        y += 6;
+        pdfDoc.text(`Date: ${quote.date}`, 110, y); y += 6;
         pdfDoc.text(`Client: ${quote.clientName}`, 14, y);
-        pdfDoc.text(`Phone: ${quote.clientPhone}`, 110, y);
-        y += 6;
+        pdfDoc.text(`Phone: ${quote.clientPhone}`, 110, y); y += 6;
         pdfDoc.text(`Vehicle: ${quote.carMake}`, 14, y);
-        pdfDoc.text(`Plate: ${quote.carPlate}`, 110, y);
-        y += 8;
-
-        const itemBody = quote.items.map(item => [
-            item.description,
-            (item.quantity ?? 0).toString(),
-            `$${(item.unitPrice ?? 0).toFixed(2)}`,
-            `$${(item.amount ?? 0).toFixed(2)}`
-        ]);
+        pdfDoc.text(`Plate: ${quote.carPlate}`, 110, y); y += 8;
 
         pdfDoc.autoTable({
             startY: y,
             head: [['Item/Service', 'Qty', 'Est. Unit Cost ($)', 'Est. Line Total ($)']],
-            body: itemBody,
+            body: quote.items.map(item => [
+                item.description,
+                (item.quantity ?? 0).toString(),
+                `$${(item.unitPrice ?? 0).toFixed(2)}`,
+                `$${(item.amount   ?? 0).toFixed(2)}`
+            ]),
             foot: [['', '', 'Estimated Total', `$${(quote.total ?? 0).toFixed(2)}`]],
             theme: 'grid', styles: { fontSize: 10 },
             headStyles: { fillColor: hexToRgbArr(branding.primaryColor) },
             footStyles: { fillColor: [230, 230, 255], textColor: [0, 0, 0], fontSize: 12, fontStyle: 'bold' }
         });
 
-        pdfDoc.setFontSize(9);
-        pdfDoc.setTextColor(120, 120, 120);
-        pdfDoc.text("NOTE: This is an estimate. Final costs may vary based on unforeseen repairs.", 14, pdfDoc.autoTable.previous.finalY + 8);
+        pdfDoc.setFontSize(9); pdfDoc.setTextColor(120, 120, 120);
+        pdfDoc.text("NOTE: This is an estimate. Final costs may vary.", 14, pdfDoc.autoTable.previous.finalY + 8);
 
         drawPdfFooter(pdfDoc, branding);
 
-        if (confirm('PDF is generated. Do you want to share a text summary via WhatsApp?')) {
-            const message = `*${branding.garageName || 'Garage Manager PRO'} Repair Quote* (No. ${quote.quoteNo})\n\nDear ${quote.clientName},\n\nYour repair quote for the ${quote.carMake} is *$${(quote.total ?? 0).toFixed(2)}* (Estimated).\n\nPlease reply to confirm the repair.`;
+        if (confirm('Share summary via WhatsApp?')) {
+            const message = `*${branding.garageName || 'Garage Manager PRO'} Repair Quote* (No. ${quote.quoteNo})\n\nDear ${quote.clientName},\n\nYour repair quote for the ${quote.carMake} is *$${(quote.total ?? 0).toFixed(2)}* (Estimated).\n\nPlease reply to confirm.`;
             window.open(`https://wa.me/${cleanPhoneNumber(clientPhone)}?text=${encodeURIComponent(message)}`, '_blank');
         }
 
@@ -1078,8 +1103,9 @@ async function generateQuotePDF(quoteId, clientPhone) {
         alert("Failed to generate or share quote.");
     }
 }
+
 function deleteQuote(id) {
-    if (confirm("Are you sure you want to delete this quote?")) {
+    if (confirm("Delete this quote?")) {
         deleteDoc(doc(db, 'quotes', id)).catch(e => console.error("Delete Error", e));
     }
 }
@@ -1103,22 +1129,18 @@ window.calculateTotal    = calculateTotal;
 // 10. BRANDING TAB INITIALIZATION & LIVE PREVIEW
 // =================================================================
 
-/** Hex to [R,G,B] array for jsPDF headStyles */
 function hexToRgbArr(hex) {
     const r = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex || '#1d4ed8');
     return r ? [parseInt(r[1],16), parseInt(r[2],16), parseInt(r[3],16)] : [29,78,216];
 }
 
 function setupBrandingTab() {
-    // Live preview: name / tagline / contacts
-    const fields = ['garageName','tagline','phone','email','address'];
-    fields.forEach(f => {
+    ['garageName','tagline','phone','email','address'].forEach(f => {
         const el = document.getElementById(`branding-${f}`);
         if (!el) return;
         el.addEventListener('input', updateBrandingPreview);
     });
 
-    // Color inputs → hex span update
     ['primaryColor','secondaryColor','accentColor'].forEach(f => {
         const el = document.getElementById(`branding-${f}`);
         if (!el) return;
@@ -1130,7 +1152,6 @@ function setupBrandingTab() {
         });
     });
 
-    // Logo file input → preview
     const logoInput = document.getElementById('branding-logo-input');
     if (logoInput) {
         logoInput.addEventListener('change', () => {
@@ -1138,20 +1159,19 @@ function setupBrandingTab() {
             if (!file) return;
             const reader = new FileReader();
             reader.onload = (e) => {
-                const prev = document.getElementById('branding-logo-preview');
+                const prev        = document.getElementById('branding-logo-preview');
                 const placeholder = document.getElementById('branding-logo-placeholder');
-                const previewImg = document.getElementById('branding-preview-logo-img');
+                const previewImg  = document.getElementById('branding-preview-logo-img');
                 const previewWrap = document.getElementById('branding-preview-logo-wrap');
-                if (prev) { prev.src = e.target.result; prev.classList.remove('hidden'); }
-                if (placeholder) placeholder.style.display = 'none';
-                if (previewImg) { previewImg.src = e.target.result; }
-                if (previewWrap) previewWrap.classList.remove('hidden');
+                if (prev)        { prev.src = e.target.result; prev.classList.remove('hidden'); }
+                if (placeholder)   placeholder.style.display = 'none';
+                if (previewImg)    previewImg.src = e.target.result;
+                if (previewWrap)   previewWrap.classList.remove('hidden');
             };
             reader.readAsDataURL(file);
         });
     }
 
-    // Load saved branding into form
     loadBrandingForm().then(updateBrandingPreview);
 }
 
@@ -1163,40 +1183,81 @@ function updateBrandingPreview() {
     const address = document.getElementById('branding-address')?.value    || '';
     const primary = document.getElementById('branding-primaryColor')?.value || '#1d4ed8';
 
-    const nameEl = document.getElementById('branding-preview-name');
-    const tagEl  = document.getElementById('branding-preview-tagline');
-    const phoneEl = document.getElementById('branding-preview-phone');
-    const emailEl = document.getElementById('branding-preview-email');
-    const footerEl = document.getElementById('branding-preview-footer-left');
-    const footerBar = document.getElementById('branding-footer-preview');
+    const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+    set('branding-preview-name',        name);
+    set('branding-preview-tagline',     tagline);
+    set('branding-preview-phone',       phone   ? `📞 ${phone}` : '');
+    set('branding-preview-email',       email   ? `✉ ${email}`  : '');
+    set('branding-preview-footer-left', `${name}${address ? '  |  ' + address : ''}`);
 
-    if (nameEl)   nameEl.textContent   = name;
-    if (tagEl)    tagEl.textContent    = tagline;
-    if (phoneEl)  phoneEl.textContent  = phone ? `📞 ${phone}` : '';
-    if (emailEl)  emailEl.textContent  = email ? `✉ ${email}` : '';
-    if (footerEl) footerEl.textContent = `${name}${address ? '  |  ' + address : ''}`;
+    const footerBar = document.getElementById('branding-footer-preview');
     if (footerBar) footerBar.style.background = primary;
 
     updateColorPreviews();
 }
 
 window.applyColorPreset = function(primary, secondary, accent) {
-    const p = document.getElementById('branding-primaryColor');
-    const s = document.getElementById('branding-secondaryColor');
-    const a = document.getElementById('branding-accentColor');
-    if (p) { p.value = primary;   document.getElementById('branding-primaryColor-hex').textContent = primary; }
-    if (s) { s.value = secondary; document.getElementById('branding-secondaryColor-hex').textContent = secondary; }
-    if (a) { a.value = accent;    document.getElementById('branding-accentColor-hex').textContent = accent; }
+    const setColor = (id, val) => {
+        const el = document.getElementById(id);
+        if (el) el.value = val;
+        const span = document.getElementById(`${id}-hex`);
+        if (span) span.textContent = val;
+    };
+    setColor('branding-primaryColor',   primary);
+    setColor('branding-secondaryColor', secondary);
+    setColor('branding-accentColor',    accent);
     updateColorPreviews();
     updateBrandingPreview();
 };
 
-// Hook into tab switching to load branding form when tab is clicked
 document.addEventListener('DOMContentLoaded', () => {
     const brandingTabBtn = document.getElementById('tab-branding');
     if (brandingTabBtn) {
-        brandingTabBtn.addEventListener('click', () => {
-            setupBrandingTab();
-        });
+        brandingTabBtn.addEventListener('click', setupBrandingTab);
     }
 });
+
+// =================================================================
+// 11. PIN MANAGEMENT (Manager only — in Garage Settings tab)
+// =================================================================
+
+window.savePinSettings = async function() {
+    if (!can('managePins')) { alert('Only managers can change PINs.'); return; }
+    const garageCode = sessionStorage.getItem('garageCode');
+    if (!garageCode) return;
+
+    const btn = document.getElementById('pin-save-btn');
+    const msg = document.getElementById('pin-save-msg');
+    btn.disabled = true; btn.textContent = 'Saving…';
+    msg.textContent = '';
+
+    try {
+        const snap     = await getDoc(doc(db, 'garages', garageCode));
+        const existing = snap.exists() ? (snap.data().pins || {}) : {};
+        const merged   = { ...existing };
+
+        for (const role of ['mechanic', 'admin', 'manager']) {
+            const val = document.getElementById(`pin-${role}`)?.value?.trim();
+            if (val && val.length >= 4)      merged[role] = val;
+            else if (val && val.length > 0) {
+                msg.textContent = `❌ ${role} PIN must be at least 4 digits.`;
+                msg.className = 'text-red-600 text-sm font-semibold mt-2';
+                btn.disabled = false; btn.textContent = 'Save PINs';
+                return;
+            }
+        }
+
+        await updateDoc(doc(db, 'garages', garageCode), { pins: merged });
+        msg.textContent = '✅ PINs saved successfully!';
+        msg.className = 'text-green-600 text-sm font-semibold mt-2';
+        ['mechanic','admin','manager'].forEach(role => {
+            const el = document.getElementById(`pin-${role}`);
+            if (el) el.value = '';
+        });
+    } catch (err) {
+        msg.textContent = `❌ Error: ${err.message}`;
+        msg.className = 'text-red-600 text-sm font-semibold mt-2';
+    } finally {
+        btn.disabled = false; btn.textContent = 'Save PINs';
+    }
+};
