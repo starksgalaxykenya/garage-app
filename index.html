@@ -499,13 +499,6 @@
     };
 
     // Initialize Firebase Services
-    // This static import is already at the top of the module
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
-    import { getFirestore, collection, addDoc, doc, updateDoc, deleteDoc, query, where, orderBy, onSnapshot, getDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js";
-    
-    // Initialize once
-    const app = initializeApp(firebaseConfig);
-    const db = getFirestore(app);
     const db = getFirestore(app);
     const carsCollection = collection(db, 'cars');
     // NEW: Clients Collection
@@ -729,6 +722,14 @@
         badge.className = `text-xs font-bold px-2 py-1 rounded-full ml-2 ${c.bg} ${c.text}`;
         badge.textContent = c.label;
     }
+
+    function showSection(sectionId) {
+    const sections = ['car-entry', 'general-service', 'clients-section', 'car-list', 'completed-list', 'reports-section'];
+    sections.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = id === sectionId ? 'block' : 'none';
+    });
+}
 
     function setupSubscriptionRecheck(garageCode) {
         setInterval(async () => {
