@@ -1823,7 +1823,7 @@ function lookupClientDetails(section) {
                 tr.innerHTML = `
                     <td>${item.name}</td>
                     <td><input type="checkbox" name="${item.name}-faulty" class="form-checkbox h-4 w-4 text-red-600"></td>
-                    <td><input type="checkbox" name="${item.name}-checked" class="form-checkbox h-4 w-4 text-green-600" checked></td>
+                    <td><input type="checkbox" name="${item.name}-checked" class="form-checkbox h-4 w-4 text-green-600"></td>
                     <td><input type="checkbox" name="${item.name}-changed" class="form-checkbox h-4 w-4 text-blue-600"></td>
                 `;
                 fluidsBody.appendChild(tr);
@@ -1833,7 +1833,7 @@ function lookupClientDetails(section) {
                 trOther.innerHTML = `
                     <td>${item.name}</td>
                     <td><input type="checkbox" name="${item.name}-faulty" class="form-checkbox h-4 w-4 text-red-600"></td>
-                    <td><input type="checkbox" name="${item.name}-checked" class="form-checkbox h-4 w-4 text-green-600" checked></td>
+                    <td><input type="checkbox" name="${item.name}-checked" class="form-checkbox h-4 w-4 text-green-600"></td>
                     <td><input type="checkbox" name="${item.name}-changed" class="form-checkbox h-4 w-4 text-blue-600"></td>
                     <td><input type="text" name="${item.name}-notes" placeholder="Condition/Recommendation" class="w-full p-1 border rounded text-xs"></td>
                 `;
@@ -1846,8 +1846,8 @@ function lookupClientDetails(section) {
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td>${light}</td>
-                <td><input type="checkbox" name="${light}-left-working" class="form-checkbox h-4 w-4 text-green-600" checked></td>
-                <td><input type="checkbox" name="${light}-right-working" class="form-checkbox h-4 w-4 text-green-600" checked></td>
+                <td><input type="checkbox" name="${light}-left-working" class="form-checkbox h-4 w-4 text-green-600"></td>
+                <td><input type="checkbox" name="${light}-right-working" class="form-checkbox h-4 w-4 text-green-600"></td>
                 <td><input type="text" name="${light}-notes" placeholder="Notes/Correction" class="w-full p-1 border rounded text-xs"></td>
             `;
             lightsBody.appendChild(tr);
