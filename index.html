@@ -74,10 +74,11 @@
 
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 
-        <section id="auth-section" class="flex justify-center items-center py-16" style="display:none;">
+        <section id="auth-section" class="flex justify-center items-center py-16">
     <div class="bg-white p-8 rounded-xl shadow-2xl w-full max-w-md">
-        <h2 class="text-2xl font-bold mb-6 text-center text-blue-800">Welcome to Garage Manager PRO</h2>
-        
+        <h2 class="text-2xl font-bold mb-2 text-center text-blue-800">Garage Manager PRO</h2>
+        <p class="text-center text-gray-500 text-sm mb-6">Enter your garage code to continue</p>
+
         <!-- Step 1: Garage Code -->
         <div id="garage-code-step">
             <label class="block text-sm font-medium text-gray-700 mb-1">Garage Code</label>
@@ -86,16 +87,65 @@
             <button onclick="proceedToLogin()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg mb-3">Continue</button>
             <p id="garage-code-message" class="text-red-500 text-sm mt-1 text-center"></p>
         </div>
- 
-        <!-- Step 2: Email/Password (shown after valid code) -->
-        <div id="credentials-step" style="display:none;">
+
+        <!-- Step 2: Role Selection -->
+        <div id="role-step" style="display:none;">
             <p id="garage-code-display" class="text-center text-blue-700 font-bold mb-4"></p>
-            <input id="auth-email" type="email" placeholder="Email" class="w-full p-3 mb-4 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" />
-            <input id="auth-password" type="password" placeholder="Password" class="w-full p-3 mb-6 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" />
-            <button id="loginBtn" onclick="handleLoginSignup(true)" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition duration-150 mb-3">Login</button>
-            <button id="signupBtn" onclick="handleLoginSignup(false)" class="w-full bg-gray-500 hover:bg-gray-600 text-white font-bold py-3 rounded-lg transition duration-150">Sign Up</button>
-            <button onclick="backToCodeStep()" class="w-full mt-2 text-gray-500 hover:text-gray-700 text-sm">← Change garage code</button>
-            <p id="auth-message" class="text-red-500 text-sm mt-3 text-center"></p>
+            <p class="text-sm text-gray-600 text-center mb-4">Select your access level</p>
+            <div class="grid grid-cols-3 gap-3 mb-4">
+                <button onclick="selectRole('mechanic')"
+                    class="role-btn flex flex-col items-center p-4 border-2 border-gray-200 rounded-xl hover:border-blue-400 hover:bg-blue-50 transition-all cursor-pointer">
+                    <span class="text-3xl mb-1">🔧</span>
+                    <span class="font-semibold text-sm text-gray-700">Mechanic</span>
+                    <span class="text-xs text-gray-400 mt-1">Bay View</span>
+                </button>
+                <button onclick="selectRole('admin')"
+                    class="role-btn flex flex-col items-center p-4 border-2 border-gray-200 rounded-xl hover:border-purple-400 hover:bg-purple-50 transition-all cursor-pointer">
+                    <span class="text-3xl mb-1">👤</span>
+                    <span class="font-semibold text-sm text-gray-700">Admin</span>
+                    <span class="text-xs text-gray-400 mt-1">Full Ops</span>
+                </button>
+                <button onclick="selectRole('manager')"
+                    class="role-btn flex flex-col items-center p-4 border-2 border-gray-200 rounded-xl hover:border-green-400 hover:bg-green-50 transition-all cursor-pointer">
+                    <span class="text-3xl mb-1">💼</span>
+                    <span class="font-semibold text-sm text-gray-700">Manager</span>
+                    <span class="text-xs text-gray-400 mt-1">All Access</span>
+                </button>
+            </div>
+            <button onclick="backToCodeStep()" class="w-full mt-2 text-gray-400 hover:text-gray-600 text-sm">← Change garage code</button>
+        </div>
+
+        <!-- Step 3: PIN Entry -->
+        <div id="pin-step" style="display:none;">
+            <p id="pin-role-display" class="text-center font-bold text-gray-700 mb-1"></p>
+            <p id="garage-code-display2" class="text-center text-blue-600 text-sm mb-4"></p>
+            <label class="block text-sm font-medium text-gray-700 mb-2 text-center">Enter PIN</label>
+            <!-- PIN dots display -->
+            <div class="flex justify-center gap-3 mb-5" id="pin-dots">
+                <div class="w-4 h-4 rounded-full border-2 border-gray-300 bg-white pin-dot"></div>
+                <div class="w-4 h-4 rounded-full border-2 border-gray-300 bg-white pin-dot"></div>
+                <div class="w-4 h-4 rounded-full border-2 border-gray-300 bg-white pin-dot"></div>
+                <div class="w-4 h-4 rounded-full border-2 border-gray-300 bg-white pin-dot"></div>
+                <div class="w-4 h-4 rounded-full border-2 border-gray-300 bg-white pin-dot"></div>
+                <div class="w-4 h-4 rounded-full border-2 border-gray-300 bg-white pin-dot"></div>
+            </div>
+            <!-- Numeric keypad -->
+            <div class="grid grid-cols-3 gap-2 mb-3" id="pin-keypad">
+                <button onclick="pinKey('1')" class="pin-key-btn p-4 text-xl font-bold rounded-xl bg-gray-100 hover:bg-blue-100 active:bg-blue-200 transition">1</button>
+                <button onclick="pinKey('2')" class="pin-key-btn p-4 text-xl font-bold rounded-xl bg-gray-100 hover:bg-blue-100 active:bg-blue-200 transition">2</button>
+                <button onclick="pinKey('3')" class="pin-key-btn p-4 text-xl font-bold rounded-xl bg-gray-100 hover:bg-blue-100 active:bg-blue-200 transition">3</button>
+                <button onclick="pinKey('4')" class="pin-key-btn p-4 text-xl font-bold rounded-xl bg-gray-100 hover:bg-blue-100 active:bg-blue-200 transition">4</button>
+                <button onclick="pinKey('5')" class="pin-key-btn p-4 text-xl font-bold rounded-xl bg-gray-100 hover:bg-blue-100 active:bg-blue-200 transition">5</button>
+                <button onclick="pinKey('6')" class="pin-key-btn p-4 text-xl font-bold rounded-xl bg-gray-100 hover:bg-blue-100 active:bg-blue-200 transition">6</button>
+                <button onclick="pinKey('7')" class="pin-key-btn p-4 text-xl font-bold rounded-xl bg-gray-100 hover:bg-blue-100 active:bg-blue-200 transition">7</button>
+                <button onclick="pinKey('8')" class="pin-key-btn p-4 text-xl font-bold rounded-xl bg-gray-100 hover:bg-blue-100 active:bg-blue-200 transition">8</button>
+                <button onclick="pinKey('9')" class="pin-key-btn p-4 text-xl font-bold rounded-xl bg-gray-100 hover:bg-blue-100 active:bg-blue-200 transition">9</button>
+                <button onclick="pinKey('back')" class="pin-key-btn p-4 text-xl font-bold rounded-xl bg-gray-50 hover:bg-red-100 transition">⌫</button>
+                <button onclick="pinKey('0')" class="pin-key-btn p-4 text-xl font-bold rounded-xl bg-gray-100 hover:bg-blue-100 active:bg-blue-200 transition">0</button>
+                <button onclick="submitPin()" class="pin-key-btn p-4 text-sm font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition">GO</button>
+            </div>
+            <p id="pin-message" class="text-red-500 text-sm text-center min-h-[20px]"></p>
+            <button onclick="backToRoleStep()" class="w-full mt-2 text-gray-400 hover:text-gray-600 text-sm">← Change role</button>
         </div>
     </div>
 </section>
@@ -434,8 +484,9 @@
 
     // Import the functions you need from the SDKs
     import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
-    import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-auth.js";
+    // Auth is now PIN-based via auth.js — no Firebase email/password needed
     import { getFirestore, collection, addDoc, doc, updateDoc, deleteDoc, query, where, orderBy, onSnapshot, getDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js"; // Note: Added 'where' for client lookup
+    import { getSession, setSession, clearSession, can, verifyPin, showTrialBanner, ROLES } from './auth.js';
 
     // Your web app's Firebase configuration
     const firebaseConfig = {
@@ -448,8 +499,8 @@
     };
 
     // Initialize Firebase Services
-    const app = initializeApp(firebaseConfig);
-    const auth = getAuth(app);
+    const { initializeApp, getApps } = await import("https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js").catch(()=>({}));
+    const app = (typeof getApps !== 'undefined' && getApps().length) ? getApps()[0] : initializeApp(firebaseConfig);
     const db = getFirestore(app);
     const carsCollection = collection(db, 'cars');
     // NEW: Clients Collection
@@ -476,7 +527,6 @@
 
     // Expose functions globally for HTML onclick attributes
     // NOTE: showSection is *not* exposed here; its handlers are attached via DOMContentLoaded
-    window.handleLoginSignup = handleLoginSignup;
     window.addErrorCodeInput = addErrorCodeInput;
     window.removeErrorCodeInput = removeErrorCodeInput;
     window.lookupErrorCode = lookupErrorCode;
@@ -508,108 +558,212 @@
     // END NEW
     
     // ----------------------------------------------------------------------
-    // 2. AUTHENTICATION LOGIC
+    // 2. PIN-BASED AUTHENTICATION LOGIC
     // ----------------------------------------------------------------------
 
-    // Prevent the initial onAuthStateChanged(null) from flashing the login screen.
-    // Firebase always fires once synchronously with null while it reads IndexedDB.
-    let _authInitialized = false;
+    let _pendingGarageCode = '';
+    let _pendingRole = '';
+    let _pinBuffer = '';
+    const PIN_MAX = 6;
 
-    onAuthStateChanged(auth, (user) => {
-        if (!_authInitialized && !user) {
-            // First fire with null = Firebase still resolving persisted session. Ignore.
-            _authInitialized = true;
+    // Check if already authenticated (session still valid)
+    function checkExistingSession() {
+        const { garageCode, role, authed } = getSession();
+        if (authed && garageCode && role) {
+            applyRoleAccess(role);
+            document.getElementById('auth-section').style.display = 'none';
+            document.getElementById('logoutBtn').style.display = 'inline-block';
+            showSection('car-entry');
+            return true;
+        }
+        return false;
+    }
+
+    function proceedToLogin() {
+        const code = document.getElementById('garage-code-input').value.trim().toUpperCase();
+        const msg  = document.getElementById('garage-code-message');
+        if (!/^[A-Za-z]{3}-\d{5}$/.test(code)) {
+            msg.textContent = 'Format must be ABC-12345';
             return;
         }
-        _authInitialized = true;
+        msg.textContent = '';
+        _pendingGarageCode = code;
+        document.getElementById('garage-code-step').style.display = 'none';
+        document.getElementById('role-step').style.display  = 'block';
+        document.getElementById('garage-code-display').textContent = `Garage: ${code}`;
+    }
 
-        if (user) {
-            // subscription.js storeSessionGarage() sets 'garageCode'.
-            // 'pendingGarageCode' is set by proceedToLogin() before auth completes.
-            const garageCode = sessionStorage.getItem('garageCode')
-                            || sessionStorage.getItem('pendingGarageCode');
+    function backToCodeStep() {
+        document.getElementById('role-step').style.display       = 'none';
+        document.getElementById('pin-step').style.display        = 'none';
+        document.getElementById('garage-code-step').style.display = 'block';
+        _pinBuffer = ''; _pendingRole = '';
+        updatePinDots();
+    }
 
-            if (!garageCode) {
-                signOut(auth);
-                return;
-            }
+    function backToRoleStep() {
+        document.getElementById('pin-step').style.display  = 'none';
+        document.getElementById('role-step').style.display = 'block';
+        _pinBuffer = ''; _pendingRole = '';
+        updatePinDots();
+        document.getElementById('pin-message').textContent = '';
+    }
 
-            checkSubscription(garageCode, db, doc, getDoc, (garageData) => {
-                // subscription.js storeSessionGarage already saved 'garageCode'
-                // Remove the pending key to keep sessionStorage clean
-                sessionStorage.removeItem('pendingGarageCode');
+    function selectRole(role) {
+        _pendingRole  = role;
+        _pinBuffer    = '';
+        const labels  = { mechanic: '🔧 Mechanic', admin: '👤 Admin', manager: '💼 Manager' };
+        document.getElementById('pin-role-display').textContent  = labels[role] || role;
+        document.getElementById('garage-code-display2').textContent = `Garage: ${_pendingGarageCode}`;
+        document.getElementById('pin-message').textContent = '';
+        document.getElementById('role-step').style.display = 'none';
+        document.getElementById('pin-step').style.display  = 'block';
+        updatePinDots();
+    }
 
-                document.getElementById('auth-section').style.display = 'none';
-                document.getElementById('logoutBtn').style.display = 'inline-block';
-                showSection('car-entry');
-
-                setupDailySubscriptionCheck(garageCode, db, doc, getDoc, (gData) => {
-                    console.log('[Daily Check] Subscription still valid.');
-                });
-            });
-        } else {
-            document.getElementById('auth-section').style.display = 'flex';
-            document.getElementById('logoutBtn').style.display = 'none';
+    function pinKey(val) {
+        const msg = document.getElementById('pin-message');
+        msg.textContent = '';
+        if (val === 'back') {
+            _pinBuffer = _pinBuffer.slice(0, -1);
+        } else if (_pinBuffer.length < PIN_MAX) {
+            _pinBuffer += val;
         }
-    });
+        updatePinDots();
+        if (_pinBuffer.length === PIN_MAX) submitPin();
+    }
 
-    function showSection(sectionId) {
-        // MODIFICATION: Added 'reports-section' and 'clients-section'
-        const sections = ['auth-section', 'car-entry', 'general-service', 'clients-section', 'car-list', 'completed-list', 'reports-section'];
-        sections.forEach(id => {
-            document.getElementById(id).style.display = 'none';
+    function updatePinDots() {
+        const dots = document.querySelectorAll('.pin-dot');
+        dots.forEach((d, i) => {
+            d.classList.toggle('bg-blue-600',  i < _pinBuffer.length);
+            d.classList.toggle('border-blue-600', i < _pinBuffer.length);
+            d.classList.toggle('bg-white',     i >= _pinBuffer.length);
+            d.classList.toggle('border-gray-300', i >= _pinBuffer.length);
         });
-        document.getElementById(sectionId).style.display = 'block';
-
-        if (sectionId === 'car-list') fetchCars('Active');
-        if (sectionId === 'completed-list') fetchCars('Completed');
-        if (sectionId === 'general-service') initializeGeneralService();
-        if (sectionId === 'clients-section') renderClientList(clientCache); // Use the cached data
     }
 
-    function getMockRole(email) {
-        return email && email.toLowerCase().includes('admin') ? 'admin' : 'mechanic';
-    }
+    async function submitPin() {
+        const msg = document.getElementById('pin-message');
+        if (_pinBuffer.length < 4) { msg.textContent = 'PIN must be at least 4 digits.'; return; }
+        msg.textContent = '⏳ Verifying…';
+        // Disable keypad during check
+        document.querySelectorAll('.pin-key-btn').forEach(b => b.disabled = true);
 
-    async function handleLoginSignup(isLogin) {
-        const email = document.getElementById('auth-email').value;
-        const password = document.getElementById('auth-password').value;
-        const messageEl = document.getElementById('auth-message');
-        messageEl.textContent = '';
+        const result = await verifyPin(_pendingGarageCode, _pendingRole, _pinBuffer, db, doc, getDoc);
 
-        try {
-            if (isLogin) {
-                await signInWithEmailAndPassword(auth, email, password);
-            } else {
-                // Ensure only admin can signup - simplified check for demo
-                if (email && !email.toLowerCase().includes('admin')) {
-                    messageEl.textContent = 'Error: Only Admins can sign up new accounts.';
-                    return;
-                }
-                await createUserWithEmailAndPassword(auth, email, password);
-            }
-        } catch (error) {
-            messageEl.textContent = `Error: ${error.message}`;
+        document.querySelectorAll('.pin-key-btn').forEach(b => b.disabled = false);
+        _pinBuffer = '';
+        updatePinDots();
+
+        if (!result.ok) {
+            msg.textContent = result.error || 'Incorrect PIN.';
+            // Shake animation
+            document.getElementById('pin-dots').animate(
+                [{transform:'translateX(-6px)'},{transform:'translateX(6px)'},{transform:'translateX(0)'}],
+                {duration:300, iterations:2}
+            );
+            return;
         }
+
+        // First-time manager setup
+        if (result.firstSetup) {
+            msg.textContent = '';
+            alert('Welcome! Default manager PIN is 0000. Please set your PINs in Settings after logging in.');
+        }
+
+        // Grant access
+        setSession(_pendingGarageCode, _pendingRole);
+        if (result.garageData) showTrialBanner(result.garageData);
+
+        applyRoleAccess(_pendingRole);
+        document.getElementById('auth-section').style.display = 'none';
+        document.getElementById('logoutBtn').style.display = 'inline-block';
+
+        // Show role badge in header
+        updateRoleBadge(_pendingRole);
+
+        // Setup hourly subscription re-check
+        setupSubscriptionRecheck(_pendingGarageCode);
+
+        showSection(can('createEntries') ? 'car-entry' : 'car-list');
+    }
+
+    function applyRoleAccess(role) {
+        // Nav buttons: hide what this role can't see
+        const nav = {
+            'nav-car-entry':        can('createEntries'),
+            'nav-general-service':  can('createEntries'),
+            'nav-clients-list':     can('viewClients'),
+            'nav-reports-section':  can('viewReports'),
+            'nav-garage-manager':   can('accessManagement'),
+        };
+        Object.entries(nav).forEach(([id, visible]) => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = visible ? '' : 'none';
+        });
+        // Show role badge
+        updateRoleBadge(role);
+    }
+
+    function updateRoleBadge(role) {
+        let badge = document.getElementById('role-badge');
+        if (!badge) {
+            badge = document.createElement('span');
+            badge.id = 'role-badge';
+            badge.className = 'text-xs font-bold px-2 py-1 rounded-full ml-2';
+            const header = document.querySelector('header nav');
+            if (header) header.prepend(badge);
+        }
+        const cfg = {
+            mechanic: { bg: 'bg-blue-200',   text: 'text-blue-800',   label: '🔧 Mechanic' },
+            admin:    { bg: 'bg-purple-200',  text: 'text-purple-800', label: '👤 Admin' },
+            manager:  { bg: 'bg-green-200',   text: 'text-green-800',  label: '💼 Manager' },
+        };
+        const c = cfg[role] || cfg.admin;
+        badge.className = `text-xs font-bold px-2 py-1 rounded-full ml-2 ${c.bg} ${c.text}`;
+        badge.textContent = c.label;
+    }
+
+    function setupSubscriptionRecheck(garageCode) {
+        setInterval(async () => {
+            const today = new Date().toDateString();
+            if (sessionStorage.getItem('lastChecked') === today) return;
+            const snap = await getDoc(doc(db, 'garages', garageCode)).catch(() => null);
+            if (!snap || !snap.exists()) return;
+            const d = snap.data();
+            const status = (d.subscriptionStatus || '').toLowerCase();
+            if (status === 'inactive') {
+                alert('Your subscription has expired. Please renew.');
+                clearSession();
+                location.reload();
+            }
+            sessionStorage.setItem('lastChecked', today);
+        }, 60 * 60 * 1000); // hourly
     }
 
     document.getElementById('logoutBtn').onclick = () => {
-        signOut(auth).then(() => {
-            currentUserRole = null;
-        });
+        clearSession();
+        currentUserRole = null;
+        location.reload();
     };
 
-    // ----------------------------------------------------------------------
-    // 3. LOGIN ENHANCEMENT (Make the log in work with Enter key)
-    // ----------------------------------------------------------------------
+    // Expose globals needed by HTML onclick attributes
+    window.proceedToLogin  = proceedToLogin;
+    window.backToCodeStep  = backToCodeStep;
+    window.backToRoleStep  = backToRoleStep;
+    window.selectRole      = selectRole;
+    window.pinKey          = pinKey;
+    window.submitPin       = submitPin;
 
-    // Add event listener to the password field to trigger login on 'Enter' key press
-    document.getElementById('auth-password').addEventListener('keypress', function(e) {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            document.getElementById('loginBtn').click();
-        }
-    });
+    // Boot: check for existing session or show login
+    if (!checkExistingSession()) {
+        document.getElementById('auth-section').style.display = 'flex';
+    }
+
+        // ----------------------------------------------------------------------
+    // 3. LOGIN ENHANCEMENT (Enter key on garage code input)
+    // ----------------------------------------------------------------------
 
     // ----------------------------------------------------------------------
     // 4. CRUD OPERATIONS (Firestore)
@@ -618,8 +772,8 @@
     // Function to save new car entry
     async function saveCarEntry(event) {
         event.preventDefault();
-        if (!auth.currentUser) {
-            alert("You must be logged in to save an entry.");
+        if (!can('createEntries')) {
+            alert("Your role does not have permission to create entries.");
             return;
         }
 
@@ -676,7 +830,7 @@
             status: 'Active',
             jobType: 'StandardRepair',
             createdAt: serverTimestamp(),
-            createdBy: auth.currentUser.email
+            createdBy: getSession().authed.email
         };
 
         try {
@@ -767,7 +921,7 @@
             await updateDoc(carRef, {
                 status: 'Completed',
                 completedAt: serverTimestamp(),
-                completedBy: auth.currentUser.email
+                completedBy: getSession().authed.email
             });
             alert("Job successfully moved to Completed list!");
             showSection('car-list'); // Refresh the active list
@@ -1785,8 +1939,8 @@ function lookupClientDetails(section) {
 
     // Function to complete and save the service job (NEW FUNCTION)
     async function completeServiceJob() {
-        if (!auth.currentUser) {
-            alert("You must be logged in to save an entry.");
+        if (!can('createEntries')) {
+            alert("Your role does not have permission to create entries.");
             return;
         }
         const carData = collectGeneralServiceData();
@@ -1797,7 +1951,7 @@ function lookupClientDetails(section) {
             ...carData,
             status: 'Completed',
             completedAt: serverTimestamp(),
-            completedBy: auth.currentUser.email,
+            completedBy: getSession().authed.email,
             // Only store a summary of the checks
             serviceCheckSummary: {
                 fluidsChanged: carData.serviceChecks.filter(c => c.changed && (c.type === 'fluid' || c.type === 'filter')).length,
