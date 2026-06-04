@@ -2425,26 +2425,6 @@ function lookupClientDetails(section) {
     // 10. INITIALIZATION
     // ----------------------------------------------------------------------
 
-    function proceedToLogin() {
-    const code = document.getElementById('garage-code-input').value.trim().toUpperCase();
-    const codeRegex = /^[A-Za-z]{3}-\d{5}$/;
-    const msg = document.getElementById('garage-code-message');
-    if (!codeRegex.test(code)) {
-        msg.textContent = 'Invalid format. Must be ABC-12345 (3 letters, dash, 5 numbers)';
-        return;
-    }
-    msg.textContent = '';
-    sessionStorage.setItem('pendingGarageCode', code);
-    document.getElementById('garage-code-step').style.display = 'none';
-    document.getElementById('credentials-step').style.display = 'block';
-    document.getElementById('garage-code-display').textContent = `Garage: ${code}`;
-}
- 
-function backToCodeStep() {
-    document.getElementById('garage-code-step').style.display = 'block';
-    document.getElementById('credentials-step').style.display = 'none';
-}
-    
     document.addEventListener('DOMContentLoaded', () => {
         
         function attachNavHandlers() {
