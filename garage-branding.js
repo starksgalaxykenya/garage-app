@@ -34,7 +34,15 @@ const db  = getFirestore(app);
 const storage = getStorage(app);
 
 // The Firestore document path for branding settings
-const BRANDING_DOC = doc(db, 'settings', 'garageBranding');
+function getBrandingDoc() {
+    const garageCode = sessionStorage.getItem('garageCode');
+    if (garageCode) {
+        return doc(db, 'garages', garageCode, 'settings', 'branding');
+    }
+    // Fallback for admin.html / unauthenticated preview
+    return doc(db, 'settings', 'garageBranding');
+}
+
 
 // ─────────────────────────────────────────────
 // In-memory cache so PDF builders can read it
@@ -46,7 +54,7 @@ let _brandingCache = null;
 export async function getBranding() {
     if (_brandingCache) return _brandingCache;
     try {
-        const snap = await getDoc(BRANDING_DOC);
+        const snap = await getDoc(getBrandingDoc());
         _brandingCache = snap.exists() ? snap.data() : getDefaultBranding();
     } catch {
         _brandingCache = getDefaultBranding();
@@ -247,7 +255,7 @@ export async function saveBrandingSettings() {
             branding.logoDataUrl = existing.logoDataUrl || '';
         }
 
-        await setDoc(BRANDING_DOC, branding);
+        await setDoc(getBrandingDoc(), branding);
         invalidateBrandingCache();
 
         msg.textContent = '✅ Branding saved successfully!';
