@@ -463,7 +463,9 @@
     </footer>
 
 <script type="module">
-
+// Add garageCol and garageDoc to your auth.js import:
+import { getSession, setSession, clearSession, can, verifyPin,
+         showTrialBanner, ROLES, garageCol, garageDoc } from './auth.js';
     // NEW: Import the local error code dictionary
     import { ERROR_CODE_LOOKUP } from "./error_codes_dictionary.js";
     // MODIFICATION 2: Expose dictionary globally for functions called via onclick to access
@@ -507,9 +509,9 @@
 
     // Initialize Firebase Services
     const db = getFirestore(app);
-    const carsCollection = collection(db, 'cars');
+    garageCol(db, collection, 'cars');
     // NEW: Clients Collection
-    const clientsCollection = collection(db, 'clients'); 
+    garageCol(db, collection, 'clients'); 
     let currentUserRole = null; // 'admin' or 'mechanic'
 
     // FIX: Global variable to hold current job card data for modal and WhatsApp
@@ -694,6 +696,21 @@
         showSection(can('createEntries') ? 'car-entry' : 'car-list');
     }
 
+    function showSection(sectionId) {
+    const sections = ['car-entry','general-service','clients-section',
+                      'car-list','completed-list','reports-section'];
+    sections.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = id === sectionId ? 'block' : 'none';
+    });
+
+    // Lazy-load data only when the section is first shown
+    if (sectionId === 'car-list')       fetchCars('Active');
+    if (sectionId === 'completed-list') fetchCars('Completed');
+    if (sectionId === 'clients-section') listenForClients();
+    if (sectionId === 'general-service') initializeGeneralService();
+}
+
     function applyRoleAccess(role) {
         // Nav buttons: hide what this role can't see
         const nav = {
@@ -729,16 +746,7 @@
         badge.className = `text-xs font-bold px-2 py-1 rounded-full ml-2 ${c.bg} ${c.text}`;
         badge.textContent = c.label;
     }
-
-    function showSection(sectionId) {
-    const sections = ['car-entry', 'general-service', 'clients-section', 'car-list', 'completed-list', 'reports-section'];
-    sections.forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.style.display = id === sectionId ? 'block' : 'none';
-    });
-    if (sectionId === 'general-service') initializeGeneralService();
-}
-
+    
     function setupSubscriptionRecheck(garageCode) {
         setInterval(async () => {
             const today = new Date().toDateString();
@@ -806,6 +814,7 @@
         }
 
         const carData = {
+            garageCode: getSession().garageCode,
             // CLIENT INFO
             clientName: document.getElementById('client-name').value,
             clientPhone: document.getElementById('client-phone').value,
@@ -844,7 +853,7 @@
             status: 'Active',
             jobType: 'StandardRepair',
             createdAt: serverTimestamp(),
-            createdBy: getSession().authed.email
+            createdBy: `${getSession().role}@${getSession().garageCode}`,
         };
 
         try {
@@ -930,7 +939,7 @@
     // Function to mark a car as completed
     async function markCarAsCompleted(carId) {
         if (!confirm("Confirm to mark this job as completed? This will move it to history.")) return;
-        const carRef = doc(db, 'cars', carId);
+        const carRef = garageDoc(db, doc, 'cars', carId);
         try {
             await updateDoc(carRef, {
                 status: 'Completed',
@@ -948,7 +957,7 @@
     // Function to delete a completed car entry
     async function deleteCompletedCar(carId) {
         if (!confirm("WARNING: This will permanently delete the job from the system. Are you sure?")) return;
-        const carRef = doc(db, 'cars', carId);
+        const carRef = garageDoc(db, doc, 'cars', carId);
         try {
             await deleteDoc(carRef);
             alert("Job history successfully deleted!");
@@ -1048,6 +1057,7 @@
         msgEl.className = 'text-blue-500 text-sm mt-2';
 
         const clientData = {
+            garageCode: getSession().garageCode,
             clientName: document.getElementById('new-client-name').value.trim(),
             clientPhone: document.getElementById('new-client-phone').value.trim(),
             clientEmail: document.getElementById('new-client-email').value.trim(),
@@ -1506,7 +1516,7 @@ function lookupClientDetails(section) {
     // Function to open the detailed report from the list view
     async function openDetailedReport(carId) {
         try {
-            const carRef = doc(db, 'cars', carId);
+            const carRef = garageDoc(db, doc, 'cars', carId);
             const docSnap = await getDoc(carRef);
 
             if (docSnap.exists()) {
