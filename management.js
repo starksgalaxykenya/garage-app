@@ -87,12 +87,12 @@ const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
 const db  = getFirestore(app);
 
 // Firestore Collection References
-const dailyTransactionsRef = collection(db, 'dailyTransactions');
-const pastReportsRef       = collection(db, 'financialReports');
-const suppliersRef         = collection(db, 'suppliers');
-const partsInventoryRef    = collection(db, 'partsInventory');
-const invoicesRef          = collection(db, 'invoices');
-const quotesRef            = collection(db, 'quotes');
+dailyTransactionsRef = garageCol(db, collection, 'dailyTransactions');
+pastReportsRef       = garageCol(db, collection, 'financialReports');
+suppliersRef         = garageCol(db, collection, 'suppliers');
+partsInventoryRef    = garageCol(db, collection, 'partsInventory');
+invoicesRef          = garageCol(db, collection, 'invoices');
+quotesRef            = garageCol(db, collection, 'quotes');
 
 // UI Elements
 const authSection      = document.getElementById('auth-section-management');
@@ -436,7 +436,7 @@ function escapeHtml(str) {
 async function deleteTransaction(id) {
     if (confirm('Are you sure you want to delete this transaction?')) {
         try {
-            await deleteDoc(doc(db, 'dailyTransactions', id));
+            await deleteDoc(garageDoc(db, doc, 'dailyTransactions', id));
         } catch (error) {
             alert('Failed to delete transaction.');
             console.error('Delete Transaction Error: ', error);
@@ -713,7 +713,7 @@ function listenForPartsInventory() {
 
 window.deletePart = (id) => {
     if (confirm("Delete this part from inventory? This cannot be undone.")) {
-        deleteDoc(doc(db, 'partsInventory', id))
+        deleteDoc(garageDoc(db, doc, 'partsInventory', id))
             .catch(e => { alert('Failed to delete part.'); console.error("Delete Part Error", e); });
     }
 };
@@ -807,7 +807,7 @@ orderWhatsappBtn.addEventListener('click', () => {
 function editSupplier(id) { alert(`Editing supplier ${id}...`); }
 function deleteSupplier(id) {
     if (confirm("Are you sure you want to delete this supplier?")) {
-        deleteDoc(doc(db, 'suppliers', id)).catch(e => console.error("Delete Error", e));
+        deleteDoc(garageDoc(db, doc, 'suppliers', id)).catch(e => console.error("Delete Error", e));
     }
 }
 window.editSupplier   = editSupplier;
@@ -965,7 +965,7 @@ async function generateInvoicePDF(invoiceId, clientPhone) {
 
 function deleteInvoice(id) {
     if (confirm("Delete this invoice?")) {
-        deleteDoc(doc(db, 'invoices', id)).catch(e => console.error("Delete Error", e));
+        deleteDoc(garageDoc(db, doc, 'invoices', id)).catch(e => console.error("Delete Error", e));
     }
 }
 window.generateInvoicePDF = generateInvoicePDF;
@@ -1106,7 +1106,7 @@ async function generateQuotePDF(quoteId, clientPhone) {
 
 function deleteQuote(id) {
     if (confirm("Delete this quote?")) {
-        deleteDoc(doc(db, 'quotes', id)).catch(e => console.error("Delete Error", e));
+        deleteDoc(garageDoc(db, doc, 'quotes', id)).catch(e => console.error("Delete Error", e));
     }
 }
 window.generateQuotePDF = generateQuotePDF;
