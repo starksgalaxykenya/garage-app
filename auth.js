@@ -19,7 +19,40 @@
 //   pins: { mechanic: "1234", admin: "5678", manager: "9012" }
 //   Only a manager can write these via the Settings tab.
 // =================================================================
+// ─── In auth.js — add these exports ───────────────────────────────
 
+/**
+ * Returns a Firestore CollectionReference scoped to the current garage.
+ * Usage: garageCol(db, collection, 'cars')
+ *
+ * @param {Firestore} db
+ * @param {Function}  collectionFn  – Firestore `collection` function
+ * @param {string}    colName       – e.g. 'cars', 'clients', 'invoices'
+ */
+export function garageCol(db, collectionFn, colName) {
+    const { garageCode } = getSession();
+    if (!garageCode) throw new Error('No active garage session.');
+    return collectionFn(db, 'garages', garageCode, colName);
+}
+
+/**
+ * Returns a Firestore DocumentReference scoped to the current garage.
+ * Usage: garageDoc(db, doc, 'cars', carId)
+ */
+export function garageDoc(db, docFn, colName, docId) {
+    const { garageCode } = getSession();
+    if (!garageCode) throw new Error('No active garage session.');
+    return docFn(db, 'garages', garageCode, colName, docId);
+}
+
+/**
+ * Returns the garage root DocumentReference.
+ * Usage: garageRef(db, doc)
+ */
+export function garageRef(db, docFn) {
+    const { garageCode } = getSession();
+    return docFn(db, 'garages', garageCode);
+}
 export const ROLES = {
     MECHANIC: 'mechanic',
     ADMIN:    'admin',
