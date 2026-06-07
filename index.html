@@ -1,8 +1,9 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <link rel="manifest" href="/manifest.json">
+    <link rel="manifest" href="./manifest.json">
 <meta name="theme-color" content="#1d4ed8">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta charset="UTF-8">
@@ -488,7 +489,7 @@ import { getSession, setSession, clearSession, can, verifyPin,
     import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
     // Auth is now PIN-based via auth.js — no Firebase email/password needed
     import { getFirestore, collection, addDoc, doc, updateDoc, deleteDoc, query, where, orderBy, onSnapshot, getDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js"; // Note: Added 'where' for client lookup
-    import { getSession, setSession, clearSession, can, verifyPin, showTrialBanner, ROLES } from './auth.js';
+    // auth.js already imported at top of this module — no duplicate import
 
     // Your web app's Firebase configuration
     const firebaseConfig = {
@@ -506,8 +507,8 @@ import { getSession, setSession, clearSession, can, verifyPin,
     // Initialize Firebase Services
     const db = getFirestore(app);
 
-// Define collections using garageCol from auth.js
-const clientsCollection = garageCol(db, collection, 'clients');
+// clientsCollection is resolved lazily after login via garageCol(db, collection, 'clients')
+// Do NOT call garageCol here — session (garageCode) is not yet set at module load time
     let currentUserRole = null; // 'admin' or 'mechanic'
 
     // FIX: Global variable to hold current job card data for modal and WhatsApp
@@ -975,7 +976,7 @@ const clientsCollection = garageCol(db, collection, 'clients');
      */
     function listenForClients() {
         // Use onSnapshot to get real-time updates
-        onSnapshot(clientsCollection, (snapshot) => {
+        onSnapshot(garageCol(db, collection, 'clients'), (snapshot) => {
             clientCache = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
             
             // Update client count
@@ -1072,7 +1073,7 @@ const clientsCollection = garageCol(db, collection, 'clients');
         }
 
         try {
-            await addDoc(clientsCollection, clientData);
+            await addDoc(garageCol(db, collection, 'clients'), clientData);
             
             msgEl.textContent = '✅ Client successfully registered!';
             msgEl.className = 'text-green-500 text-sm mt-2';
@@ -2512,7 +2513,7 @@ function lookupClientDetails(section) {
 <script>
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('/sw.js')
+      navigator.serviceWorker.register('./sw.js')
         .then(reg => console.log('SW registered: ', reg))
         .catch(err => console.log('SW registration failed: ', err));
     });
