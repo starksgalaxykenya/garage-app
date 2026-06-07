@@ -71,6 +71,7 @@
                 <button id="nav-car-list" class="text-white hover:text-blue-200 font-medium transition duration-150" style="display:none;">Active Jobs</button>
                 <button id="nav-completed-list" class="text-white hover:text-blue-200 font-medium transition duration-150" style="display:none;">Completed Jobs</button>
                 <button id="nav-reports-section" class="text-white hover:text-blue-200 font-bold py-2 px-4 rounded-lg bg-yellow-600 hover:bg-yellow-700 transition duration-150" style="display:none;">Reports</button>
+                <button id="nav-mechanics" class="text-white hover:text-blue-200 font-medium transition duration-150" style="display:none;">🔧 Mechanics</button>
                 <button id="nav-garage-manager" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded transition duration-150 ml-2" style="display:none;">Enter Garage Manager</button>
                 <button id="logoutBtn" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded transition duration-150" style="display:none;">Logout</button>
             </nav>
@@ -217,11 +218,9 @@
                         
                         <div>
                             <label for="assigned-mechanic" class="block text-sm font-medium text-gray-700 mb-1">Assigned Mechanic</label>
-                            <input id="assigned-mechanic" type="text" placeholder="Type Mechanic's Name" required class="w-full p-3 border rounded-lg" list="mechanic-suggestions"/>
-                            <datalist id="mechanic-suggestions">
-                                <option value="John Doe (Mock)">
-                                <option value="Jane Smith (Mock)">
-                            </datalist>
+                            <select id="assigned-mechanic" required class="w-full p-3 border rounded-lg">
+                                <option value="">-- Select Mechanic --</option>
+                            </select>
                         </div>
 
                         <div>
@@ -345,7 +344,12 @@
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-4">
                         <input id="current-mileage" type="number" placeholder="Current Mileage (KM)" required class="p-3 border rounded-lg" />
                         <input id="next-service-mileage" type="number" placeholder="Next Service Est. Mileage (KM)" required class="p-3 border rounded-lg" />
-                        <input id="service-person" type="text" placeholder="Service Person Name" required class="p-3 border rounded-lg" />
+                        <div>
+                            <label for="service-person" class="block text-sm font-medium text-gray-700 mb-1">Service Person</label>
+                            <select id="service-person" required class="w-full p-3 border rounded-lg">
+                                <option value="">-- Select Mechanic --</option>
+                            </select>
+                        </div>
                     </div>
                 </fieldset>
 
@@ -382,7 +386,131 @@
             </div>
         </section>
         
-        <section id="car-list" style="display:none;">
+        <section id="mechanics-section" class="space-y-8" style="display:none;">
+            <h2 class="text-3xl font-bold text-gray-800 border-b pb-2">🔧 Mechanic Management</h2>
+
+            <div class="bg-white p-6 rounded-xl shadow-lg">
+                <h3 class="text-2xl font-semibold text-blue-700 mb-4 border-b pb-2">➕ Add New Mechanic</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                    <input id="new-mechanic-name" type="text" placeholder="Full Name" class="p-3 border rounded-lg" />
+                    <input id="new-mechanic-phone" type="tel" placeholder="Phone Number" class="p-3 border rounded-lg" />
+                    <select id="new-mechanic-specialization" class="p-3 border rounded-lg">
+                        <option value="">-- Select Specialization --</option>
+                        <option>General Mechanic</option>
+                        <option>Engine Specialist</option>
+                        <option>Transmission Specialist</option>
+                        <option>Electrical / Auto-Electrician</option>
+                        <option>Diagnostics Technician</option>
+                        <option>Brake & Suspension Specialist</option>
+                        <option>Body & Paint Technician</option>
+                        <option>Tyre & Alignment Technician</option>
+                        <option>AC & Cooling Specialist</option>
+                        <option>Diesel Technician</option>
+                        <option>Service Advisor</option>
+                    </select>
+                    <input id="new-mechanic-custom-spec" type="text" placeholder="Or type custom specialization" class="p-3 border rounded-lg" />
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                    <select id="new-mechanic-status" class="p-3 border rounded-lg">
+                        <option value="Active">Active</option>
+                        <option value="On Leave">On Leave</option>
+                        <option value="Inactive">Inactive</option>
+                    </select>
+                    <input id="new-mechanic-employee-no" type="text" placeholder="Employee / Staff No. (Optional)" class="p-3 border rounded-lg" />
+                    <input id="new-mechanic-joining-date" type="date" class="p-3 border rounded-lg" title="Date Joined" />
+                </div>
+                <textarea id="new-mechanic-notes" rows="2" placeholder="Notes (e.g. certifications, specialties, languages)" class="w-full p-3 border rounded-lg mb-4"></textarea>
+                <button onclick="saveNewMechanic()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition">Save Mechanic</button>
+                <p id="mechanic-save-message" class="text-sm mt-2"></p>
+            </div>
+
+            <div class="mt-6">
+                <h3 class="text-2xl font-semibold text-teal-700 mb-4 border-b pb-2">👷 All Mechanics (<span id="mechanic-count">0</span>)</h3>
+                <input type="text" id="mechanic-search" placeholder="Search by name or specialization..." class="w-full p-3 border rounded-lg mb-4" oninput="filterMechanics()" />
+                <div id="mechanics-list-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <p id="no-mechanics-message" class="text-center text-gray-500 py-10 col-span-full">Loading mechanics...</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Edit Mechanic Modal -->
+        <div id="editMechanicModal" class="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center p-4 z-[200]" style="display:none;">
+            <div class="bg-white p-8 rounded-xl shadow-2xl w-full max-w-lg">
+                <h3 class="text-2xl font-bold text-blue-800 mb-4 border-b pb-2">Edit Mechanic</h3>
+                <input type="hidden" id="edit-mechanic-id" />
+                <div class="grid grid-cols-1 gap-4 mb-4">
+                    <input id="edit-mechanic-name" type="text" placeholder="Full Name" class="p-3 border rounded-lg" />
+                    <input id="edit-mechanic-phone" type="tel" placeholder="Phone Number" class="p-3 border rounded-lg" />
+                    <select id="edit-mechanic-specialization" class="p-3 border rounded-lg">
+                        <option value="">-- Select Specialization --</option>
+                        <option>General Mechanic</option>
+                        <option>Engine Specialist</option>
+                        <option>Transmission Specialist</option>
+                        <option>Electrical / Auto-Electrician</option>
+                        <option>Diagnostics Technician</option>
+                        <option>Brake & Suspension Specialist</option>
+                        <option>Body & Paint Technician</option>
+                        <option>Tyre & Alignment Technician</option>
+                        <option>AC & Cooling Specialist</option>
+                        <option>Diesel Technician</option>
+                        <option>Service Advisor</option>
+                    </select>
+                    <input id="edit-mechanic-custom-spec" type="text" placeholder="Or custom specialization" class="p-3 border rounded-lg" />
+                    <select id="edit-mechanic-status" class="p-3 border rounded-lg">
+                        <option value="Active">Active</option>
+                        <option value="On Leave">On Leave</option>
+                        <option value="Inactive">Inactive</option>
+                    </select>
+                    <input id="edit-mechanic-employee-no" type="text" placeholder="Employee No." class="p-3 border rounded-lg" />
+                    <textarea id="edit-mechanic-notes" rows="2" placeholder="Notes" class="p-3 border rounded-lg"></textarea>
+                </div>
+                <div class="flex justify-end space-x-3">
+                    <button onclick="document.getElementById('editMechanicModal').style.display='none'" class="bg-gray-400 hover:bg-gray-500 text-white font-bold py-2 px-5 rounded-lg">Cancel</button>
+                    <button onclick="updateMechanic()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-5 rounded-lg">Save Changes</button>
+                </div>
+                <p id="mechanic-edit-message" class="text-sm mt-2"></p>
+            </div>
+        </div>
+
+        <!-- Client Vehicles Modal -->
+        <div id="clientVehiclesModal" class="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center p-4 z-[200]" style="display:none;">
+            <div class="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col">
+                <div class="bg-indigo-700 text-white p-5 rounded-t-xl flex justify-between items-center">
+                    <div>
+                        <h3 class="text-2xl font-bold" id="cvModal-client-name">Client Name</h3>
+                        <p class="text-indigo-200 text-sm" id="cvModal-client-phone"></p>
+                    </div>
+                    <button onclick="document.getElementById('clientVehiclesModal').style.display='none'" class="text-white hover:text-red-300 text-3xl font-bold leading-none">&times;</button>
+                </div>
+                <div class="p-6 overflow-y-auto custom-scrollbar flex-1">
+                    <div id="cvModal-vehicles-container" class="space-y-4">
+                        <p class="text-gray-500 text-center py-6">No vehicles found.</p>
+                    </div>
+                </div>
+                <div class="p-4 border-t flex justify-end">
+                    <button onclick="document.getElementById('clientVehiclesModal').style.display='none'" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-6 rounded-lg">Close</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Item Completion Modal -->
+        <div id="actionCompleteModal" class="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center p-4 z-[300]" style="display:none;">
+            <div class="bg-white p-8 rounded-xl shadow-2xl w-full max-w-md">
+                <h3 class="text-xl font-bold text-green-700 mb-4">✅ Mark Action as Complete</h3>
+                <p class="text-gray-600 mb-1 text-sm">Action Item:</p>
+                <p id="aca-action-text" class="font-semibold text-gray-800 mb-4 p-3 bg-green-50 rounded-lg border border-green-200"></p>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Completed By (Mechanic)</label>
+                <select id="aca-mechanic-select" class="w-full p-3 border rounded-lg mb-4">
+                    <option value="">-- Select Mechanic --</option>
+                </select>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Completion Notes (Optional)</label>
+                <textarea id="aca-notes" rows="2" placeholder="e.g. parts replaced, findings..." class="w-full p-3 border rounded-lg mb-4"></textarea>
+                <div class="flex justify-end space-x-3">
+                    <button onclick="document.getElementById('actionCompleteModal').style.display='none'" class="bg-gray-400 hover:bg-gray-500 text-white font-bold py-2 px-5 rounded-lg">Cancel</button>
+                    <button onclick="confirmActionComplete()" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-5 rounded-lg">Mark Complete</button>
+                </div>
+            </div>
+        </div>
             <h2 class="text-3xl font-bold text-gray-800 border-b pb-2 mb-6">📋 Active Jobs & Work in Progress</h2>
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="car-list-container">
                 </div>
@@ -419,6 +547,7 @@
                     </div>
                 <div class="flex justify-end space-x-4 mt-6" id="job-card-actions">
                     <button onclick="document.getElementById('jobCardModal').style.display = 'none'" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded transition duration-150 print:hidden">Close</button>
+                    <button id="save-action-progress-btn" onclick="saveActionProgress()" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded transition duration-150 print:hidden" style="display:none;">💾 Save Progress</button>
                     <button id="whatsapp-btn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded transition duration-150 print:hidden">Send via WhatsApp</button>
                     <button onclick="window.print()" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded transition duration-150 print:hidden">Print Job Card</button>
                 </div>
@@ -523,6 +652,9 @@ import { getSession, setSession, clearSession, can, verifyPin,
     let clientCarsCache = {}; // Stores {clientPhone: [carData, ...]}
     let currentClientVehicles = []; // Temp storage for vehicles associated with the looked-up client
 
+    // NEW: Global cache for mechanics
+    let mechanicsCache = []; // [{id, name, specialization, status, phone, ...}]
+
     // NEW: Global variables to temporarily hold the report data for PDF generation
     let currentReportJobs = [];
     let currentReportSummary = {};
@@ -560,6 +692,16 @@ import { getSession, setSession, clearSession, can, verifyPin,
     window.lookupClientDetails = lookupClientDetails;
     window.autofillVehicleDetails = autofillVehicleDetails;
     // END NEW
+
+    // START NEW: Mechanics Management Functions
+    window.saveNewMechanic = saveNewMechanic;
+    window.filterMechanics = filterMechanics;
+    window.openEditMechanicModal = openEditMechanicModal;
+    window.updateMechanic = updateMechanic;
+    window.deleteMechanic = deleteMechanic;
+    window.toggleActionDone = toggleActionDone;
+    window.confirmActionComplete = confirmActionComplete;
+    // END NEW
     
     // ----------------------------------------------------------------------
     // 2. PIN-BASED AUTHENTICATION LOGIC
@@ -576,6 +718,7 @@ import { getSession, setSession, clearSession, can, verifyPin,
         if (authed && garageCode && role) {
             applyRoleAccess(role);
             listenForCarsForCache();
+            listenForMechanics();
             document.getElementById('auth-section').style.display = 'none';
             document.getElementById('logoutBtn').style.display = 'inline-block';
             showSection('car-entry');
@@ -683,6 +826,7 @@ import { getSession, setSession, clearSession, can, verifyPin,
 
         applyRoleAccess(_pendingRole);
         listenForCarsForCache();
+        listenForMechanics();
         document.getElementById('auth-section').style.display = 'none';
         document.getElementById('logoutBtn').style.display = 'inline-block';
 
@@ -701,7 +845,7 @@ import { getSession, setSession, clearSession, can, verifyPin,
         document.getElementById('auth-section').style.display = 'flex';
         return;
     }
-    const sections = ['car-entry','general-service','clients-section',
+    const sections = ['car-entry','general-service','clients-section','mechanics-section',
                       'car-list','completed-list','reports-section'];
     sections.forEach(id => {
         const el = document.getElementById(id);
@@ -709,10 +853,11 @@ import { getSession, setSession, clearSession, can, verifyPin,
     });
 
     // Lazy-load data only when the section is first shown
-    if (sectionId === 'car-list')       fetchCars('Active');
-    if (sectionId === 'completed-list') fetchCars('Completed');
-    if (sectionId === 'clients-section') listenForClients();
-    if (sectionId === 'general-service') initializeGeneralService();
+    if (sectionId === 'car-list')         fetchCars('Active');
+    if (sectionId === 'completed-list')   fetchCars('Completed');
+    if (sectionId === 'clients-section')  listenForClients();
+    if (sectionId === 'mechanics-section') listenForMechanics();
+    if (sectionId === 'general-service')  initializeGeneralService();
 }
 
     function applyRoleAccess(role) {
@@ -721,6 +866,7 @@ import { getSession, setSession, clearSession, can, verifyPin,
             'nav-car-entry':        can('createEntries'),
             'nav-general-service':  can('createEntries'),
             'nav-clients-list':     can('viewClients'),
+            'nav-mechanics':        can('accessManagement'),
             'nav-car-list':         true,  // all roles can view active jobs
             'nav-completed-list':   true,  // all roles can view completed jobs
             'nav-reports-section':  can('viewReports'),
@@ -773,15 +919,16 @@ import { getSession, setSession, clearSession, can, verifyPin,
     document.getElementById('logoutBtn').onclick = () => {
         clearSession();
         currentUserRole = null;
+        _mechanicsUnsubscribe = null; // reset so it re-attaches on next login
         // Hide all nav buttons immediately so nothing is accessible
-        ['nav-car-entry','nav-general-service','nav-clients-list',
+        ['nav-car-entry','nav-general-service','nav-clients-list','nav-mechanics',
          'nav-car-list','nav-completed-list','nav-reports-section',
          'nav-garage-manager','logoutBtn'].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.style.display = 'none';
         });
         // Hide all content sections
-        ['car-entry','general-service','clients-section',
+        ['car-entry','general-service','clients-section','mechanics-section',
          'car-list','completed-list','reports-section'].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.style.display = 'none';
@@ -1026,8 +1173,188 @@ import { getSession, setSession, clearSession, can, verifyPin,
         });
     }
     
-    /**
-     * Listens to the 'cars' collection and builds the clientCarsCache.
+    // ----------------------------------------------------------------------
+    // 5b. MECHANICS MANAGEMENT LOGIC
+    // ----------------------------------------------------------------------
+
+    let _mechanicsUnsubscribe = null;
+
+    /** Populate all mechanic <select> dropdowns in the page */
+    function populateAllMechanicDropdowns() {
+        const selects = document.querySelectorAll('#assigned-mechanic, #service-person, .repair-plan-mechanic, #aca-mechanic-select');
+        selects.forEach(sel => {
+            const prev = sel.value;
+            // Keep first placeholder option
+            while (sel.options.length > 1) sel.remove(1);
+            mechanicsCache.filter(m => m.status !== 'Inactive').forEach(mech => {
+                const opt = document.createElement('option');
+                opt.value = mech.name;
+                opt.textContent = `${mech.name} (${mech.specialization || 'General'})`;
+                sel.appendChild(opt);
+            });
+            if (prev) sel.value = prev;
+        });
+    }
+
+    function listenForMechanics() {
+        if (_mechanicsUnsubscribe) return; // already listening
+        _mechanicsUnsubscribe = onSnapshot(garageCol(db, collection, 'mechanics'), (snapshot) => {
+            mechanicsCache = snapshot.docs.map(d => ({ ...d.data(), id: d.id }));
+            populateAllMechanicDropdowns();
+            document.getElementById('mechanic-count').textContent = mechanicsCache.length;
+            if (document.getElementById('mechanics-section').style.display === 'block') {
+                renderMechanicList(mechanicsCache);
+            }
+        }, err => {
+            console.error('Error listening to mechanics:', err);
+        });
+    }
+
+    async function saveNewMechanic() {
+        const msgEl = document.getElementById('mechanic-save-message');
+        const name = document.getElementById('new-mechanic-name').value.trim();
+        const phone = document.getElementById('new-mechanic-phone').value.trim();
+        const specSelect = document.getElementById('new-mechanic-specialization').value;
+        const specCustom = document.getElementById('new-mechanic-custom-spec').value.trim();
+        const specialization = specCustom || specSelect;
+        const status = document.getElementById('new-mechanic-status').value;
+        const employeeNo = document.getElementById('new-mechanic-employee-no').value.trim();
+        const joiningDate = document.getElementById('new-mechanic-joining-date').value;
+        const notes = document.getElementById('new-mechanic-notes').value.trim();
+
+        if (!name) { msgEl.textContent = '❌ Name is required.'; msgEl.className = 'text-red-500 text-sm mt-2'; return; }
+        if (!specialization) { msgEl.textContent = '❌ Please select or type a specialization.'; msgEl.className = 'text-red-500 text-sm mt-2'; return; }
+
+        msgEl.textContent = 'Saving...'; msgEl.className = 'text-blue-500 text-sm mt-2';
+        try {
+            await addDoc(garageCol(db, collection, 'mechanics'), {
+                garageCode: getSession().garageCode,
+                name, phone, specialization, status,
+                employeeNo, joiningDate, notes,
+                createdAt: serverTimestamp(),
+            });
+            msgEl.textContent = '✅ Mechanic saved successfully!';
+            msgEl.className = 'text-green-600 text-sm mt-2';
+            // Reset form
+            ['new-mechanic-name','new-mechanic-phone','new-mechanic-employee-no','new-mechanic-joining-date','new-mechanic-notes','new-mechanic-custom-spec'].forEach(id => {
+                document.getElementById(id).value = '';
+            });
+            document.getElementById('new-mechanic-specialization').value = '';
+            document.getElementById('new-mechanic-status').value = 'Active';
+        } catch (err) {
+            msgEl.textContent = `❌ Error: ${err.message}`;
+            msgEl.className = 'text-red-500 text-sm mt-2';
+        }
+    }
+
+    function renderMechanicList(mechanics) {
+        const container = document.getElementById('mechanics-list-container');
+        const noMsg = document.getElementById('no-mechanics-message');
+        const search = document.getElementById('mechanic-search').value.toLowerCase();
+        const filtered = mechanics.filter(m =>
+            m.name.toLowerCase().includes(search) ||
+            (m.specialization || '').toLowerCase().includes(search)
+        );
+        if (filtered.length === 0) {
+            container.innerHTML = '';
+            noMsg.style.display = 'block';
+            noMsg.textContent = 'No mechanics found.';
+            return;
+        }
+        noMsg.style.display = 'none';
+        container.innerHTML = filtered.map(m => {
+            const statusColor = m.status === 'Active' ? 'bg-green-100 text-green-700' : m.status === 'On Leave' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700';
+            return `
+                <div class="bg-white p-5 rounded-xl shadow-md border-l-4 border-blue-500 hover:shadow-lg transition">
+                    <div class="flex justify-between items-start mb-2">
+                        <h4 class="text-xl font-bold text-gray-800">${m.name}</h4>
+                        <span class="text-xs font-semibold px-2 py-1 rounded-full ${statusColor}">${m.status || 'Active'}</span>
+                    </div>
+                    <p class="text-sm text-blue-700 font-semibold mb-1">🔧 ${m.specialization || 'General Mechanic'}</p>
+                    ${m.phone ? `<p class="text-sm text-gray-600">📞 ${m.phone}</p>` : ''}
+                    ${m.employeeNo ? `<p class="text-sm text-gray-600">ID: ${m.employeeNo}</p>` : ''}
+                    ${m.joiningDate ? `<p class="text-sm text-gray-500">Joined: ${m.joiningDate}</p>` : ''}
+                    ${m.notes ? `<p class="text-sm text-gray-500 italic mt-1">${m.notes}</p>` : ''}
+                    <div class="flex space-x-2 mt-4">
+                        <button onclick="openEditMechanicModal('${m.id}')" class="bg-blue-500 hover:bg-blue-600 text-white text-sm font-bold py-1.5 px-4 rounded-lg transition">Edit</button>
+                        <button onclick="deleteMechanic('${m.id}','${m.name}')" class="bg-red-400 hover:bg-red-500 text-white text-sm font-bold py-1.5 px-4 rounded-lg transition">Remove</button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    function filterMechanics() { renderMechanicList(mechanicsCache); }
+
+    function openEditMechanicModal(mechId) {
+        const mech = mechanicsCache.find(m => m.id === mechId);
+        if (!mech) return;
+        document.getElementById('edit-mechanic-id').value = mechId;
+        document.getElementById('edit-mechanic-name').value = mech.name || '';
+        document.getElementById('edit-mechanic-phone').value = mech.phone || '';
+        document.getElementById('edit-mechanic-employee-no').value = mech.employeeNo || '';
+        document.getElementById('edit-mechanic-notes').value = mech.notes || '';
+        document.getElementById('edit-mechanic-status').value = mech.status || 'Active';
+        // Try to match specialization to select, else put in custom
+        const sel = document.getElementById('edit-mechanic-specialization');
+        const customIn = document.getElementById('edit-mechanic-custom-spec');
+        const knownOpts = [...sel.options].map(o => o.value);
+        if (knownOpts.includes(mech.specialization)) {
+            sel.value = mech.specialization;
+            customIn.value = '';
+        } else {
+            sel.value = '';
+            customIn.value = mech.specialization || '';
+        }
+        document.getElementById('mechanic-edit-message').textContent = '';
+        document.getElementById('editMechanicModal').style.display = 'flex';
+    }
+
+    async function updateMechanic() {
+        const msgEl = document.getElementById('mechanic-edit-message');
+        const mechId = document.getElementById('edit-mechanic-id').value;
+        const name = document.getElementById('edit-mechanic-name').value.trim();
+        const specSelect = document.getElementById('edit-mechanic-specialization').value;
+        const specCustom = document.getElementById('edit-mechanic-custom-spec').value.trim();
+        const specialization = specCustom || specSelect;
+        if (!name || !specialization) { msgEl.textContent = '❌ Name and specialization required.'; msgEl.className = 'text-red-500 text-sm mt-2'; return; }
+        msgEl.textContent = 'Saving...'; msgEl.className = 'text-blue-500 text-sm mt-2';
+        try {
+            await updateDoc(garageDoc(db, doc, 'mechanics', mechId), {
+                name,
+                phone: document.getElementById('edit-mechanic-phone').value.trim(),
+                specialization,
+                status: document.getElementById('edit-mechanic-status').value,
+                employeeNo: document.getElementById('edit-mechanic-employee-no').value.trim(),
+                notes: document.getElementById('edit-mechanic-notes').value.trim(),
+            });
+            msgEl.textContent = '✅ Updated!'; msgEl.className = 'text-green-600 text-sm mt-2';
+            setTimeout(() => { document.getElementById('editMechanicModal').style.display = 'none'; }, 800);
+        } catch (err) {
+            msgEl.textContent = `❌ ${err.message}`; msgEl.className = 'text-red-500 text-sm mt-2';
+        }
+    }
+
+    async function deleteMechanic(mechId, mechName) {
+        if (!confirm(`Remove ${mechName} from the system? This cannot be undone.`)) return;
+        try {
+            await deleteDoc(garageDoc(db, doc, 'mechanics', mechId));
+            alert(`${mechName} removed successfully.`);
+        } catch (err) { alert(`Error: ${err.message}`); }
+    }
+
+    // Called when confirming action item completion from the modal
+    let _pendingActionCompleteCallback = null;
+    function confirmActionComplete() {
+        const mechanic = document.getElementById('aca-mechanic-select').value;
+        const notes = document.getElementById('aca-notes').value.trim();
+        if (!mechanic) { alert('Please select the mechanic who completed this action.'); return; }
+        if (_pendingActionCompleteCallback) _pendingActionCompleteCallback(mechanic, notes);
+        document.getElementById('actionCompleteModal').style.display = 'none';
+        _pendingActionCompleteCallback = null;
+    }
+
+    // ----------------------------------------------------------------------
      * This is needed to show a client's vehicles in the client list section and for autofill.
      */
     function listenForCarsForCache() {
@@ -1173,21 +1500,45 @@ import { getSession, setSession, clearSession, can, verifyPin,
     }
 
     /**
-     * Opens a modal or displays vehicle details for a client.
+     * Opens the full client vehicles modal.
      */
     function openClientVehiclesModal(clientPhone, clientName) {
         const vehicles = clientCarsCache[clientPhone] || [];
-        
+
+        document.getElementById('cvModal-client-name').textContent = clientName;
+        document.getElementById('cvModal-client-phone').textContent = clientPhone;
+
+        const container = document.getElementById('cvModal-vehicles-container');
         if (vehicles.length === 0) {
-            alert(`No vehicle history found for ${clientName} (${clientPhone}).`);
-            return;
+            container.innerHTML = '<p class="text-gray-500 text-center py-6">No vehicles found for this client.</p>';
+        } else {
+            container.innerHTML = vehicles.map((car, i) => {
+                const statusColor = car.status === 'Active' ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700';
+                const jobLabel = car.jobType === 'GeneralService' ? 'General Service' : 'Standard Repair';
+                return `
+                    <div class="border border-gray-200 rounded-xl p-5 shadow-sm hover:shadow-md transition">
+                        <div class="flex justify-between items-start mb-2">
+                            <h4 class="text-xl font-bold text-blue-800">${car.plate}</h4>
+                            <span class="text-xs font-semibold px-2 py-1 rounded-full ${statusColor}">${car.status} · ${jobLabel}</span>
+                        </div>
+                        <div class="grid grid-cols-2 gap-x-6 gap-y-1 text-sm text-gray-700">
+                            <p><span class="font-semibold">Make:</span> ${car.make}</p>
+                            <p><span class="font-semibold">Model:</span> ${car.model}</p>
+                            <p><span class="font-semibold">Year:</span> ${car.year}</p>
+                            <p><span class="font-semibold">Color:</span> ${car.color}</p>
+                            <p><span class="font-semibold">VIN:</span> ${car.vin}</p>
+                            <p><span class="font-semibold">Engine CC:</span> ${car.engineCC}</p>
+                            <p><span class="font-semibold">Engine:</span> ${car.engineName}</p>
+                            <p><span class="font-semibold">Trim:</span> ${car.trim}</p>
+                            <p><span class="font-semibold">Transmission:</span> ${car.transmission}</p>
+                            <p><span class="font-semibold">Drive:</span> ${car.driveType}</p>
+                        </div>
+                    </div>
+                `;
+            }).join('');
         }
 
-        const vehicleDetails = vehicles.map((car, index) => 
-            `\n${index + 1}. Plate: ${car.plate} | Make/Model: ${car.make} ${car.model} | VIN: ${car.vin} | Status: ${car.status} | Job Type: ${car.jobType}`
-        ).join('');
-        
-        alert(`Vehicle History for ${clientName} (${clientPhone}):\n${vehicleDetails}\n\nNOTE: A proper modal would be used here in a final application, but this is a temporary detailed view.`);
+        document.getElementById('clientVehiclesModal').style.display = 'flex';
     }
 
 
@@ -1446,21 +1797,75 @@ function lookupClientDetails(section) {
     }
 
     // MODIFICATION 3: New Repair Plan Card Functions
-    function addRepairPlanCard(initialAction = '', initialParts = '') {
+    function addRepairPlanCard(initialAction = '', initialParts = '', initialDone = false, initialMechanic = '', initialNotes = '') {
         const container = document.getElementById('repair-plan-container');
         const card = document.createElement('div');
         card.className = 'repair-plan-card p-4 border border-pink-300 bg-pink-50 rounded-lg shadow-sm space-y-3';
+        const checkedAttr = initialDone ? 'checked' : '';
+        const doneClass = initialDone ? 'opacity-60' : '';
         card.innerHTML = `
             <div class="flex justify-between items-center">
                 <h4 class="font-semibold text-pink-800">Repair Action Item</h4>
                 <button type="button" onclick="removeRepairPlanCard(this)" class="text-red-500 hover:text-red-700 font-bold text-lg leading-none transition duration-150">×</button>
             </div>
             <textarea placeholder="Specific repair action to be performed (e.g., Replace cylinder head gasket, Full Transmission Service)" 
-                class="repair-plan-action w-full p-2 border rounded-lg" rows="2" required>${initialAction}</textarea>
+                class="repair-plan-action w-full p-2 border rounded-lg ${doneClass}" rows="2" required>${initialAction}</textarea>
             <input type="text" placeholder="Replacement Parts List (e.g., Head Gasket Set, 5L ATF, Oil Filter)" 
                 class="repair-plan-parts w-full p-2 border rounded-lg" value="${initialParts}" />
+            <div class="border-t border-pink-200 pt-3 mt-2">
+                <div class="flex items-center gap-3 flex-wrap">
+                    <label class="flex items-center gap-2 cursor-pointer select-none">
+                        <input type="checkbox" class="repair-plan-done w-5 h-5 accent-green-600 cursor-pointer" ${checkedAttr} onchange="toggleActionDone(this)" />
+                        <span class="font-semibold text-green-700 text-sm">Mark as Done</span>
+                    </label>
+                    <select class="repair-plan-mechanic p-2 border rounded-lg text-sm flex-1 min-w-[180px]" ${!initialDone ? 'disabled' : ''}>
+                        <option value="">-- Mechanic who completed this --</option>
+                    </select>
+                </div>
+                <input type="text" placeholder="Completion notes (e.g. parts used, findings)" 
+                    class="repair-plan-completion-notes w-full p-2 border rounded-lg text-sm mt-2 ${!initialDone ? 'hidden' : ''}" value="${initialNotes}" />
+                ${initialDone && initialMechanic ? `<p class="text-xs text-green-700 mt-1 font-medium">✅ Completed by: <span class="repair-plan-mechanic-name">${initialMechanic}</span></p>` : ''}
+            </div>
         `;
         container.appendChild(card);
+        // Populate mechanic dropdown
+        const select = card.querySelector('.repair-plan-mechanic');
+        populateMechanicSelect(select, initialMechanic);
+    }
+
+    function toggleActionDone(checkbox) {
+        const card = checkbox.closest('.repair-plan-card');
+        const textarea = card.querySelector('.repair-plan-action');
+        const mechanicSelect = card.querySelector('.repair-plan-mechanic');
+        const notesInput = card.querySelector('.repair-plan-completion-notes');
+
+        if (checkbox.checked) {
+            textarea.classList.add('opacity-60');
+            mechanicSelect.disabled = false;
+            notesInput.classList.remove('hidden');
+        } else {
+            textarea.classList.remove('opacity-60');
+            mechanicSelect.disabled = true;
+            mechanicSelect.value = '';
+            notesInput.classList.add('hidden');
+            notesInput.value = '';
+        }
+    }
+
+    /** Populates a mechanic <select> element from the global mechanics cache */
+    function populateMechanicSelect(selectEl, selectedName = '') {
+        const currentVal = selectEl.value;
+        const existingOptions = [...selectEl.options].map(o => o.value);
+        mechanicsCache.forEach(mech => {
+            if (!existingOptions.includes(mech.name)) {
+                const opt = document.createElement('option');
+                opt.value = mech.name;
+                opt.textContent = `${mech.name} (${mech.specialization || 'General'})`;
+                selectEl.appendChild(opt);
+            }
+        });
+        if (selectedName) selectEl.value = selectedName;
+        else if (currentVal) selectEl.value = currentVal;
     }
 
     function removeRepairPlanCard(button) {
@@ -1473,8 +1878,11 @@ function lookupClientDetails(section) {
         cards.forEach(card => {
             const action = card.querySelector('.repair-plan-action').value.trim();
             const parts = card.querySelector('.repair-plan-parts').value.trim();
+            const done = card.querySelector('.repair-plan-done').checked;
+            const mechanic = card.querySelector('.repair-plan-mechanic').value.trim();
+            const completionNotes = card.querySelector('.repair-plan-completion-notes')?.value.trim() || '';
             if (action) {
-                items.push({ action, parts });
+                items.push({ action, parts, done, completedBy: done ? mechanic : '', completionNotes: done ? completionNotes : '' });
             }
         });
         return items;
@@ -1546,9 +1954,12 @@ function lookupClientDetails(section) {
             const docSnap = await getDoc(carRef);
 
             if (docSnap.exists()) {
-                const data = docSnap.data();
+                const data = { ...docSnap.data(), _docId: carId };
                 renderJobCardContent(data, data.status); // Pass the status for display
                 document.getElementById('jobCardModal').style.display = 'flex';
+                // Show save progress button for active standard repairs
+                const saveBtn = document.getElementById('save-action-progress-btn');
+                if (saveBtn) saveBtn.style.display = (data.status === 'Active' && data.jobType !== 'GeneralService') ? 'inline-block' : 'none';
             } else {
                 alert("Report not found!");
             }
@@ -1595,16 +2006,34 @@ function lookupClientDetails(section) {
             // Standard Repair/Check-in Job Card
             dialogEl.classList.add('max-w-3xl');
             
+            const isLiveView = !!(data._docId); // came from Firestore, not preview
             const repairPlanHtml = data.repairPlanItems && data.repairPlanItems.length > 0 ? 
-                `<div class="space-y-3">
-                    ${data.repairPlanItems.map((item, index) => `
-                        <div class="p-3 border border-pink-300 bg-pink-50 rounded-lg shadow-sm">
-                            <p class="font-bold text-pink-700">Action Item ${index + 1}:</p>
-                            <p class="whitespace-pre-wrap">${item.action}</p>
+                `<div class="space-y-3" id="modal-repair-plan-list">
+                    ${data.repairPlanItems.map((item, index) => {
+                        const isDone = item.done;
+                        const doneBadge = isDone
+                            ? `<span class="ml-2 text-xs bg-green-100 text-green-700 font-bold px-2 py-0.5 rounded-full">✅ Done</span>`
+                            : `<span class="ml-2 text-xs bg-orange-100 text-orange-700 font-bold px-2 py-0.5 rounded-full">⏳ Pending</span>`;
+                        const completedByHtml = isDone && item.completedBy
+                            ? `<p class="mt-1 text-sm text-green-700"><span class="font-semibold">Completed by:</span> ${item.completedBy}</p>` : '';
+                        const completionNotesHtml = isDone && item.completionNotes
+                            ? `<p class="mt-1 text-sm text-gray-600"><span class="font-semibold">Notes:</span> ${item.completionNotes}</p>` : '';
+                        const checkboxHtml = isLiveView && !isDone && data.status === 'Active'
+                            ? `<label class="flex items-center gap-2 cursor-pointer mt-2 text-sm font-medium text-gray-600">
+                                <input type="checkbox" class="modal-action-done-cb w-4 h-4 accent-green-600" data-index="${index}" onchange="handleModalActionCheck(this, ${index})" />
+                                Mark as done
+                               </label>` : '';
+                        return `
+                        <div class="p-3 border ${isDone ? 'border-green-300 bg-green-50' : 'border-pink-300 bg-pink-50'} rounded-lg shadow-sm" id="modal-action-${index}">
+                            <p class="font-bold ${isDone ? 'text-green-700' : 'text-pink-700'}">Action Item ${index + 1}: ${doneBadge}</p>
+                            <p class="whitespace-pre-wrap ${isDone ? 'line-through text-gray-400' : ''}">${item.action}</p>
                             ${item.parts ? `<p class="mt-2 text-sm"><span class="font-semibold">Parts:</span> ${item.parts}</p>` : ''}
-                        </div>
-                    `).join('')}
-                </div>` 
+                            ${completedByHtml}
+                            ${completionNotesHtml}
+                            ${checkboxHtml}
+                        </div>`;
+                    }).join('')}
+                </div>`
                 : '<p class="text-gray-500">No repair plan items specified.</p>';
 
             jobCardContent.innerHTML = `
@@ -1644,6 +2073,67 @@ function lookupClientDetails(section) {
             document.getElementById('whatsapp-btn').style.display = 'inline-block';
         }
     }
+
+    // Handle checkbox click inside the job card modal
+    function handleModalActionCheck(checkbox, itemIndex) {
+        if (!checkbox.checked) return;
+        checkbox.checked = false; // uncheck until confirmed
+        const data = window.currentJobCardData;
+        if (!data || !data._docId) return;
+
+        const actionText = data.repairPlanItems[itemIndex]?.action || '';
+        document.getElementById('aca-action-text').textContent = actionText;
+        document.getElementById('aca-notes').value = '';
+        // Populate mechanic select
+        const acaSelect = document.getElementById('aca-mechanic-select');
+        while (acaSelect.options.length > 1) acaSelect.remove(1);
+        mechanicsCache.filter(m => m.status !== 'Inactive').forEach(m => {
+            const opt = document.createElement('option');
+            opt.value = m.name;
+            opt.textContent = `${m.name} (${m.specialization || 'General'})`;
+            acaSelect.appendChild(opt);
+        });
+        document.getElementById('actionCompleteModal').style.display = 'flex';
+
+        _pendingActionCompleteCallback = (mechanic, notes) => {
+            // Update the in-memory data
+            data.repairPlanItems[itemIndex].done = true;
+            data.repairPlanItems[itemIndex].completedBy = mechanic;
+            data.repairPlanItems[itemIndex].completionNotes = notes;
+            // Re-render the action card visually without full reload
+            const cardEl = document.getElementById(`modal-action-${itemIndex}`);
+            if (cardEl) {
+                cardEl.className = 'p-3 border border-green-300 bg-green-50 rounded-lg shadow-sm';
+                cardEl.innerHTML = `
+                    <p class="font-bold text-green-700">Action Item ${itemIndex + 1}: <span class="ml-2 text-xs bg-green-100 text-green-700 font-bold px-2 py-0.5 rounded-full">✅ Done</span></p>
+                    <p class="whitespace-pre-wrap line-through text-gray-400">${data.repairPlanItems[itemIndex].action}</p>
+                    ${data.repairPlanItems[itemIndex].parts ? `<p class="mt-2 text-sm"><span class="font-semibold">Parts:</span> ${data.repairPlanItems[itemIndex].parts}</p>` : ''}
+                    <p class="mt-1 text-sm text-green-700"><span class="font-semibold">Completed by:</span> ${mechanic}</p>
+                    ${notes ? `<p class="mt-1 text-sm text-gray-600"><span class="font-semibold">Notes:</span> ${notes}</p>` : ''}
+                `;
+            }
+        };
+    }
+
+    window.handleModalActionCheck = handleModalActionCheck;
+
+    async function saveActionProgress() {
+        const data = window.currentJobCardData;
+        if (!data || !data._docId) { alert('No active job to save.'); return; }
+        const btn = document.getElementById('save-action-progress-btn');
+        btn.disabled = true; btn.textContent = 'Saving...';
+        try {
+            await updateDoc(garageDoc(db, doc, 'cars', data._docId), {
+                repairPlanItems: data.repairPlanItems
+            });
+            btn.textContent = '✅ Saved!';
+            setTimeout(() => { btn.textContent = '💾 Save Progress'; btn.disabled = false; }, 1500);
+        } catch (err) {
+            alert(`Error saving: ${err.message}`);
+            btn.textContent = '💾 Save Progress'; btn.disabled = false;
+        }
+    }
+    window.saveActionProgress = saveActionProgress;
 
     // Function to send job card via WhatsApp
     function sendJobCardViaWhatsApp() {
@@ -2483,6 +2973,8 @@ function lookupClientDetails(section) {
                 { id: 'nav-general-service', section: 'general-service' },
                 // NEW: Clients button
                 { id: 'nav-clients-list', section: 'clients-section' },
+                // NEW: Mechanics button
+                { id: 'nav-mechanics', section: 'mechanics-section' },
                 { id: 'nav-car-list', section: 'car-list' },
                 { id: 'nav-completed-list', section: 'completed-list' },
                 { id: 'nav-reports-section', section: 'reports-section' }
