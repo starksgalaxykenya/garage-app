@@ -12,7 +12,6 @@ const urlsToCache = [
   './management.js',
   './subscription.js',
   './manifest.json',
-  'https://cdn.tailwindcss.com',
   'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
   'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js',
   'https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.js',
