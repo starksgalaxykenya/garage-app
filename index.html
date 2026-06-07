@@ -1974,7 +1974,7 @@ function lookupClientDetails(section) {
             ...carData,
             status: 'Completed',
             completedAt: serverTimestamp(),
-            completedBy: `${getSession().role}@${getSession().garageCode}`
+            completedBy: `${getSession().role}@${getSession().garageCode}`,
             // Only store a summary of the checks
             serviceCheckSummary: {
                 fluidsChanged: carData.serviceChecks.filter(c => c.changed && (c.type === 'fluid' || c.type === 'filter')).length,
