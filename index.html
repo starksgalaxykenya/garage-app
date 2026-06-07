@@ -856,7 +856,7 @@ import { getSession, setSession, clearSession, can, verifyPin,
         };
 
         try {
-            await addDoc(carsCollection, carData);
+            await addDoc(garageCol(db, collection, 'cars'), carData);
             alert("New Vehicle Entry successfully saved!");
             document.getElementById('car-entry-form').reset();
             document.getElementById('error-codes-container').innerHTML = '';
@@ -878,7 +878,7 @@ import { getSession, setSession, clearSession, can, verifyPin,
         container.innerHTML = `<p class="text-center text-xl text-blue-500 py-10">Loading ${status.toLowerCase()} jobs...</p>`;
 
         // Only fetch documents with the specified status
-        const carsQuery = query(carsCollection, where('status', '==', status), orderBy('createdAt', 'desc'));
+        const carsQuery = query(garageCol(db, collection, 'cars'), where('status', '==', status), orderBy('createdAt', 'desc'));
 
         // Listen for real-time updates
         onSnapshot(carsQuery, (snapshot) => {
@@ -1005,7 +1005,7 @@ import { getSession, setSession, clearSession, can, verifyPin,
      */
     function listenForCarsForCache() {
         // Query for all cars, active or completed, only need plate, make, model, and clientPhone
-        const allCarsQuery = query(carsCollection, orderBy('createdAt', 'desc')); 
+        const allCarsQuery = query(garageCol(db, collection, 'cars'), orderBy('createdAt', 'desc')); 
         
         onSnapshot(allCarsQuery, (snapshot) => {
             clientCarsCache = {}; // Reset cache
@@ -1990,7 +1990,7 @@ function lookupClientDetails(section) {
         delete firestoreData.repairPlanItems; // Also remove the empty one
 
         try {
-            await addDoc(carsCollection, firestoreData);
+            await addDoc(garageCol(db, collection, 'cars'), firestoreData);
             alert("General Service job successfully completed and saved!");
             document.getElementById('general-service-form').reset();
             initializeGeneralService(); // Re-initialize tables
