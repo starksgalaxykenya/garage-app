@@ -499,6 +499,7 @@ endDayBtn.addEventListener('click', async () => {
 });
 
 
+viewReportsBtn.addEventListener('click', () => {
     reportViewSection.classList.remove('hidden');
     pastReportsList.innerHTML = '<p class="text-gray-500">Loading reports...</p>';
 
