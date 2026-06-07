@@ -71,6 +71,7 @@ import {
     orderBy,
     onSnapshot,
     writeBatch,
+    runTransaction,
     serverTimestamp,
     getDocs
 } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js";
@@ -446,7 +447,58 @@ async function deleteTransaction(id) {
 }
 window.deleteTransaction = deleteTransaction;
 
-viewReportsBtn.addEventListener('click', () => {
+// End Day — uses a transaction to prevent duplicate reports if two sessions click simultaneously
+endDayBtn.addEventListener('click', async () => {
+    if (currentDailyTransactions.length === 0) return;
+    if (!confirm('Close today and save the P&L report? This cannot be undone.')) return;
+
+    endDayBtn.disabled = true;
+    endDayBtn.textContent = 'Saving…';
+
+    const today          = getUTCDateString();
+    // Use a fixed doc ID = date so a second concurrent click hits the same doc and the
+    // transaction detects it already exists — preventing duplicate reports
+    const reportRef      = garageDoc(db, doc, 'financialReports', today);
+    const { garageCode } = getSession();
+
+    try {
+        await runTransaction(db, async (transaction) => {
+            const existing = await transaction.get(reportRef);
+            if (existing.exists()) {
+                throw new Error('A report for today already exists. Reload to see it.');
+            }
+
+            // Tally from the live cache (already authoritative — onSnapshot keeps it current)
+            let totalIncome = 0, totalExpense = 0;
+            currentDailyTransactions.forEach(t => {
+                totalIncome  += t.income  || 0;
+                totalExpense += t.expense || 0;
+            });
+            const netProfit = totalIncome - totalExpense;
+
+            transaction.set(reportRef, {
+                date:         today,
+                garageCode,
+                totalIncome,
+                totalExpense,
+                netProfit,
+                transactionCount: currentDailyTransactions.length,
+                savedAt:      serverTimestamp(),
+                savedBy:      getSession().role,
+            });
+        });
+
+        alert(`Day closed! Net profit: $${(parseFloat(summaryProfit.textContent.replace('$','')) || 0).toFixed(2)}`);
+    } catch (err) {
+        alert(`Could not save report: ${err.message}`);
+        console.error('End Day Error:', err);
+    } finally {
+        endDayBtn.disabled = currentDailyTransactions.length === 0;
+        endDayBtn.textContent = 'End Day & Save P&L Report';
+    }
+});
+
+
     reportViewSection.classList.remove('hidden');
     pastReportsList.innerHTML = '<p class="text-gray-500">Loading reports...</p>';
 
@@ -647,26 +699,38 @@ sellPartForm.addEventListener('submit', async (e) => {
 
     if (!confirm(`Confirm sale of ${quantitySold} x ${partName} for $${totalIncome.toFixed(2)} (Profit: $${totalProfit.toFixed(2)})?`)) return;
 
+    commitPartSaleBtn.disabled = true;
     try {
-        const batch   = writeBatch(db);
-        const partRef = garageDoc(db, doc, 'partsInventory', partId);
-        batch.update(partRef, { quantity: stock - quantitySold });
+        const partRef    = garageDoc(db, doc, 'partsInventory', partId);
+        const transRef   = doc(getDailyTransactionsRef());
 
-        const newTransRef = doc(getDailyTransactionsRef());
-        batch.set(newTransRef, {
-            type: 'PART SALE', subtype: partName, plate: carPlate,
-            description: `${quantitySold} x ${partName} sold (Plate: ${carPlate})`,
-            income: totalIncome, expense: totalExpense, profit: totalProfit,
-            timestamp: serverTimestamp(), isJob: true, date: getUTCDateString()
+        await runTransaction(db, async (transaction) => {
+            // Read live stock from Firestore — not the UI cache
+            const partSnap = await transaction.get(partRef);
+            if (!partSnap.exists()) throw new Error('Part no longer exists.');
+
+            const liveStock = partSnap.data().quantity ?? 0;
+            if (quantitySold > liveStock) {
+                throw new Error(`Only ${liveStock} unit(s) left in stock. Another session may have just sold some.`);
+            }
+
+            transaction.update(partRef, { quantity: liveStock - quantitySold });
+            transaction.set(transRef, {
+                type: 'PART SALE', subtype: partName, plate: carPlate,
+                description: `${quantitySold} x ${partName} sold (Plate: ${carPlate})`,
+                income: totalIncome, expense: totalExpense, profit: totalProfit,
+                timestamp: serverTimestamp(), isJob: true, date: getUTCDateString()
+            });
         });
 
-        await batch.commit();
         alert(`Sale committed! Profit: $${totalProfit.toFixed(2)} recorded in Finance.`);
         sellPartForm.reset();
         partSaleProfitDisplay.textContent = '$0.00';
     } catch (error) {
-        alert('Failed to commit sale.');
+        alert(`Sale failed: ${error.message}`);
         console.error('Part Sale Error: ', error);
+    } finally {
+        commitPartSaleBtn.disabled = false;
     }
 });
 
