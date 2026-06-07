@@ -12,12 +12,6 @@ import {
     getDoc,
     setDoc
 } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js";
-import {
-    getStorage,
-    ref,
-    uploadBytes,
-    getDownloadURL
-} from "https://www.gstatic.com/firebasejs/12.6.0/firebase-storage.js";
 
 const firebaseConfig = {
     apiKey: "AIzaSyBCvFltNyGj3SYR-ADUocWD5EVjljoCEp8",
@@ -31,7 +25,6 @@ const firebaseConfig = {
 // Reuse existing app if already initialized
 const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
 const db  = getFirestore(app);
-const storage = getStorage(app);
 
 // The Firestore document path for branding settings
 function getBrandingDoc() {
@@ -204,11 +197,12 @@ export async function loadBrandingForm() {
         const el = document.getElementById(`branding-${f}`);
         if (el) el.value = branding[f] || (f.includes('Color') ? '#1d4ed8' : '');
     });
-    // Show current logo preview
-    if (branding.logoUrl) {
+    // Show current logo preview (stored as base64 data URL directly in Firestore)
+    const logoDataUrl = branding.logoDataUrl || branding.logoUrl || '';
+    if (logoDataUrl) {
         const prev = document.getElementById('branding-logo-preview');
         if (prev) {
-            prev.src = branding.logoUrl;
+            prev.src = logoDataUrl;
             prev.classList.remove('hidden');
         }
     }
@@ -235,23 +229,17 @@ export async function saveBrandingSettings() {
             accentColor:   document.getElementById('branding-accentColor').value,
         };
 
-        // Handle logo upload
+        // Handle logo — compress & store as base64 directly in Firestore (no Storage needed)
         const logoFile = document.getElementById('branding-logo-input').files[0];
         if (logoFile) {
-            // Validate: image, max 2 MB
             if (!logoFile.type.startsWith('image/')) throw new Error('Logo must be an image file.');
             if (logoFile.size > 2 * 1024 * 1024) throw new Error('Logo must be under 2 MB.');
 
-            const storageRef = ref(storage, `garage_assets/logo_${Date.now()}`);
-            const snap = await uploadBytes(storageRef, logoFile);
-            branding.logoUrl = await getDownloadURL(snap.ref);
-
-            // Also convert to data URL for in-memory PDF use (stored separately)
-            branding.logoDataUrl = await fileToDataUrl(logoFile);
+            // Compress to max 200px wide, JPEG quality 0.7 — keeps Firestore doc small
+            branding.logoDataUrl = await compressImageToDataUrl(logoFile, 200, 0.7);
         } else {
-            // Preserve existing
+            // Preserve existing logo
             const existing = await getBranding();
-            branding.logoUrl     = existing.logoUrl     || '';
             branding.logoDataUrl = existing.logoDataUrl || '';
         }
 
@@ -262,9 +250,9 @@ export async function saveBrandingSettings() {
         msg.className = 'text-green-600 text-sm mt-2 font-semibold';
 
         // Update logo preview
-        if (branding.logoUrl) {
+        if (branding.logoDataUrl) {
             const prev = document.getElementById('branding-logo-preview');
-            if (prev) { prev.src = branding.logoUrl; prev.classList.remove('hidden'); }
+            if (prev) { prev.src = branding.logoDataUrl; prev.classList.remove('hidden'); }
         }
 
     } catch (err) {
@@ -303,11 +291,29 @@ function hexToRgb(hex) {
         : [29, 78, 216];
 }
 
-function fileToDataUrl(file) {
+/**
+ * Compresses an image File to a base64 data URL at a max width,
+ * keeping aspect ratio, at the given JPEG quality (0–1).
+ * Keeps PNG transparency if the file is a PNG.
+ */
+function compressImageToDataUrl(file, maxWidth = 200, quality = 0.7) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
-        reader.onload = () => resolve(reader.result);
         reader.onerror = reject;
+        reader.onload = (e) => {
+            const img = new Image();
+            img.onerror = reject;
+            img.onload = () => {
+                const scale  = Math.min(1, maxWidth / img.width);
+                const canvas = document.createElement('canvas');
+                canvas.width  = Math.round(img.width  * scale);
+                canvas.height = Math.round(img.height * scale);
+                canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+                const mime = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+                resolve(canvas.toDataURL(mime, quality));
+            };
+            img.src = e.target.result;
+        };
         reader.readAsDataURL(file);
     });
 }
