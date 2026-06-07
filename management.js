@@ -510,7 +510,7 @@ function renderFinancialChart(monthTotals) {
 
 async function generateDailyReportPDF(reportId) {
     try {
-        const docSnap = await getDoc(doc(db, 'financialReports', reportId));
+        const docSnap = await getDoc(garageDoc(db, doc, 'financialReports', reportId));
         if (!docSnap.exists()) { alert("Report not found."); return; }
         const report  = docSnap.data();
         const branding = await getBranding();
@@ -649,7 +649,7 @@ sellPartForm.addEventListener('submit', async (e) => {
 
     try {
         const batch   = writeBatch(db);
-        const partRef = doc(db, 'partsInventory', partId);
+        const partRef = garageDoc(db, doc, 'partsInventory', partId);
         batch.update(partRef, { quantity: stock - quantitySold });
 
         const newTransRef = doc(getDailyTransactionsRef());
@@ -920,7 +920,7 @@ function listenForInvoices() {
 
 async function generateInvoicePDF(invoiceId, clientPhone) {
     try {
-        const docSnap = await getDoc(doc(db, 'invoices', invoiceId));
+        const docSnap = await getDoc(garageDoc(db, doc, 'invoices', invoiceId));
         if (!docSnap.exists()) { alert("Invoice not found."); return; }
         const invoice  = docSnap.data();
         const branding = await getBranding();
@@ -1057,7 +1057,7 @@ function listenForQuotes() {
 
 async function generateQuotePDF(quoteId, clientPhone) {
     try {
-        const docSnap  = await getDoc(doc(db, 'quotes', quoteId));
+        const docSnap  = await getDoc(garageDoc(db, doc, 'quotes', quoteId));
         if (!docSnap.exists()) { alert("Quote not found."); return; }
         const quote    = docSnap.data();
         const branding = await getBranding();
