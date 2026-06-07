@@ -1353,8 +1353,9 @@ import { getSession, setSession, clearSession, can, verifyPin,
         _pendingActionCompleteCallback = null;
     }
 
-    // ----------------------------------------------------------------------
-     /* This is needed to show a client's vehicles in the client list section and for autofill.
+    /**
+     * Listens to the 'cars' collection and builds the clientCarsCache.
+     * This is needed to show a client's vehicles in the client list section and for autofill.
      */
     function listenForCarsForCache() {
         // Query for all cars, active or completed, only need plate, make, model, and clientPhone
