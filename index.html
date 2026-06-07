@@ -654,6 +654,7 @@ import { getSession, setSession, clearSession, can, verifyPin,
 
     // NEW: Global cache for mechanics
     let mechanicsCache = []; // [{id, name, specialization, status, phone, ...}]
+    let _mechanicsUnsubscribe = null;
 
     // NEW: Global variables to temporarily hold the report data for PDF generation
     let currentReportJobs = [];
@@ -1176,8 +1177,6 @@ import { getSession, setSession, clearSession, can, verifyPin,
     // ----------------------------------------------------------------------
     // 5b. MECHANICS MANAGEMENT LOGIC
     // ----------------------------------------------------------------------
-
-    let _mechanicsUnsubscribe = null;
 
     /** Populate all mechanic <select> dropdowns in the page */
     function populateAllMechanicDropdowns() {
