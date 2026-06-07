@@ -46,7 +46,8 @@ import {
     showTrialBanner,
     ROLES,
     savePins,
-    PERMISSIONS
+    PERMISSIONS,
+    garageCol
 } from './auth.js';
 
 // Expose branding functions globally
@@ -86,13 +87,13 @@ const firebaseConfig = {
 const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
 const db  = getFirestore(app);
 
-// Firestore Collection References
-dailyTransactionsRef = garageCol(db, collection, 'dailyTransactions');
-pastReportsRef       = garageCol(db, collection, 'financialReports');
-suppliersRef         = garageCol(db, collection, 'suppliers');
-partsInventoryRef    = garageCol(db, collection, 'partsInventory');
-invoicesRef          = garageCol(db, collection, 'invoices');
-quotesRef            = garageCol(db, collection, 'quotes');
+// Collection references resolved lazily after login (garageCode not available at module load)
+function getDailyTransactionsRef() { return garageCol(db, collection, 'dailyTransactions'); }
+function getPastReportsRef()       { return garageCol(db, collection, 'financialReports'); }
+function getSuppliersRef()         { return garageCol(db, collection, 'suppliers'); }
+function getPartsInventoryRef()    { return garageCol(db, collection, 'partsInventory'); }
+function getInvoicesRef()          { return garageCol(db, collection, 'invoices'); }
+function getQuotesRef()            { return garageCol(db, collection, 'quotes'); }
 
 // UI Elements
 const authSection      = document.getElementById('auth-section-management');
@@ -325,7 +326,7 @@ jobForm.addEventListener('submit', async (e) => {
     };
 
     try {
-        await addDoc(dailyTransactionsRef, transaction);
+        await addDoc(getDailyTransactionsRef(), transaction);
         jobForm.reset();
         jobProfitDisplay.textContent = 'Profit: $0.00';
     } catch (error) {
@@ -354,7 +355,7 @@ generalForm.addEventListener('submit', async (e) => {
     };
 
     try {
-        await addDoc(dailyTransactionsRef, transaction);
+        await addDoc(getDailyTransactionsRef(), transaction);
         generalForm.reset();
     } catch (error) {
         alert('Failed to record general transaction.');
@@ -370,7 +371,7 @@ function safeToFixed(value, decimals = 2) {
 
 function listenForDailyTransactions() {
     const today = getUTCDateString();
-    const q = query(dailyTransactionsRef, where('date', '==', today), orderBy('timestamp', 'asc'));
+    const q = query(getDailyTransactionsRef(), where('date', '==', today), orderBy('timestamp', 'asc'));
 
     onSnapshot(q, snapshot => {
         currentDailyTransactions = [];
@@ -449,7 +450,7 @@ viewReportsBtn.addEventListener('click', () => {
     reportViewSection.classList.remove('hidden');
     pastReportsList.innerHTML = '<p class="text-gray-500">Loading reports...</p>';
 
-    const q = query(pastReportsRef, orderBy('date', 'desc'));
+    const q = query(getPastReportsRef(), orderBy('date', 'desc'));
     getDocs(q).then(snapshot => {
         if (snapshot.empty) {
             pastReportsList.innerHTML = '<p class="text-gray-500">No past reports saved.</p>';
@@ -582,7 +583,7 @@ addPartForm.addEventListener('submit', async (e) => {
         if (!confirm(`Warning: Selling Price ($${part.sellingPrice.toFixed(2)}) is less than Supplier Price ($${part.supplierPrice.toFixed(2)}). Continue?`)) return;
     }
     try {
-        await addDoc(partsInventoryRef, part);
+        await addDoc(getPartsInventoryRef(), part);
         addPartForm.reset();
         alert('Part added successfully!');
     } catch (error) {
@@ -651,7 +652,7 @@ sellPartForm.addEventListener('submit', async (e) => {
         const partRef = doc(db, 'partsInventory', partId);
         batch.update(partRef, { quantity: stock - quantitySold });
 
-        const newTransRef = doc(dailyTransactionsRef);
+        const newTransRef = doc(getDailyTransactionsRef());
         batch.set(newTransRef, {
             type: 'PART SALE', subtype: partName, plate: carPlate,
             description: `${quantitySold} x ${partName} sold (Plate: ${carPlate})`,
@@ -670,7 +671,7 @@ sellPartForm.addEventListener('submit', async (e) => {
 });
 
 function listenForPartsInventory() {
-    const q = query(partsInventoryRef, orderBy('name', 'asc'));
+    const q = query(getPartsInventoryRef(), orderBy('name', 'asc'));
     onSnapshot(q, snapshot => {
         allPartsInventory = [];
         partsInventoryBody.innerHTML = '';
@@ -733,7 +734,7 @@ addSupplierForm.addEventListener('submit', async (e) => {
         createdAt: serverTimestamp()
     };
     try {
-        await addDoc(suppliersRef, supplier);
+        await addDoc(getSuppliersRef(), supplier);
         addSupplierForm.reset();
         alert('Supplier saved successfully!');
     } catch (error) {
@@ -743,7 +744,7 @@ addSupplierForm.addEventListener('submit', async (e) => {
 });
 
 function listenForSuppliers() {
-    const q = query(suppliersRef, orderBy('name'));
+    const q = query(getSuppliersRef(), orderBy('name'));
     onSnapshot(q, snapshot => {
         allSuppliers = [];
         suppliersTableBody.innerHTML = '';
@@ -877,8 +878,8 @@ invoiceCreationForm.addEventListener('submit', async (e) => {
     };
 
     try {
-        await addDoc(invoicesRef, invoice);
-        await addDoc(dailyTransactionsRef, {
+        await addDoc(getInvoicesRef(), invoice);
+        await addDoc(getDailyTransactionsRef(), {
             type: 'JOB', subtype: 'Invoice/Receipt', plate: invoice.carPlate,
             description: `Invoice #${invoice.invoiceNo} paid by ${invoice.clientName}`,
             income: totalAmount, expense: 0, profit: totalAmount,
@@ -895,7 +896,7 @@ invoiceCreationForm.addEventListener('submit', async (e) => {
 });
 
 function listenForInvoices() {
-    const q = query(invoicesRef, orderBy('timestamp', 'desc'));
+    const q = query(getInvoicesRef(), orderBy('timestamp', 'desc'));
     onSnapshot(q, snapshot => {
         invoicesTableBody.innerHTML = '';
         snapshot.forEach(docSnap => {
@@ -1020,7 +1021,7 @@ quoteCreationForm.addEventListener('submit', async (e) => {
     };
 
     try {
-        await addDoc(quotesRef, quote);
+        await addDoc(getQuotesRef(), quote);
         quoteCreationForm.reset();
         document.getElementById('quote-items-container').innerHTML = '';
         addQuoteItemRow();
@@ -1032,7 +1033,7 @@ quoteCreationForm.addEventListener('submit', async (e) => {
 });
 
 function listenForQuotes() {
-    const q = query(quotesRef, orderBy('timestamp', 'desc'));
+    const q = query(getQuotesRef(), orderBy('timestamp', 'desc'));
     onSnapshot(q, snapshot => {
         quotesTableBody.innerHTML = '';
         snapshot.forEach(docSnap => {
