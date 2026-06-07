@@ -65,13 +65,13 @@
                 <p class="text-sm text-blue-200">The Ultimate Auto Service Tool</p>
             </div>
             <nav class="flex space-x-4">
-                <button id="nav-car-entry" class="text-white hover:text-blue-200 font-medium transition duration-150">New Car Entry</button>
-                <button id="nav-general-service" class="text-white hover:text-blue-200 font-medium transition duration-150">General Service</button>
-                <button id="nav-clients-list" class="text-white hover:text-blue-200 font-medium transition duration-150">All Clients</button>
-                <button id="nav-car-list" class="text-white hover:text-blue-200 font-medium transition duration-150">Active Jobs</button>
-                <button id="nav-completed-list" class="text-white hover:text-blue-200 font-medium transition duration-150">Completed Jobs</button>
-                <button id="nav-reports-section" class="text-white hover:text-blue-200 font-bold py-2 px-4 rounded-lg bg-yellow-600 hover:bg-yellow-700 transition duration-150">Reports</button>
-                <button id="nav-garage-manager" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded transition duration-150 ml-2">Enter Garage Manager</button>
+                <button id="nav-car-entry" class="text-white hover:text-blue-200 font-medium transition duration-150" style="display:none;">New Car Entry</button>
+                <button id="nav-general-service" class="text-white hover:text-blue-200 font-medium transition duration-150" style="display:none;">General Service</button>
+                <button id="nav-clients-list" class="text-white hover:text-blue-200 font-medium transition duration-150" style="display:none;">All Clients</button>
+                <button id="nav-car-list" class="text-white hover:text-blue-200 font-medium transition duration-150" style="display:none;">Active Jobs</button>
+                <button id="nav-completed-list" class="text-white hover:text-blue-200 font-medium transition duration-150" style="display:none;">Completed Jobs</button>
+                <button id="nav-reports-section" class="text-white hover:text-blue-200 font-bold py-2 px-4 rounded-lg bg-yellow-600 hover:bg-yellow-700 transition duration-150" style="display:none;">Reports</button>
+                <button id="nav-garage-manager" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded transition duration-150 ml-2" style="display:none;">Enter Garage Manager</button>
                 <button id="logoutBtn" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded transition duration-150" style="display:none;">Logout</button>
             </nav>
         </div>
@@ -696,6 +696,11 @@ import { getSession, setSession, clearSession, can, verifyPin,
     }
 
     function showSection(sectionId) {
+    // Auth guard — never render content if not logged in
+    if (!getSession().authed) {
+        document.getElementById('auth-section').style.display = 'flex';
+        return;
+    }
     const sections = ['car-entry','general-service','clients-section',
                       'car-list','completed-list','reports-section'];
     sections.forEach(id => {
@@ -711,11 +716,13 @@ import { getSession, setSession, clearSession, can, verifyPin,
 }
 
     function applyRoleAccess(role) {
-        // Nav buttons: hide what this role can't see
+        // Nav buttons: show/hide based on role permissions
         const nav = {
             'nav-car-entry':        can('createEntries'),
             'nav-general-service':  can('createEntries'),
             'nav-clients-list':     can('viewClients'),
+            'nav-car-list':         true,  // all roles can view active jobs
+            'nav-completed-list':   true,  // all roles can view completed jobs
             'nav-reports-section':  can('viewReports'),
             'nav-garage-manager':   can('accessManagement'),
         };
@@ -766,7 +773,27 @@ import { getSession, setSession, clearSession, can, verifyPin,
     document.getElementById('logoutBtn').onclick = () => {
         clearSession();
         currentUserRole = null;
-        location.reload();
+        // Hide all nav buttons immediately so nothing is accessible
+        ['nav-car-entry','nav-general-service','nav-clients-list',
+         'nav-car-list','nav-completed-list','nav-reports-section',
+         'nav-garage-manager','logoutBtn'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = 'none';
+        });
+        // Hide all content sections
+        ['car-entry','general-service','clients-section',
+         'car-list','completed-list','reports-section'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = 'none';
+        });
+        // Show login screen
+        document.getElementById('auth-section').style.display = 'flex';
+        // Reset auth steps to initial state
+        document.getElementById('garage-code-step').style.display = 'block';
+        document.getElementById('role-step').style.display = 'none';
+        document.getElementById('pin-step').style.display = 'none';
+        document.getElementById('garage-code-input').value = '';
+        document.getElementById('garage-code-message').textContent = '';
     };
 
     // Expose globals needed by HTML onclick attributes
