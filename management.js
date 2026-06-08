@@ -984,6 +984,12 @@ function listenForInvoices() {
 }
 
 async function generateInvoicePDF(invoiceId, clientPhone) {
+       // Guard against missing garage session
+    const { garageCode } = getSession();
+    if (!garageCode) {
+        alert("Garage session expired. Please log out and log in again.");
+        return;
+    }
     try {
         const docSnap = await getDoc(garageDoc(db, doc, 'invoices', invoiceId));
         if (!docSnap.exists()) { alert("Invoice not found."); return; }
