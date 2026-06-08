@@ -2543,6 +2543,7 @@ function lookupClientDetails(section) {
     window.ejcSaveChanges = ejcSaveChanges;
 
     // ======================================================================
+    async function saveActionProgress() {
         const data = window.currentJobCardData;
         if (!data || !data._docId) { alert('No active job to save.'); return; }
         const btn = document.getElementById('save-action-progress-btn');
