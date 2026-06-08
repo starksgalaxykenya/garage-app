@@ -47,7 +47,9 @@ import {
     ROLES,
     savePins,
     PERMISSIONS,
-    garageCol
+    garageCol,
+    garageDoc,      // ← add this
+    garageRef       // optional, but good to have
 } from './auth.js';
 
 // Expose branding functions globally
