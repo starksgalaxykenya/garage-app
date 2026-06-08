@@ -54,6 +54,9 @@
             padding: 8px 12px;
             border-bottom: 1px solid #e5e7eb;
         }
+        /* Checklist row styling */
+        .checklist-row:hover { background: #f9fafb; }
+        .checklist-row { transition: background 0.15s; }
     </style>
 </head>
 <body class="bg-gray-50 font-sans">
@@ -246,6 +249,61 @@
                     <div id="repair-plan-container" class="space-y-4 mt-4">
                         </div>
                     <button type="button" onclick="addRepairPlanCard()" class="mt-4 bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition duration-150">Add Repair Plan Item</button>
+                </fieldset>
+
+                <fieldset class="border-2 border-teal-200 p-4 rounded-lg">
+                    <legend class="text-xl font-semibold text-teal-700 px-2">🔍 Vehicle Condition Checklist (Intake Inspection)</legend>
+                    <p class="text-sm text-gray-500 mb-4 mt-1">Document the condition of all vehicle items at the time of check-in. This protects both the garage and the client.</p>
+
+                    <!-- Exterior -->
+                    <h4 class="font-bold text-gray-700 mb-2 mt-3 border-b pb-1">🚗 Exterior & Body</h4>
+                    <div id="checklist-exterior" class="space-y-2"></div>
+
+                    <!-- Glass -->
+                    <h4 class="font-bold text-gray-700 mb-2 mt-4 border-b pb-1">🪟 Glass & Mirrors</h4>
+                    <div id="checklist-glass" class="space-y-2"></div>
+
+                    <!-- Interior -->
+                    <h4 class="font-bold text-gray-700 mb-2 mt-4 border-b pb-1">🪑 Interior & Accessories</h4>
+                    <div id="checklist-interior" class="space-y-2"></div>
+
+                    <!-- Wheels & Tyres -->
+                    <h4 class="font-bold text-gray-700 mb-2 mt-4 border-b pb-1">🛞 Wheels, Tyres & Boot</h4>
+                    <div id="checklist-wheels" class="space-y-2"></div>
+
+                    <!-- Electrical -->
+                    <h4 class="font-bold text-gray-700 mb-2 mt-4 border-b pb-1">⚡ Electrical & Lights</h4>
+                    <div id="checklist-electrical" class="space-y-2"></div>
+
+                    <!-- Fluids visible -->
+                    <h4 class="font-bold text-gray-700 mb-2 mt-4 border-b pb-1">🛢️ Visible Fluids & Engine Bay</h4>
+                    <div id="checklist-engine" class="space-y-2"></div>
+
+                    <!-- Fuel -->
+                    <h4 class="font-bold text-gray-700 mb-2 mt-4 border-b pb-1">⛽ Fuel & Mileage</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Fuel Level</label>
+                            <select id="checklist-fuel-level" class="w-full p-2 border rounded-lg text-sm">
+                                <option value="">-- Not Checked --</option>
+                                <option>Empty</option>
+                                <option>¼ Tank</option>
+                                <option>½ Tank</option>
+                                <option>¾ Tank</option>
+                                <option>Full</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Odometer Reading (KM)</label>
+                            <input id="checklist-odometer" type="number" placeholder="e.g. 84500" class="w-full p-2 border rounded-lg text-sm" />
+                        </div>
+                    </div>
+
+                    <!-- General Notes -->
+                    <h4 class="font-bold text-gray-700 mb-2 mt-4 border-b pb-1">📝 General Condition Notes</h4>
+                    <textarea id="checklist-general-notes" rows="3" placeholder="Any additional observations about the vehicle's overall condition, visible damage, smells, sounds, etc." class="w-full p-3 border rounded-lg text-sm mt-1"></textarea>
+
+                    <p class="text-xs text-gray-400 mt-3 italic">* This checklist is saved with the job card and printed on the vehicle report for client sign-off.</p>
                 </fieldset>
 
                 <div class="flex justify-end space-x-4 pt-4">
@@ -511,7 +569,36 @@
                 </div>
             </div>
         </div>
-            <h2 class="text-3xl font-bold text-gray-800 border-b pb-2 mb-6">📋 Active Jobs & Work in Progress</h2>
+        <!-- Edit Job Card Modal (Add/Revoke Repair Items) -->
+        <div id="editJobCardModal" class="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center p-4 z-[250]" style="display:none;">
+            <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+                <div class="bg-pink-700 text-white p-5 rounded-t-xl flex justify-between items-center">
+                    <div>
+                        <h3 class="text-2xl font-bold">✏️ Edit Repair Plan</h3>
+                        <p class="text-pink-200 text-sm" id="ejc-plate-label"></p>
+                    </div>
+                    <button onclick="document.getElementById('editJobCardModal').style.display='none'" class="text-white hover:text-red-300 text-3xl font-bold leading-none">&times;</button>
+                </div>
+                <div class="p-6 overflow-y-auto custom-scrollbar flex-1">
+                    <!-- Existing items list -->
+                    <h4 class="font-bold text-gray-700 mb-3 border-b pb-1">Current Action Items</h4>
+                    <div id="ejc-items-list" class="space-y-3 mb-6"></div>
+
+                    <!-- Add new item -->
+                    <h4 class="font-bold text-gray-700 mb-3 border-b pb-1 mt-4">➕ Add New Action Item</h4>
+                    <textarea id="ejc-new-action" rows="2" placeholder="Repair action to be performed..." class="w-full p-3 border rounded-lg mb-2 text-sm"></textarea>
+                    <input id="ejc-new-parts" type="text" placeholder="Parts required (optional)..." class="w-full p-3 border rounded-lg mb-3 text-sm" />
+                    <button onclick="ejcAddItem()" class="bg-pink-600 hover:bg-pink-700 text-white font-bold py-2 px-5 rounded-lg text-sm transition">Add to Repair Plan</button>
+                </div>
+                <div class="p-4 border-t flex justify-between items-center">
+                    <p id="ejc-save-msg" class="text-sm"></p>
+                    <div class="flex space-x-3">
+                        <button onclick="document.getElementById('editJobCardModal').style.display='none'" class="bg-gray-400 hover:bg-gray-500 text-white font-bold py-2 px-5 rounded-lg">Cancel</button>
+                        <button onclick="ejcSaveChanges()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-5 rounded-lg">💾 Save Changes</button>
+                    </div>
+                </div>
+            </div>
+        </div>
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="car-list-container">
                 </div>
         </section>
@@ -545,9 +632,13 @@
                 </div>
                 <div id="job-card-content" class="space-y-4 text-gray-700">
                     </div>
-                <div class="flex justify-end space-x-4 mt-6" id="job-card-actions">
+                <!-- Intake Checklist Panel (hidden by default, toggled) -->
+                <div id="intake-checklist-panel" class="mt-4 border-t pt-4" style="display:none;"></div>
+                <div class="flex justify-end flex-wrap gap-2 mt-6" id="job-card-actions">
                     <button onclick="document.getElementById('jobCardModal').style.display = 'none'" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded transition duration-150 print:hidden">Close</button>
                     <button id="save-action-progress-btn" onclick="saveActionProgress()" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded transition duration-150 print:hidden" style="display:none;">💾 Save Progress</button>
+                    <button id="edit-repair-plan-btn" onclick="openEditJobCardModal()" class="bg-pink-600 hover:bg-pink-700 text-white font-bold py-2 px-4 rounded transition duration-150 print:hidden" style="display:none;">✏️ Edit Repair Plan</button>
+                    <button id="view-checklist-btn" onclick="toggleChecklistPanel()" class="bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-4 rounded transition duration-150 print:hidden" style="display:none;">🔍 View Intake Checklist</button>
                     <button id="whatsapp-btn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded transition duration-150 print:hidden">Send via WhatsApp</button>
                     <button onclick="window.print()" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded transition duration-150 print:hidden">Print Job Card</button>
                 </div>
@@ -1023,6 +1114,12 @@ import { getSession, setSession, clearSession, can, verifyPin,
             errorCodes: rawErrorCodes,
             errorMeanings: fullErrorMeanings,
 
+            // INTAKE CHECKLIST
+            intakeChecklist: collectChecklistData(),
+            checklistFuelLevel: document.getElementById('checklist-fuel-level')?.value || '',
+            checklistOdometer: document.getElementById('checklist-odometer')?.value || '',
+            checklistGeneralNotes: document.getElementById('checklist-general-notes')?.value.trim() || '',
+
             // STATUS & TIMESTAMPS
             status: 'Active',
             jobType: 'StandardRepair',
@@ -1038,6 +1135,7 @@ import { getSession, setSession, clearSession, can, verifyPin,
             document.getElementById('repair-plan-container').innerHTML = '';
             addErrorCodeInput(); // Re-initialize the first one
             addRepairPlanCard('Full diagnostic and repair of error codes.', ''); // Re-initialize the first one
+            initChecklistGroups(); // Reset checklist
             showSection('car-list'); // Go to the list view
         } catch (error) {
             console.error("Error adding document: ", error);
@@ -1941,6 +2039,12 @@ function lookupClientDetails(section) {
             // ERROR CODES
             errorCodes: rawErrorCodes,
             errorMeanings: fullErrorMeanings,
+
+            // INTAKE CHECKLIST
+            intakeChecklist: collectChecklistData(),
+            checklistFuelLevel: document.getElementById('checklist-fuel-level')?.value || '',
+            checklistOdometer: document.getElementById('checklist-odometer')?.value || '',
+            checklistGeneralNotes: document.getElementById('checklist-general-notes')?.value.trim() || '',
         };
 
         renderJobCardContent(data, 'Preview');
@@ -1959,7 +2063,12 @@ function lookupClientDetails(section) {
                 document.getElementById('jobCardModal').style.display = 'flex';
                 // Show save progress button for active standard repairs
                 const saveBtn = document.getElementById('save-action-progress-btn');
-                if (saveBtn) saveBtn.style.display = (data.status === 'Active' && data.jobType !== 'GeneralService') ? 'inline-block' : 'none';
+                const editBtn = document.getElementById('edit-repair-plan-btn');
+                const checklistBtn = document.getElementById('view-checklist-btn');
+                const isActive = data.status === 'Active' && data.jobType !== 'GeneralService';
+                if (saveBtn) saveBtn.style.display = isActive ? 'inline-block' : 'none';
+                if (editBtn) editBtn.style.display = isActive ? 'inline-block' : 'none';
+                if (checklistBtn) checklistBtn.style.display = data.intakeChecklist ? 'inline-block' : 'none';
             } else {
                 alert("Report not found!");
             }
@@ -2010,26 +2119,39 @@ function lookupClientDetails(section) {
             const repairPlanHtml = data.repairPlanItems && data.repairPlanItems.length > 0 ? 
                 `<div class="space-y-3" id="modal-repair-plan-list">
                     ${data.repairPlanItems.map((item, index) => {
-                        const isDone = item.done;
-                        const doneBadge = isDone
+                        const isDone = item.done && !item.revoked;
+                        const isRevoked = !!item.revoked;
+                        const borderCls = isRevoked ? 'border-gray-300 bg-gray-50'
+                                        : isDone   ? 'border-green-300 bg-green-50'
+                                        :            'border-pink-300 bg-pink-50';
+                        const doneBadge = isRevoked
+                            ? `<span class="ml-2 text-xs bg-gray-200 text-gray-600 font-bold px-2 py-0.5 rounded-full">🚫 Revoked</span>`
+                            : isDone
                             ? `<span class="ml-2 text-xs bg-green-100 text-green-700 font-bold px-2 py-0.5 rounded-full">✅ Done</span>`
                             : `<span class="ml-2 text-xs bg-orange-100 text-orange-700 font-bold px-2 py-0.5 rounded-full">⏳ Pending</span>`;
+                        const textCls = isRevoked ? 'line-through text-gray-400' : isDone ? 'line-through text-gray-400' : '';
+                        const headCls = isRevoked ? 'text-gray-500' : isDone ? 'text-green-700' : 'text-pink-700';
                         const completedByHtml = isDone && item.completedBy
                             ? `<p class="mt-1 text-sm text-green-700"><span class="font-semibold">Completed by:</span> ${item.completedBy}</p>` : '';
                         const completionNotesHtml = isDone && item.completionNotes
                             ? `<p class="mt-1 text-sm text-gray-600"><span class="font-semibold">Notes:</span> ${item.completionNotes}</p>` : '';
-                        const checkboxHtml = isLiveView && !isDone && data.status === 'Active'
+                        const revokedByHtml = isRevoked && item.revokedBy
+                            ? `<p class="mt-1 text-xs text-gray-400">Revoked by: ${item.revokedBy}${item.revokedAt ? ' — ' + item.revokedAt : ''}</p>` : '';
+                        const addedBadge = item.addedAfterCreation
+                            ? `<span class="ml-1 text-xs bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-full">Added later</span>` : '';
+                        const checkboxHtml = isLiveView && !isDone && !isRevoked && data.status === 'Active'
                             ? `<label class="flex items-center gap-2 cursor-pointer mt-2 text-sm font-medium text-gray-600">
                                 <input type="checkbox" class="modal-action-done-cb w-4 h-4 accent-green-600" data-index="${index}" onchange="handleModalActionCheck(this, ${index})" />
                                 Mark as done
                                </label>` : '';
                         return `
-                        <div class="p-3 border ${isDone ? 'border-green-300 bg-green-50' : 'border-pink-300 bg-pink-50'} rounded-lg shadow-sm" id="modal-action-${index}">
-                            <p class="font-bold ${isDone ? 'text-green-700' : 'text-pink-700'}">Action Item ${index + 1}: ${doneBadge}</p>
-                            <p class="whitespace-pre-wrap ${isDone ? 'line-through text-gray-400' : ''}">${item.action}</p>
-                            ${item.parts ? `<p class="mt-2 text-sm"><span class="font-semibold">Parts:</span> ${item.parts}</p>` : ''}
+                        <div class="p-3 border ${borderCls} rounded-lg shadow-sm" id="modal-action-${index}">
+                            <p class="font-bold ${headCls}">Action Item ${index + 1}: ${doneBadge}${addedBadge}</p>
+                            <p class="whitespace-pre-wrap ${textCls}">${item.action}</p>
+                            ${item.parts ? `<p class="mt-2 text-sm ${isRevoked ? 'line-through text-gray-400' : ''}"><span class="font-semibold">Parts:</span> ${item.parts}</p>` : ''}
                             ${completedByHtml}
                             ${completionNotesHtml}
+                            ${revokedByHtml}
                             ${checkboxHtml}
                         </div>`;
                     }).join('')}
@@ -2117,7 +2239,310 @@ function lookupClientDetails(section) {
 
     window.handleModalActionCheck = handleModalActionCheck;
 
-    async function saveActionProgress() {
+    // ======================================================================
+    // VEHICLE INTAKE CHECKLIST — definitions and rendering
+    // ======================================================================
+
+    const CHECKLIST_GROUPS = {
+        exterior: [
+            { key: 'bonnet',         label: 'Bonnet / Hood' },
+            { key: 'front_bumper',   label: 'Front Bumper' },
+            { key: 'rear_bumper',    label: 'Rear Bumper' },
+            { key: 'left_door_f',    label: 'Left Front Door' },
+            { key: 'left_door_r',    label: 'Left Rear Door' },
+            { key: 'right_door_f',   label: 'Right Front Door' },
+            { key: 'right_door_r',   label: 'Right Rear Door' },
+            { key: 'left_fender',    label: 'Left Fender / Wing' },
+            { key: 'right_fender',   label: 'Right Fender / Wing' },
+            { key: 'roof',           label: 'Roof / Sunroof Panel' },
+            { key: 'boot_lid',       label: 'Boot Lid / Tailgate' },
+            { key: 'paintwork',      label: 'Overall Paintwork' },
+            { key: 'underbody',      label: 'Underbody / Chassis' },
+        ],
+        glass: [
+            { key: 'windscreen',     label: 'Windscreen (Front)' },
+            { key: 'rear_screen',    label: 'Rear Windscreen' },
+            { key: 'left_window_f',  label: 'Left Front Window' },
+            { key: 'left_window_r',  label: 'Left Rear Window' },
+            { key: 'right_window_f', label: 'Right Front Window' },
+            { key: 'right_window_r', label: 'Right Rear Window' },
+            { key: 'left_mirror',    label: 'Left Wing Mirror' },
+            { key: 'right_mirror',   label: 'Right Wing Mirror' },
+            { key: 'rearview_mirror',label: 'Interior Rear-View Mirror' },
+        ],
+        interior: [
+            { key: 'dashboard',      label: 'Dashboard / Instrument Panel' },
+            { key: 'steering_wheel', label: 'Steering Wheel' },
+            { key: 'seats',          label: 'Seats & Upholstery' },
+            { key: 'seatbelts',      label: 'Seatbelts (all)' },
+            { key: 'carpets',        label: 'Carpets & Floor Mats' },
+            { key: 'radio',          label: 'Radio / Infotainment System' },
+            { key: 'ac_unit',        label: 'A/C Controls & Vents' },
+            { key: 'horn',           label: 'Horn' },
+            { key: 'handbrake',      label: 'Handbrake / Parking Brake' },
+            { key: 'gear_lever',     label: 'Gear Lever / Knob' },
+            { key: 'glove_box',      label: 'Glove Box' },
+        ],
+        wheels: [
+            { key: 'tyre_fl',        label: 'Tyre – Front Left' },
+            { key: 'tyre_fr',        label: 'Tyre – Front Right' },
+            { key: 'tyre_rl',        label: 'Tyre – Rear Left' },
+            { key: 'tyre_rr',        label: 'Tyre – Rear Right' },
+            { key: 'spare_wheel',    label: 'Spare Wheel' },
+            { key: 'jack',           label: 'Jack' },
+            { key: 'wheel_spanner',  label: 'Wheel Spanner / Lug Wrench' },
+            { key: 'wheel_caps',     label: 'Wheel / Hub Caps' },
+            { key: 'boot_contents',  label: 'Boot / Trunk Contents' },
+        ],
+        electrical: [
+            { key: 'battery',        label: 'Battery' },
+            { key: 'headlights',     label: 'Headlights (Low/High Beam)' },
+            { key: 'tail_lights',    label: 'Tail Lights' },
+            { key: 'brake_lights',   label: 'Brake Lights' },
+            { key: 'indicators',     label: 'Indicators / Turn Signals' },
+            { key: 'hazard_lights',  label: 'Hazard Lights' },
+            { key: 'reverse_lights', label: 'Reverse Lights' },
+            { key: 'interior_lights',label: 'Interior / Dome Lights' },
+            { key: 'wipers_f',       label: 'Front Wipers & Washer' },
+            { key: 'wipers_r',       label: 'Rear Wiper & Washer' },
+        ],
+        engine: [
+            { key: 'engine_oil',     label: 'Engine Oil Level (Visible)' },
+            { key: 'coolant',        label: 'Coolant / Radiator Level' },
+            { key: 'brake_fluid',    label: 'Brake Fluid Level' },
+            { key: 'power_steering', label: 'Power Steering Fluid' },
+            { key: 'washer_fluid',   label: 'Windscreen Washer Fluid' },
+            { key: 'oil_leaks',      label: 'Visible Oil / Fluid Leaks' },
+            { key: 'engine_bay',     label: 'Engine Bay General Condition' },
+        ],
+    };
+
+    const CHECKLIST_STATUSES = ['OK', 'Damaged', 'Broken', 'Missing', 'Not Equipped', 'Not Checked'];
+    const STATUS_COLORS = {
+        'OK':            'bg-green-100 text-green-800',
+        'Damaged':       'bg-yellow-100 text-yellow-800',
+        'Broken':        'bg-red-100 text-red-800',
+        'Missing':       'bg-red-200 text-red-900',
+        'Not Equipped':  'bg-gray-100 text-gray-600',
+        'Not Checked':   'bg-gray-50 text-gray-400',
+    };
+
+    /** Renders a checklist group into a container div */
+    function renderChecklistGroup(containerId, items, savedData = {}) {
+        const container = document.getElementById(containerId);
+        if (!container) return;
+        container.innerHTML = items.map(item => {
+            const saved = savedData[item.key] || {};
+            const status = saved.status || 'Not Checked';
+            return `
+            <div class="grid grid-cols-12 gap-2 items-start py-2 border-b border-gray-100 checklist-row" data-key="${item.key}">
+                <label class="col-span-12 md:col-span-3 text-sm font-medium text-gray-700 pt-1">${item.label}</label>
+                <div class="col-span-12 md:col-span-5 flex flex-wrap gap-1">
+                    ${CHECKLIST_STATUSES.map(s => `
+                        <label class="flex items-center gap-1 cursor-pointer">
+                            <input type="radio" name="cl_${item.key}" value="${s}" class="checklist-radio" ${status === s ? 'checked' : ''} />
+                            <span class="text-xs px-1.5 py-0.5 rounded ${STATUS_COLORS[s] || ''}">${s}</span>
+                        </label>
+                    `).join('')}
+                </div>
+                <div class="col-span-12 md:col-span-4">
+                    <input type="text" class="checklist-note w-full p-1.5 border rounded text-xs" placeholder="Notes..." value="${saved.note || ''}" />
+                </div>
+            </div>`;
+        }).join('');
+    }
+
+    /** Reads all checklist radio+note values from the entry form */
+    function collectChecklistData() {
+        const allItems = Object.values(CHECKLIST_GROUPS).flat();
+        const result = {};
+        allItems.forEach(item => {
+            const radios = document.querySelectorAll(`input[name="cl_${item.key}"]`);
+            let status = 'Not Checked';
+            radios.forEach(r => { if (r.checked) status = r.value; });
+            const noteEl = document.querySelector(`[data-key="${item.key}"] .checklist-note`);
+            result[item.key] = { status, note: noteEl ? noteEl.value.trim() : '' };
+        });
+        return result;
+    }
+
+    /** Initialises all checklist groups in the car entry form */
+    function initChecklistGroups(savedData = {}) {
+        renderChecklistGroup('checklist-exterior',   CHECKLIST_GROUPS.exterior,   savedData);
+        renderChecklistGroup('checklist-glass',      CHECKLIST_GROUPS.glass,      savedData);
+        renderChecklistGroup('checklist-interior',   CHECKLIST_GROUPS.interior,   savedData);
+        renderChecklistGroup('checklist-wheels',     CHECKLIST_GROUPS.wheels,     savedData);
+        renderChecklistGroup('checklist-electrical', CHECKLIST_GROUPS.electrical, savedData);
+        renderChecklistGroup('checklist-engine',     CHECKLIST_GROUPS.engine,     savedData);
+    }
+
+    /** Renders the read-only checklist panel inside the job card modal */
+    function renderChecklistPanel(intakeChecklist, fuelLevel, odometer, generalNotes) {
+        const panel = document.getElementById('intake-checklist-panel');
+        if (!panel || !intakeChecklist) return;
+
+        const allGroups = [
+            { label: '🚗 Exterior & Body',       keys: CHECKLIST_GROUPS.exterior },
+            { label: '🪟 Glass & Mirrors',        keys: CHECKLIST_GROUPS.glass },
+            { label: '🪑 Interior & Accessories', keys: CHECKLIST_GROUPS.interior },
+            { label: '🛞 Wheels, Tyres & Boot',   keys: CHECKLIST_GROUPS.wheels },
+            { label: '⚡ Electrical & Lights',    keys: CHECKLIST_GROUPS.electrical },
+            { label: '🛢️ Engine Bay & Fluids',    keys: CHECKLIST_GROUPS.engine },
+        ];
+
+        const groupHtml = allGroups.map(group => {
+            const rows = group.keys.map(item => {
+                const d = intakeChecklist[item.key] || {};
+                const st = d.status || 'Not Checked';
+                const colorClass = STATUS_COLORS[st] || 'bg-gray-50 text-gray-400';
+                const noteHtml = d.note ? `<span class="text-gray-500 text-xs italic ml-2">— ${d.note}</span>` : '';
+                return `<tr>
+                    <td class="py-1 pr-3 text-sm text-gray-700">${item.label}</td>
+                    <td><span class="text-xs font-semibold px-2 py-0.5 rounded ${colorClass}">${st}</span>${noteHtml}</td>
+                </tr>`;
+            }).join('');
+            return `<h4 class="font-bold text-gray-700 mt-4 mb-1 border-b pb-1">${group.label}</h4>
+                    <table class="w-full text-sm mb-2">${rows}</table>`;
+        }).join('');
+
+        panel.innerHTML = `
+            <h3 class="text-xl font-bold text-teal-700 mb-3 border-b-2 pb-1">🔍 Intake Condition Checklist</h3>
+            ${fuelLevel ? `<p class="text-sm mb-1"><span class="font-bold">Fuel Level at Check-in:</span> ${fuelLevel}</p>` : ''}
+            ${odometer ? `<p class="text-sm mb-2"><span class="font-bold">Odometer at Check-in:</span> ${odometer} KM</p>` : ''}
+            ${groupHtml}
+            ${generalNotes ? `<div class="mt-3 p-3 bg-gray-50 rounded-lg border"><p class="text-sm font-bold text-gray-700 mb-1">General Condition Notes:</p><p class="text-sm text-gray-600 whitespace-pre-wrap">${generalNotes}</p></div>` : ''}
+        `;
+    }
+
+    function toggleChecklistPanel() {
+        const panel = document.getElementById('intake-checklist-panel');
+        const btn = document.getElementById('view-checklist-btn');
+        if (!panel) return;
+        if (panel.style.display === 'none') {
+            panel.style.display = 'block';
+            btn.textContent = '🔍 Hide Intake Checklist';
+            const d = window.currentJobCardData;
+            if (d) renderChecklistPanel(d.intakeChecklist, d.checklistFuelLevel, d.checklistOdometer, d.checklistGeneralNotes);
+        } else {
+            panel.style.display = 'none';
+            btn.textContent = '🔍 View Intake Checklist';
+        }
+    }
+    window.toggleChecklistPanel = toggleChecklistPanel;
+
+    // ======================================================================
+    // EDIT JOB CARD (ejc) — add / revoke repair items after creation
+    // ======================================================================
+
+    function openEditJobCardModal() {
+        const data = window.currentJobCardData;
+        if (!data || !data._docId) return;
+        document.getElementById('ejc-plate-label').textContent = `${data.plate} — ${data.make} ${data.model}`;
+        document.getElementById('ejc-new-action').value = '';
+        document.getElementById('ejc-new-parts').value = '';
+        document.getElementById('ejc-save-msg').textContent = '';
+        renderEjcItems(data.repairPlanItems || []);
+        document.getElementById('editJobCardModal').style.display = 'flex';
+    }
+    window.openEditJobCardModal = openEditJobCardModal;
+
+    function renderEjcItems(items) {
+        const container = document.getElementById('ejc-items-list');
+        if (items.length === 0) {
+            container.innerHTML = '<p class="text-gray-400 text-sm">No repair items yet.</p>';
+            return;
+        }
+        container.innerHTML = items.map((item, i) => {
+            const isRevoked = !!item.revoked;
+            const isDone = !!item.done && !isRevoked;
+            const borderCls = isRevoked ? 'border-gray-300 bg-gray-50 opacity-70'
+                            : isDone   ? 'border-green-300 bg-green-50'
+                            :            'border-pink-300 bg-pink-50';
+            const textCls = isRevoked ? 'line-through text-gray-400' : '';
+            const badge = isRevoked
+                ? `<span class="text-xs bg-gray-200 text-gray-600 font-bold px-2 py-0.5 rounded-full">🚫 Revoked</span>`
+                : isDone
+                ? `<span class="text-xs bg-green-100 text-green-700 font-bold px-2 py-0.5 rounded-full">✅ Done</span>`
+                : `<span class="text-xs bg-orange-100 text-orange-700 font-bold px-2 py-0.5 rounded-full">⏳ Pending</span>`;
+            const revokeBtn = !isRevoked
+                ? `<button onclick="ejcRevokeItem(${i})" class="text-xs bg-red-100 hover:bg-red-200 text-red-700 font-bold px-3 py-1 rounded-lg transition" title="Revoke this item (keeps record with strikethrough)">Revoke</button>`
+                : `<button onclick="ejcRestoreItem(${i})" class="text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 font-bold px-3 py-1 rounded-lg transition" title="Restore this item">Restore</button>`;
+            const revokedByHtml = isRevoked && item.revokedBy
+                ? `<p class="text-xs text-gray-400 mt-1">Revoked by: ${item.revokedBy} — ${item.revokedAt || ''}</p>` : '';
+            return `
+            <div class="p-3 border ${borderCls} rounded-lg shadow-sm">
+                <div class="flex justify-between items-start gap-2">
+                    <div class="flex-1">
+                        <div class="flex items-center gap-2 mb-1">${badge}</div>
+                        <p class="text-sm font-medium ${textCls}">${item.action}</p>
+                        ${item.parts ? `<p class="text-xs text-gray-500 mt-1"><span class="font-semibold">Parts:</span> <span class="${textCls}">${item.parts}</span></p>` : ''}
+                        ${item.completedBy && !isRevoked ? `<p class="text-xs text-green-600 mt-1">Completed by: ${item.completedBy}</p>` : ''}
+                        ${revokedByHtml}
+                    </div>
+                    <div class="shrink-0">${revokeBtn}</div>
+                </div>
+            </div>`;
+        }).join('');
+    }
+
+    function ejcRevokeItem(index) {
+        const data = window.currentJobCardData;
+        if (!data || !data.repairPlanItems) return;
+        const item = data.repairPlanItems[index];
+        if (!item) return;
+        item.revoked = true;
+        item.revokedBy = `${getSession().role}`;
+        item.revokedAt = new Date().toLocaleDateString();
+        renderEjcItems(data.repairPlanItems);
+    }
+    window.ejcRevokeItem = ejcRevokeItem;
+
+    function ejcRestoreItem(index) {
+        const data = window.currentJobCardData;
+        if (!data || !data.repairPlanItems) return;
+        data.repairPlanItems[index].revoked = false;
+        delete data.repairPlanItems[index].revokedBy;
+        delete data.repairPlanItems[index].revokedAt;
+        renderEjcItems(data.repairPlanItems);
+    }
+    window.ejcRestoreItem = ejcRestoreItem;
+
+    function ejcAddItem() {
+        const action = document.getElementById('ejc-new-action').value.trim();
+        const parts  = document.getElementById('ejc-new-parts').value.trim();
+        if (!action) { alert('Please enter an action description.'); return; }
+        const data = window.currentJobCardData;
+        if (!data) return;
+        if (!data.repairPlanItems) data.repairPlanItems = [];
+        data.repairPlanItems.push({ action, parts, done: false, completedBy: '', completionNotes: '', addedAfterCreation: true });
+        document.getElementById('ejc-new-action').value = '';
+        document.getElementById('ejc-new-parts').value = '';
+        renderEjcItems(data.repairPlanItems);
+    }
+    window.ejcAddItem = ejcAddItem;
+
+    async function ejcSaveChanges() {
+        const data = window.currentJobCardData;
+        if (!data || !data._docId) return;
+        const msgEl = document.getElementById('ejc-save-msg');
+        msgEl.textContent = 'Saving...'; msgEl.className = 'text-blue-500 text-sm';
+        try {
+            await updateDoc(garageDoc(db, doc, 'cars', data._docId), {
+                repairPlanItems: data.repairPlanItems
+            });
+            msgEl.textContent = '✅ Saved!'; msgEl.className = 'text-green-600 text-sm font-semibold';
+            // Refresh the job card modal view
+            setTimeout(() => {
+                document.getElementById('editJobCardModal').style.display = 'none';
+                renderJobCardContent(data, data.status || 'Active');
+            }, 600);
+        } catch (err) {
+            msgEl.textContent = `❌ ${err.message}`; msgEl.className = 'text-red-500 text-sm';
+        }
+    }
+    window.ejcSaveChanges = ejcSaveChanges;
+
+    // ======================================================================
         const data = window.currentJobCardData;
         if (!data || !data._docId) { alert('No active job to save.'); return; }
         const btn = document.getElementById('save-action-progress-btn');
@@ -2999,6 +3424,8 @@ function lookupClientDetails(section) {
         addErrorCodeInput(); 
         // MODIFICATION 3: Initialize the first repair plan card
         addRepairPlanCard('Full diagnostic and repair of error codes.', '');
+        // Initialize vehicle intake checklist groups
+        initChecklistGroups();
 
         // MODIFICATION 4: Attach WhatsApp handler to the button element in the modal
         document.getElementById('whatsapp-btn').onclick = sendJobCardViaWhatsApp;
