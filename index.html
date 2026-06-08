@@ -57,6 +57,27 @@
         /* Checklist row styling */
         .checklist-row:hover { background: #f9fafb; }
         .checklist-row { transition: background 0.15s; }
+
+        /* Job Status Pipeline */
+        .status-pipeline { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }
+        .status-node { display: flex; flex-direction: column; align-items: center; min-width: 72px; }
+        .status-dot { width: 28px; height: 28px; border-radius: 50%; border: 3px solid #d1d5db; background: #fff; display: flex; align-items: center; justify-content: center; font-size: 12px; z-index: 1; }
+        .status-dot.active { border-color: #2563eb; background: #2563eb; color: #fff; }
+        .status-dot.done { border-color: #16a34a; background: #16a34a; color: #fff; }
+        .status-dot.warn { border-color: #f59e0b; background: #f59e0b; color: #fff; }
+        .status-dot.ready { border-color: #8b5cf6; background: #8b5cf6; color: #fff; }
+        .status-dot.complete { border-color: #16a34a; background: #16a34a; color: #fff; }
+        .status-connector { height: 3px; flex: 1; background: #d1d5db; min-width: 16px; margin-top: -14px; }
+        .status-connector.done { background: #16a34a; }
+        .status-label { font-size: 9px; font-weight: 600; text-align: center; margin-top: 3px; color: #6b7280; max-width: 70px; line-height: 1.2; }
+        .status-time { font-size: 8px; color: #9ca3af; text-align: center; margin-top: 1px; }
+
+        /* Signature pad */
+        #signature-canvas { touch-action: none; cursor: crosshair; border-radius: 8px; }
+
+        /* Photo thumbnails */
+        .photo-thumb { width: 72px; height: 72px; object-fit: cover; border-radius: 6px; border: 2px solid #e5e7eb; cursor: pointer; transition: border-color .15s; }
+        .photo-thumb:hover { border-color: #3b82f6; }
     </style>
 </head>
 <body class="bg-gray-50 font-sans">
@@ -304,6 +325,28 @@
                     <textarea id="checklist-general-notes" rows="3" placeholder="Any additional observations about the vehicle's overall condition, visible damage, smells, sounds, etc." class="w-full p-3 border rounded-lg text-sm mt-1"></textarea>
 
                     <p class="text-xs text-gray-400 mt-3 italic">* This checklist is saved with the job card and printed on the vehicle report for client sign-off.</p>
+
+                    <!-- Client Signature Pad -->
+                    <h4 class="font-bold text-gray-700 mb-2 mt-4 border-b pb-1">✍️ Client Signature (Intake Sign-Off)</h4>
+                    <p class="text-xs text-gray-500 mb-2">Client acknowledges the vehicle condition report above. Draw or sign below:</p>
+                    <div class="relative border-2 border-dashed border-gray-300 rounded-lg bg-gray-50 inline-block">
+                        <canvas id="signature-canvas" width="500" height="160" class="block"></canvas>
+                    </div>
+                    <div class="flex gap-2 mt-2">
+                        <button type="button" onclick="clearSignature()" class="bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold py-1.5 px-4 rounded-lg text-sm">Clear Signature</button>
+                    </div>
+                    <p id="signature-status" class="text-xs text-gray-400 mt-1 italic">No signature yet.</p>
+                </fieldset>
+
+                <fieldset class="border-2 border-sky-200 p-4 rounded-lg">
+                    <legend class="text-xl font-semibold text-sky-700 px-2">📸 Photo Attachments (Damage / Parts / Condition)</legend>
+                    <p class="text-sm text-gray-500 mb-3 mt-1">Attach photos of existing damage or notable condition items. These are saved with the job. Max 5 photos.</p>
+                    <div class="flex flex-wrap gap-3 mb-3" id="photo-preview-container"></div>
+                    <label class="cursor-pointer inline-flex items-center gap-2 bg-sky-100 hover:bg-sky-200 text-sky-800 font-semibold py-2 px-4 rounded-lg text-sm transition">
+                        <span>📎 Add Photo</span>
+                        <input id="photo-upload-input" type="file" accept="image/*" multiple class="hidden" onchange="handlePhotoUpload(this)" />
+                    </label>
+                    <p id="photo-upload-status" class="text-xs text-gray-400 mt-2"></p>
                 </fieldset>
 
                 <div class="flex justify-end space-x-4 pt-4">
@@ -599,10 +642,54 @@
                 </div>
             </div>
         </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="car-list-container">
+
+        <!-- Status Change Modal -->
+        <div id="statusChangeModal" class="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center p-4 z-[300]" style="display:none;">
+            <div class="bg-white rounded-xl shadow-2xl w-full max-w-md">
+                <div class="bg-indigo-700 text-white p-5 rounded-t-xl flex justify-between items-center">
+                    <h3 class="text-xl font-bold">🔄 Update Job Status</h3>
+                    <button onclick="document.getElementById('statusChangeModal').style.display='none'" class="text-white hover:text-red-300 text-3xl font-bold leading-none">&times;</button>
                 </div>
+                <div class="p-6">
+                    <p class="text-sm text-gray-600 mb-1">Job: <span id="scm-job-label" class="font-bold text-gray-800"></span></p>
+                    <p class="text-sm text-gray-600 mb-4">Current status: <span id="scm-current-status" class="font-bold"></span></p>
+                    
+                    <label class="block text-sm font-medium text-gray-700 mb-2">New Status</label>
+                    <div class="grid grid-cols-1 gap-2 mb-4" id="scm-status-options">
+                        <!-- dynamically populated -->
+                    </div>
+
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Note (Optional)</label>
+                    <textarea id="scm-note" rows="2" placeholder="Reason for status change..." class="w-full p-3 border rounded-lg mb-4 text-sm"></textarea>
+
+                    <div class="flex justify-end space-x-3">
+                        <button onclick="document.getElementById('statusChangeModal').style.display='none'" class="bg-gray-400 hover:bg-gray-500 text-white font-bold py-2 px-5 rounded-lg">Cancel</button>
+                        <button onclick="confirmStatusChange()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-5 rounded-lg">Apply Status</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Photo Lightbox -->
+        <div id="photoLightbox" class="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center p-4 z-[400]" style="display:none;" onclick="document.getElementById('photoLightbox').style.display='none'">
+            <img id="lightbox-img" src="" alt="Job photo" class="max-w-full max-h-full rounded-lg shadow-2xl" />
+            <button class="absolute top-4 right-6 text-white text-4xl font-bold hover:text-red-400 leading-none" onclick="document.getElementById('photoLightbox').style.display='none'">&times;</button>
+        </div>
+
+        <section id="car-list" style="display:none;">
+            <div class="flex flex-wrap justify-between items-center border-b pb-2 mb-4 gap-3">
+                <h2 class="text-3xl font-bold text-gray-800">🔧 Active Jobs</h2>
+                <div class="flex flex-wrap gap-2" id="status-filter-tabs">
+                    <button onclick="filterActiveByStatus('all')" data-filter="all" class="status-filter-btn px-3 py-1.5 rounded-full text-xs font-bold border-2 border-blue-500 bg-blue-500 text-white transition">All Active</button>
+                    <button onclick="filterActiveByStatus('Active')" data-filter="Active" class="status-filter-btn px-3 py-1.5 rounded-full text-xs font-bold border-2 border-gray-300 text-gray-600 hover:border-blue-400 transition">🔧 Active</button>
+                    <button onclick="filterActiveByStatus('Waiting for Parts')" data-filter="Waiting for Parts" class="status-filter-btn px-3 py-1.5 rounded-full text-xs font-bold border-2 border-gray-300 text-gray-600 hover:border-yellow-400 transition">📦 Waiting for Parts</button>
+                    <button onclick="filterActiveByStatus('Awaiting Approval')" data-filter="Awaiting Approval" class="status-filter-btn px-3 py-1.5 rounded-full text-xs font-bold border-2 border-gray-300 text-gray-600 hover:border-orange-400 transition">⏳ Awaiting Approval</button>
+                    <button onclick="filterActiveByStatus('Ready for Collection')" data-filter="Ready for Collection" class="status-filter-btn px-3 py-1.5 rounded-full text-xs font-bold border-2 border-gray-300 text-gray-600 hover:border-purple-400 transition">✅ Ready for Collection</button>
+                </div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="car-list-container"></div>
         </section>
-        
+
         <section id="completed-list" style="display:none;">
             <h2 class="text-3xl font-bold text-gray-800 border-b pb-2 mb-6">✅ Completed Jobs (History)</h2>
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="completed-list-container">
@@ -634,9 +721,22 @@
                     </div>
                 <!-- Intake Checklist Panel (hidden by default, toggled) -->
                 <div id="intake-checklist-panel" class="mt-4 border-t pt-4" style="display:none;"></div>
+                <!-- Photos Panel (hidden by default, toggled) -->
+                <div id="job-photos-panel" class="mt-4 border-t pt-4" style="display:none;">
+                    <h3 class="text-xl font-bold text-sky-700 mb-3 border-b-2 pb-1">📸 Job Photos</h3>
+                    <div id="job-photos-container" class="flex flex-wrap gap-3 mb-3">
+                        <p class="text-gray-400 text-sm">No photos attached.</p>
+                    </div>
+                    <label id="modal-add-photo-label" class="cursor-pointer inline-flex items-center gap-2 bg-sky-100 hover:bg-sky-200 text-sky-800 font-semibold py-2 px-4 rounded-lg text-sm transition" style="display:none;">
+                        📎 Add More Photos
+                        <input id="modal-photo-input" type="file" accept="image/*" multiple class="hidden" onchange="handleModalPhotoUpload(this)" />
+                    </label>
+                </div>
                 <div class="flex justify-end flex-wrap gap-2 mt-6" id="job-card-actions">
                     <button onclick="document.getElementById('jobCardModal').style.display = 'none'" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded transition duration-150 print:hidden">Close</button>
                     <button id="save-action-progress-btn" onclick="saveActionProgress()" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded transition duration-150 print:hidden" style="display:none;">💾 Save Progress</button>
+                    <button id="change-status-btn" onclick="openStatusChangeModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded transition duration-150 print:hidden" style="display:none;">🔄 Change Status</button>
+                    <button id="view-photos-btn" onclick="togglePhotosPanel()" class="bg-sky-600 hover:bg-sky-700 text-white font-bold py-2 px-4 rounded transition duration-150 print:hidden" style="display:none;">📸 Photos</button>
                     <button id="edit-repair-plan-btn" onclick="openEditJobCardModal()" class="bg-pink-600 hover:bg-pink-700 text-white font-bold py-2 px-4 rounded transition duration-150 print:hidden" style="display:none;">✏️ Edit Repair Plan</button>
                     <button id="view-checklist-btn" onclick="toggleChecklistPanel()" class="bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-4 rounded transition duration-150 print:hidden" style="display:none;">🔍 View Intake Checklist</button>
                     <button id="whatsapp-btn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded transition duration-150 print:hidden">Send via WhatsApp</button>
@@ -709,6 +809,7 @@ import { getSession, setSession, clearSession, can, verifyPin,
     import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
     // Auth is now PIN-based via auth.js — no Firebase email/password needed
     import { getFirestore, collection, addDoc, doc, updateDoc, deleteDoc, query, where, orderBy, onSnapshot, getDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js"; // Note: Added 'where' for client lookup
+    import { getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-storage.js";
     // auth.js already imported at top of this module — no duplicate import
 
     // Your web app's Firebase configuration
@@ -726,6 +827,7 @@ import { getSession, setSession, clearSession, can, verifyPin,
 
     // Initialize Firebase Services
     const db = getFirestore(app);
+    const storage = getStorage(app);
 
 // clientsCollection is resolved lazily after login via garageCol(db, collection, 'clients')
 // Do NOT call garageCol here — session (garageCode) is not yet set at module load time
@@ -737,6 +839,31 @@ import { getSession, setSession, clearSession, can, verifyPin,
     
     // NEW: Global cache for completed jobs to power the daily report
     let completedJobsCache = [];
+
+    // ── Job Status Pipeline ──────────────────────────────────────────────
+    const JOB_STATUSES = [
+        { key: 'Active',              label: 'Active',              icon: '🔧', color: 'active' },
+        { key: 'Waiting for Parts',   label: 'Waiting for Parts',   icon: '📦', color: 'warn'   },
+        { key: 'Awaiting Approval',   label: 'Awaiting Approval',   icon: '⏳', color: 'warn'   },
+        { key: 'Ready for Collection',label: 'Ready for Collection',icon: '✅', color: 'ready'  },
+        { key: 'Completed',           label: 'Completed',           icon: '🏁', color: 'complete'},
+    ];
+
+    // Status colours for cards
+    const STATUS_BADGE_COLORS = {
+        'Active':               'bg-blue-100 text-blue-800',
+        'Waiting for Parts':    'bg-yellow-100 text-yellow-800',
+        'Awaiting Approval':    'bg-orange-100 text-orange-800',
+        'Ready for Collection': 'bg-purple-100 text-purple-800',
+        'Completed':            'bg-green-100 text-green-800',
+    };
+
+    // ── Signature pad globals ────────────────────────────────────────────
+    let _sigCanvas = null, _sigCtx = null, _sigDrawing = false, _sigHasData = false;
+    let _pendingPhotoFiles = []; // Files staged for upload on save
+
+    // ── Status change pending ────────────────────────────────────────────
+    let _pendingStatusTarget = null; // { docId, currentStatus, plate }
     
     // NEW: Global cache for all clients and their cars for search/autofill
     let clientCache = []; // Stores {id, clientName, clientPhone, clientEmail, ...}
@@ -945,7 +1072,7 @@ import { getSession, setSession, clearSession, can, verifyPin,
     });
 
     // Lazy-load data only when the section is first shown
-    if (sectionId === 'car-list')         fetchCars('Active');
+    if (sectionId === 'car-list')         fetchCars('active-all');
     if (sectionId === 'completed-list')   fetchCars('Completed');
     if (sectionId === 'clients-section')  listenForClients();
     if (sectionId === 'mechanics-section') listenForMechanics();
@@ -1120,19 +1247,31 @@ import { getSession, setSession, clearSession, can, verifyPin,
             checklistOdometer: document.getElementById('checklist-odometer')?.value || '',
             checklistGeneralNotes: document.getElementById('checklist-general-notes')?.value.trim() || '',
 
+            // CLIENT SIGNATURE
+            clientSignatureDataUrl: _sigHasData && _sigCanvas ? _sigCanvas.toDataURL('image/png') : null,
+
             // STATUS & TIMESTAMPS
             status: 'Active',
+            statusHistory: [{ status: 'Active', timestamp: new Date().toISOString(), by: `${getSession().role}@${getSession().garageCode}`, note: 'Job created' }],
             jobType: 'StandardRepair',
             createdAt: serverTimestamp(),
             createdBy: `${getSession().role}@${getSession().garageCode}`,
         };
 
         try {
-            await addDoc(garageCol(db, collection, 'cars'), carData);
+            const docRef = await addDoc(garageCol(db, collection, 'cars'), carData);
+            // Upload staged photos to Firebase Storage
+            if (_pendingPhotoFiles.length > 0) {
+                await uploadJobPhotos(docRef.id, _pendingPhotoFiles);
+            }
+            _pendingPhotoFiles = [];
             alert("New Vehicle Entry successfully saved!");
             document.getElementById('car-entry-form').reset();
             document.getElementById('error-codes-container').innerHTML = '';
             document.getElementById('repair-plan-container').innerHTML = '';
+            clearSignature();
+            document.getElementById('photo-preview-container').innerHTML = '';
+            document.getElementById('photo-upload-status').textContent = '';
             addErrorCodeInput(); // Re-initialize the first one
             addRepairPlanCard('Full diagnostic and repair of error codes.', ''); // Re-initialize the first one
             initChecklistGroups(); // Reset checklist
@@ -1147,11 +1286,15 @@ import { getSession, setSession, clearSession, can, verifyPin,
 
     // Function to fetch and display cars based on status
     function fetchCars(status) {
-        const container = document.getElementById(status === 'Active' ? 'car-list-container' : 'completed-list-container');
-        container.innerHTML = `<p class="text-center text-xl text-blue-500 py-10">Loading ${status.toLowerCase()} jobs...</p>`;
+        const isActiveAll = status === 'active-all';
+        const container = document.getElementById(isActiveAll ? 'car-list-container' : 'completed-list-container');
+        container.innerHTML = `<p class="text-center text-xl text-blue-500 py-10">Loading jobs...</p>`;
 
-        // Only fetch documents with the specified status
-        const carsQuery = query(garageCol(db, collection, 'cars'), where('status', '==', status), orderBy('createdAt', 'desc'));
+        // For active list, fetch all pipeline statuses; for completed, fetch Completed only
+        const ACTIVE_STATUSES = JOB_STATUSES.filter(s => s.key !== 'Completed').map(s => s.key);
+        const carsQuery = isActiveAll
+            ? query(garageCol(db, collection, 'cars'), where('status', 'in', ACTIVE_STATUSES), orderBy('createdAt', 'desc'))
+            : query(garageCol(db, collection, 'cars'), where('status', '==', 'Completed'), orderBy('createdAt', 'desc'));
 
         // Listen for real-time updates
         onSnapshot(carsQuery, (snapshot) => {
@@ -1159,17 +1302,19 @@ import { getSession, setSession, clearSession, can, verifyPin,
             const allCars = snapshot.docs.map(doc => ({...doc.data(), id: doc.id}));
             
             // Cache completed jobs for the reports section
-            if (status === 'Completed') {
+            if (!isActiveAll) {
                 completedJobsCache = allCars; 
+            } else {
+                _activeJobsCache = allCars;
             }
             
             if (allCars.length === 0) {
-                container.innerHTML = `<p class="text-center text-xl text-gray-500 py-10">No ${status} jobs found.</p>`;
+                container.innerHTML = `<p class="text-center text-xl text-gray-500 py-10">No ${isActiveAll ? 'active' : 'completed'} jobs found.</p>`;
                 return;
             }
 
             allCars.forEach(car => {
-                const card = createCarCard(car, status);
+                const card = createCarCard(car, isActiveAll ? car.status : 'Completed');
                 container.appendChild(card);
             });
         }, (error) => {
@@ -1178,29 +1323,81 @@ import { getSession, setSession, clearSession, can, verifyPin,
         });
     }
 
-    // Creates the HTML card for a car entry (MODIFIED: Added Plate to card)
+    let _activeJobsCache = []; // cache for filter
+
+    function filterActiveByStatus(filter) {
+        // Update button styles
+        document.querySelectorAll('.status-filter-btn').forEach(btn => {
+            const isActive = btn.dataset.filter === filter;
+            btn.classList.toggle('bg-blue-500', isActive);
+            btn.classList.toggle('text-white', isActive);
+            btn.classList.toggle('border-blue-500', isActive);
+            btn.classList.toggle('border-gray-300', !isActive);
+            btn.classList.toggle('text-gray-600', !isActive);
+        });
+        const container = document.getElementById('car-list-container');
+        const filtered = filter === 'all' ? _activeJobsCache : _activeJobsCache.filter(c => c.status === filter);
+        container.innerHTML = '';
+        if (filtered.length === 0) {
+            container.innerHTML = `<p class="text-center text-xl text-gray-500 py-10 col-span-3">No jobs with status "${filter === 'all' ? 'active' : filter}".</p>`;
+            return;
+        }
+        filtered.forEach(car => container.appendChild(createCarCard(car, car.status)));
+    }
+    window.filterActiveByStatus = filterActiveByStatus;
     function createCarCard(car, status) {
         const card = document.createElement('div');
         const borderColor = car.jobType === 'GeneralService' ? 'border-green-500' : 'border-blue-500';
         const jobTypeLabel = car.jobType === 'GeneralService' ? '<span class="text-xs font-semibold bg-green-100 text-green-800 px-2 py-0.5 rounded">G. Service</span>' : '';
         card.className = `bg-white p-6 rounded-xl shadow-lg border-t-4 ${borderColor} hover:shadow-xl transition duration-200`;
 
-        const actions = status === 'Active' ? 
-            `<button onclick="markCarAsCompleted('${car.id}')" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded transition duration-150 text-sm">Mark Complete</button>` :
-            `<button onclick="deleteCompletedCar('${car.id}')" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded transition duration-150 text-sm">Delete History</button>`;
+        // Status badge
+        const carStatus = car.status || 'Active';
+        const badgeCls = STATUS_BADGE_COLORS[carStatus] || 'bg-gray-100 text-gray-700';
+        const statusBadge = `<span class="text-xs font-bold px-2 py-1 rounded-full ${badgeCls}">${carStatus}</span>`;
+
+        // Status pipeline (for active non-general-service jobs)
+        let pipelineHtml = '';
+        if (car.jobType !== 'GeneralService') {
+            const statusHistory = car.statusHistory || [];
+            const statusKeys = JOB_STATUSES.map(s => s.key);
+            const currentIdx = statusKeys.indexOf(carStatus);
+            pipelineHtml = `<div class="mt-3 mb-2">
+                <div class="status-pipeline">` +
+                JOB_STATUSES.map((s, i) => {
+                    const isPast = i < currentIdx;
+                    const isCurrent = i === currentIdx;
+                    const dotCls = isCurrent ? s.color : isPast ? 'done' : '';
+                    const histEntry = statusHistory.find(h => h.status === s.key);
+                    const timeStr = histEntry ? new Date(histEntry.timestamp).toLocaleDateString('en-GB',{day:'2-digit',month:'short'}) : '';
+                    const connectorCls = i < currentIdx ? 'done' : '';
+                    return `<div class="status-node">
+                        <div class="status-dot ${dotCls}">${s.icon}</div>
+                        <div class="status-label">${s.label}</div>
+                        ${timeStr ? `<div class="status-time">${timeStr}</div>` : ''}
+                    </div>${i < JOB_STATUSES.length-1 ? `<div class="status-connector ${connectorCls}"></div>` : ''}`;
+                }).join('') +
+                `</div></div>`;
+        }
+
+        const isActive = status !== 'Completed';
+        const actions = isActive ? 
+            `<button onclick="markCarAsCompleted('${car.id}')" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-3 rounded transition duration-150 text-sm">Mark Complete</button>` :
+            `<button onclick="deleteCompletedCar('${car.id}')" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-3 rounded transition duration-150 text-sm">Delete History</button>`;
             
-        const viewReportBtn = `<button onclick="openDetailedReport('${car.id}')" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded transition duration-150 text-sm">View Report</button>`;
+        const viewReportBtn = `<button onclick="openDetailedReport('${car.id}')" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-3 rounded transition duration-150 text-sm">View Report</button>`;
 
         card.innerHTML = `
-            <div class="flex justify-between items-start mb-4">
+            <div class="flex justify-between items-start mb-1">
                 <h3 class="text-2xl font-bold text-gray-900">${car.plate}</h3>
-                ${jobTypeLabel}
+                <div class="flex gap-1 flex-wrap justify-end">${jobTypeLabel}${statusBadge}</div>
             </div>
             <p class="text-gray-700 font-semibold mb-1">${car.make} ${car.model} (${car.year || 'N/A'})</p>
             <p class="text-sm text-gray-600">Client: ${car.clientName} (${car.clientPhone})</p>
-            <p class="text-sm text-gray-600">Mechanic: ${car.assignedMechanic}</p>
-            <p class="text-sm text-gray-600 mb-4">Due: ${car.deliveryDate}</p>
-            <div class="flex space-x-2">
+            <p class="text-sm text-gray-600">Mechanic: ${car.assignedMechanic || car.servicePerson || 'N/A'}</p>
+            <p class="text-sm text-gray-600 mb-1">Due: ${car.deliveryDate || 'TBD'}</p>
+            ${pipelineHtml}
+            <div class="flex space-x-2 mt-3 flex-wrap gap-y-2">
                 ${actions}
                 ${viewReportBtn}
             </div>
@@ -1213,10 +1410,13 @@ import { getSession, setSession, clearSession, can, verifyPin,
         if (!confirm("Confirm to mark this job as completed? This will move it to history.")) return;
         const carRef = garageDoc(db, doc, 'cars', carId);
         try {
+            const snap = await getDoc(carRef);
+            const existing = snap.exists() ? (snap.data().statusHistory || []) : [];
             await updateDoc(carRef, {
                 status: 'Completed',
                 completedAt: serverTimestamp(),
-                completedBy: `${getSession().role}@${getSession().garageCode}`
+                completedBy: `${getSession().role}@${getSession().garageCode}`,
+                statusHistory: [...existing, { status: 'Completed', timestamp: new Date().toISOString(), by: `${getSession().role}@${getSession().garageCode}`, note: 'Job marked complete' }]
             });
             alert("Job successfully moved to Completed list!");
             showSection('car-list'); // Refresh the active list
@@ -1575,23 +1775,37 @@ import { getSession, setSession, clearSession, can, verifyPin,
      */
     function createClientCard(client) {
         const vehicles = clientCarsCache[client.clientPhone] || [];
-        const activeCars = vehicles.filter(c => c.status === 'Active').length;
+        const activeCars = vehicles.filter(c => c.status !== 'Completed').length;
+        // Count total job entries (each vehicle entry = one visit)
+        const totalVisits = vehicles.length;
+        const lastVehicle = vehicles[0]; // sorted by createdAt desc in cache
         
+        const loyaltyBadge = totalVisits >= 5
+            ? '<span class="text-xs bg-yellow-100 text-yellow-800 font-bold px-2 py-0.5 rounded-full">⭐ Loyal Client</span>'
+            : totalVisits >= 3
+            ? '<span class="text-xs bg-blue-100 text-blue-700 font-semibold px-2 py-0.5 rounded-full">🔁 Returning</span>'
+            : '';
+
         return `
             <div class="bg-white p-6 rounded-xl shadow-md border-l-4 border-indigo-500 hover:shadow-lg transition duration-200">
-                <h4 class="text-xl font-bold text-gray-800">${client.clientName}</h4>
+                <div class="flex justify-between items-start mb-1">
+                    <h4 class="text-xl font-bold text-gray-800">${client.clientName}</h4>
+                    ${loyaltyBadge}
+                </div>
                 <p class="text-sm text-gray-600">Phone: <span class="font-mono">${client.clientPhone}</span></p>
                 <p class="text-sm text-gray-600">Email: ${client.clientEmail || 'N/A'}</p>
-                <p class="text-sm text-gray-600 mb-4">Address: ${client.clientAddress || 'N/A'}</p>
+                <p class="text-sm text-gray-600 mb-2">Address: ${client.clientAddress || 'N/A'}</p>
                 
-                <div class="mt-2 pt-2 border-t text-sm">
-                    <p class="font-semibold text-teal-700">Vehicles in System: ${vehicles.length}</p>
-                    ${activeCars > 0 ? `<p class="text-orange-600">Active Jobs: ${activeCars}</p>` : ''}
+                <div class="mt-2 pt-2 border-t text-sm grid grid-cols-2 gap-x-4 gap-y-1">
+                    <p class="font-semibold text-teal-700">🚗 Vehicles: ${[...new Set(vehicles.map(v=>v.plate))].length}</p>
+                    <p class="font-semibold text-indigo-700">📋 Total Visits: <span class="text-lg">${totalVisits}</span></p>
+                    ${activeCars > 0 ? `<p class="text-orange-600 col-span-2">🔧 Active Jobs: ${activeCars}</p>` : ''}
+                    ${lastVehicle ? `<p class="text-gray-400 text-xs col-span-2">Last vehicle: ${lastVehicle.plate} (${lastVehicle.make} ${lastVehicle.model})</p>` : ''}
                 </div>
                 
                 <button onclick="openClientVehiclesModal('${client.clientPhone}', '${client.clientName}')" 
                         class="mt-4 bg-teal-500 hover:bg-teal-600 text-white font-bold py-2 px-4 rounded transition duration-150 text-sm">
-                    View All Vehicles (${vehicles.length})
+                    View History (${vehicles.length} jobs)
                 </button>
             </div>
         `;
@@ -1611,7 +1825,7 @@ import { getSession, setSession, clearSession, can, verifyPin,
             container.innerHTML = '<p class="text-gray-500 text-center py-6">No vehicles found for this client.</p>';
         } else {
             container.innerHTML = vehicles.map((car, i) => {
-                const statusColor = car.status === 'Active' ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700';
+                const statusColor = STATUS_BADGE_COLORS[car.status] || 'bg-gray-100 text-gray-700';
                 const jobLabel = car.jobType === 'GeneralService' ? 'General Service' : 'Standard Repair';
                 return `
                     <div class="border border-gray-200 rounded-xl p-5 shadow-sm hover:shadow-md transition">
@@ -2065,10 +2279,19 @@ function lookupClientDetails(section) {
                 const saveBtn = document.getElementById('save-action-progress-btn');
                 const editBtn = document.getElementById('edit-repair-plan-btn');
                 const checklistBtn = document.getElementById('view-checklist-btn');
-                const isActive = data.status === 'Active' && data.jobType !== 'GeneralService';
+                const statusBtn = document.getElementById('change-status-btn');
+                const photosBtn = document.getElementById('view-photos-btn');
+                const isActive = data.status !== 'Completed' && data.jobType !== 'GeneralService';
                 if (saveBtn) saveBtn.style.display = isActive ? 'inline-block' : 'none';
                 if (editBtn) editBtn.style.display = isActive ? 'inline-block' : 'none';
                 if (checklistBtn) checklistBtn.style.display = data.intakeChecklist ? 'inline-block' : 'none';
+                if (statusBtn) statusBtn.style.display = (data.status !== 'Completed' && data.jobType !== 'GeneralService') ? 'inline-block' : 'none';
+                if (photosBtn) photosBtn.style.display = 'inline-block';
+                // Reset panels
+                document.getElementById('intake-checklist-panel').style.display = 'none';
+                document.getElementById('job-photos-panel').style.display = 'none';
+                // Load photos
+                await loadJobPhotos(carId, isActive);
             } else {
                 alert("Report not found!");
             }
@@ -2139,7 +2362,7 @@ function lookupClientDetails(section) {
                             ? `<p class="mt-1 text-xs text-gray-400">Revoked by: ${item.revokedBy}${item.revokedAt ? ' — ' + item.revokedAt : ''}</p>` : '';
                         const addedBadge = item.addedAfterCreation
                             ? `<span class="ml-1 text-xs bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-full">Added later</span>` : '';
-                        const checkboxHtml = isLiveView && !isDone && !isRevoked && data.status === 'Active'
+                        const checkboxHtml = isLiveView && !isDone && !isRevoked && data.status !== 'Completed'
                             ? `<label class="flex items-center gap-2 cursor-pointer mt-2 text-sm font-medium text-gray-600">
                                 <input type="checkbox" class="modal-action-done-cb w-4 h-4 accent-green-600" data-index="${index}" onchange="handleModalActionCheck(this, ${index})" />
                                 Mark as done
@@ -2184,12 +2407,30 @@ function lookupClientDetails(section) {
                 ${repairPlanHtml}
 
                 <h3 class="text-xl font-bold text-indigo-700 mt-4 border-b-2 pb-1">Job Status & Schedule</h3>
-                <p class="mt-2"><span class="font-bold">Status:</span> <span class="font-extrabold text-${status === 'Active' ? 'orange' : 'green'}-600">${status}</span></p>
+                <p class="mt-2"><span class="font-bold">Status:</span> <span class="font-extrabold text-${['Active','Waiting for Parts','Awaiting Approval'].includes(data.status) ? 'orange' : data.status === 'Ready for Collection' ? 'purple' : 'green'}-600">${data.status || 'Active'}</span></p>
                 <p><span class="font-bold">Assigned Mechanic:</span> ${data.assignedMechanic}</p>
                 <p><span class="font-bold">Est. Delivery:</span> ${data.deliveryDate}</p>
+                ${data.statusHistory && data.statusHistory.length > 1 ? `
+                <div class="mt-3 p-3 bg-indigo-50 rounded-lg">
+                    <p class="font-bold text-indigo-700 text-sm mb-2">📋 Status History</p>
+                    ${data.statusHistory.map(h => `
+                        <div class="flex items-start gap-2 text-xs text-gray-600 mb-1">
+                            <span class="font-bold text-indigo-600 whitespace-nowrap">${new Date(h.timestamp).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'2-digit'})}</span>
+                            <span class="px-1.5 py-0.5 rounded ${STATUS_BADGE_COLORS[h.status]||'bg-gray-100 text-gray-600'} font-semibold">${h.status}</span>
+                            ${h.note ? `<span class="text-gray-400 italic">${h.note}</span>` : ''}
+                            <span class="text-gray-300 ml-auto">${h.by || ''}</span>
+                        </div>
+                    `).join('')}
+                </div>` : ''}
 
                 <h3 class="text-xl font-bold text-yellow-700 mt-4 border-b-2 pb-1">Error Codes</h3>
                 <div class="mt-2 p-3 bg-yellow-50 rounded-lg whitespace-pre-wrap text-sm">${data.errorMeanings || 'No codes recorded.'}</div>
+
+                ${data.clientSignatureDataUrl ? `
+                <h3 class="text-xl font-bold text-teal-700 mt-4 border-b-2 pb-1">✍️ Client Signature (Intake Sign-Off)</h3>
+                <div class="mt-2 p-3 bg-gray-50 rounded-lg border inline-block">
+                    <img src="${data.clientSignatureDataUrl}" alt="Client Signature" style="max-width:300px;max-height:100px;" />
+                </div>` : ''}
             `;
             // Show the WhatsApp button for standard jobs
             document.getElementById('whatsapp-btn').style.display = 'inline-block';
@@ -2429,6 +2670,210 @@ function lookupClientDetails(section) {
         }
     }
     window.toggleChecklistPanel = toggleChecklistPanel;
+
+    // ======================================================================
+    // SIGNATURE PAD
+    // ======================================================================
+    function initSignaturePad() {
+        _sigCanvas = document.getElementById('signature-canvas');
+        if (!_sigCanvas) return;
+        _sigCtx = _sigCanvas.getContext('2d');
+        _sigCtx.strokeStyle = '#1d4ed8';
+        _sigCtx.lineWidth = 2;
+        _sigCtx.lineCap = 'round';
+        _sigCtx.lineJoin = 'round';
+
+        const getPos = (e) => {
+            const rect = _sigCanvas.getBoundingClientRect();
+            const src = e.touches ? e.touches[0] : e;
+            return { x: src.clientX - rect.left, y: src.clientY - rect.top };
+        };
+
+        const start = (e) => { e.preventDefault(); _sigDrawing = true; const p = getPos(e); _sigCtx.beginPath(); _sigCtx.moveTo(p.x, p.y); };
+        const draw  = (e) => { e.preventDefault(); if (!_sigDrawing) return; const p = getPos(e); _sigCtx.lineTo(p.x, p.y); _sigCtx.stroke(); _sigHasData = true; document.getElementById('signature-status').textContent = 'Signature captured ✓'; };
+        const stop  = () => { _sigDrawing = false; };
+
+        _sigCanvas.addEventListener('mousedown',  start);
+        _sigCanvas.addEventListener('mousemove',  draw);
+        _sigCanvas.addEventListener('mouseup',    stop);
+        _sigCanvas.addEventListener('mouseleave', stop);
+        _sigCanvas.addEventListener('touchstart', start, { passive: false });
+        _sigCanvas.addEventListener('touchmove',  draw,  { passive: false });
+        _sigCanvas.addEventListener('touchend',   stop);
+    }
+
+    function clearSignature() {
+        if (!_sigCtx || !_sigCanvas) return;
+        _sigCtx.clearRect(0, 0, _sigCanvas.width, _sigCanvas.height);
+        _sigHasData = false;
+        const el = document.getElementById('signature-status');
+        if (el) el.textContent = 'Signature cleared.';
+    }
+    window.clearSignature = clearSignature;
+
+    // ======================================================================
+    // PHOTO UPLOAD (Staged for new jobs, direct for existing jobs)
+    // ======================================================================
+    function handlePhotoUpload(input) {
+        const files = Array.from(input.files);
+        const total = _pendingPhotoFiles.length + files.length;
+        const statusEl = document.getElementById('photo-upload-status');
+        if (total > 5) {
+            if (statusEl) statusEl.textContent = `Max 5 photos allowed. Currently staged: ${_pendingPhotoFiles.length}`;
+            return;
+        }
+        _pendingPhotoFiles.push(...files);
+        const container = document.getElementById('photo-preview-container');
+        files.forEach(file => {
+            const url = URL.createObjectURL(file);
+            const img = document.createElement('img');
+            img.src = url; img.className = 'photo-thumb'; img.title = file.name;
+            img.onclick = () => openLightbox(url);
+            container.appendChild(img);
+        });
+        if (statusEl) statusEl.textContent = `${_pendingPhotoFiles.length} photo(s) staged for upload.`;
+        input.value = '';
+    }
+    window.handlePhotoUpload = handlePhotoUpload;
+
+    async function uploadJobPhotos(jobId, files) {
+        const gc = getSession().garageCode;
+        const urls = [];
+        for (const file of files) {
+            const path = `garages/${gc}/jobs/${jobId}/${Date.now()}_${file.name}`;
+            const ref = storageRef(storage, path);
+            await uploadBytes(ref, file);
+            const url = await getDownloadURL(ref);
+            urls.push({ url, name: file.name, path });
+        }
+        // Merge with any existing photos
+        const carRef = garageDoc(db, doc, 'cars', jobId);
+        const snap = await getDoc(carRef);
+        const existing = snap.exists() ? (snap.data().photos || []) : [];
+        await updateDoc(carRef, { photos: [...existing, ...urls] });
+        return urls;
+    }
+
+    async function loadJobPhotos(jobId, isEditable) {
+        const container = document.getElementById('job-photos-container');
+        const addLabel = document.getElementById('modal-add-photo-label');
+        container.innerHTML = '<p class="text-gray-400 text-sm">Loading photos...</p>';
+
+        const carRef = garageDoc(db, doc, 'cars', jobId);
+        const snap = await getDoc(carRef);
+        const photos = snap.exists() ? (snap.data().photos || []) : [];
+
+        if (photos.length === 0) {
+            container.innerHTML = '<p class="text-gray-400 text-sm">No photos attached to this job yet.</p>';
+        } else {
+            container.innerHTML = photos.map((p, i) => `
+                <div class="relative group">
+                    <img src="${p.url}" alt="${p.name}" class="photo-thumb" onclick="openLightbox('${p.url}')" />
+                    ${isEditable ? `<button onclick="deleteJobPhoto('${jobId}', ${i})" class="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-5 h-5 text-xs flex items-center justify-center hidden group-hover:flex">×</button>` : ''}
+                </div>
+            `).join('');
+        }
+
+        if (addLabel) addLabel.style.display = isEditable && photos.length < 5 ? 'inline-flex' : 'none';
+    }
+
+    async function handleModalPhotoUpload(input) {
+        const data = window.currentJobCardData;
+        if (!data || !data._docId) return;
+        const files = Array.from(input.files).slice(0, 5 - (data.photos?.length || 0));
+        if (files.length === 0) return;
+        const btn = document.getElementById('modal-add-photo-label');
+        if (btn) btn.textContent = 'Uploading...';
+        try {
+            await uploadJobPhotos(data._docId, files);
+            await loadJobPhotos(data._docId, true);
+        } catch (err) { alert('Upload failed: ' + err.message); }
+        input.value = '';
+    }
+    window.handleModalPhotoUpload = handleModalPhotoUpload;
+
+    async function deleteJobPhoto(jobId, photoIndex) {
+        if (!confirm('Delete this photo?')) return;
+        try {
+            const carRef = garageDoc(db, doc, 'cars', jobId);
+            const snap = await getDoc(carRef);
+            const photos = snap.data().photos || [];
+            const toDelete = photos[photoIndex];
+            if (toDelete && toDelete.path) {
+                try { await deleteObject(storageRef(storage, toDelete.path)); } catch(e) { /* ignore */ }
+            }
+            photos.splice(photoIndex, 1);
+            await updateDoc(carRef, { photos });
+            await loadJobPhotos(jobId, true);
+        } catch (err) { alert('Error deleting: ' + err.message); }
+    }
+    window.deleteJobPhoto = deleteJobPhoto;
+
+    function togglePhotosPanel() {
+        const panel = document.getElementById('job-photos-panel');
+        const btn = document.getElementById('view-photos-btn');
+        if (!panel) return;
+        const isHidden = panel.style.display === 'none';
+        panel.style.display = isHidden ? 'block' : 'none';
+        if (btn) btn.textContent = isHidden ? '📸 Hide Photos' : '📸 Photos';
+    }
+    window.togglePhotosPanel = togglePhotosPanel;
+
+    function openLightbox(url) {
+        document.getElementById('lightbox-img').src = url;
+        document.getElementById('photoLightbox').style.display = 'flex';
+    }
+    window.openLightbox = openLightbox;
+
+    // ======================================================================
+    // STATUS CHANGE LOGIC
+    // ======================================================================
+    function openStatusChangeModal() {
+        const data = window.currentJobCardData;
+        if (!data || !data._docId) return;
+        _pendingStatusTarget = { docId: data._docId, currentStatus: data.status, plate: data.plate };
+        document.getElementById('scm-job-label').textContent = `${data.plate} — ${data.make} ${data.model}`;
+        const currentBadgeCls = STATUS_BADGE_COLORS[data.status] || 'bg-gray-100 text-gray-700';
+        document.getElementById('scm-current-status').innerHTML = `<span class="px-2 py-0.5 rounded text-xs font-bold ${currentBadgeCls}">${data.status}</span>`;
+        document.getElementById('scm-note').value = '';
+
+        const optContainer = document.getElementById('scm-status-options');
+        optContainer.innerHTML = JOB_STATUSES
+            .filter(s => s.key !== data.status && s.key !== 'Completed') // Completed only via Mark Complete
+            .map(s => {
+                const cls = STATUS_BADGE_COLORS[s.key] || 'bg-gray-100 text-gray-700';
+                return `<label class="flex items-center gap-3 p-3 rounded-lg border-2 border-gray-200 cursor-pointer hover:border-blue-400 transition scm-option">
+                    <input type="radio" name="scm-status" value="${s.key}" class="w-4 h-4" />
+                    <span class="text-sm font-semibold px-2 py-0.5 rounded ${cls}">${s.icon} ${s.label}</span>
+                </label>`;
+            }).join('');
+
+        document.getElementById('statusChangeModal').style.display = 'flex';
+    }
+    window.openStatusChangeModal = openStatusChangeModal;
+
+    async function confirmStatusChange() {
+        const selected = document.querySelector('input[name="scm-status"]:checked');
+        if (!selected) { alert('Please select a new status.'); return; }
+        const newStatus = selected.value;
+        const note = document.getElementById('scm-note').value.trim();
+        if (!_pendingStatusTarget) return;
+        const { docId } = _pendingStatusTarget;
+
+        try {
+            const carRef = garageDoc(db, doc, 'cars', docId);
+            const snap = await getDoc(carRef);
+            const existing = snap.data().statusHistory || [];
+            const newEntry = { status: newStatus, timestamp: new Date().toISOString(), by: `${getSession().role}@${getSession().garageCode}`, note: note || '' };
+            await updateDoc(carRef, { status: newStatus, statusHistory: [...existing, newEntry] });
+            document.getElementById('statusChangeModal').style.display = 'none';
+            // Re-open the report with fresh data
+            await openDetailedReport(docId);
+            // Also refresh the active list if visible
+            if (document.getElementById('car-list').style.display === 'block') fetchCars('active-all');
+        } catch (err) { alert('Error updating status: ' + err.message); }
+    }
+    window.confirmStatusChange = confirmStatusChange;
 
     // ======================================================================
     // EDIT JOB CARD (ejc) — add / revoke repair items after creation
@@ -3084,38 +3529,53 @@ function lookupClientDetails(section) {
             totalJobs: jobs.length,
             jobsByType: {},
             jobsByMechanic: {},
+            mechanicPerformance: {},
             jobsByMake: {},
             totalParts: 0,
         };
 
         jobs.forEach(job => {
-            // Count by Type
             summary.jobsByType[job.jobType] = (summary.jobsByType[job.jobType] || 0) + 1;
 
-            // Count by Mechanic
             const mechanic = job.assignedMechanic || job.servicePerson || 'Unknown';
             summary.jobsByMechanic[mechanic] = (summary.jobsByMechanic[mechanic] || 0) + 1;
 
-            // Count by Make
+            if (!summary.mechanicPerformance[mechanic]) {
+                summary.mechanicPerformance[mechanic] = { count: 0, totalMs: 0, timeable: 0 };
+            }
+            summary.mechanicPerformance[mechanic].count += 1;
+            if (job.createdAt && job.completedAt) {
+                try {
+                    const created   = job.createdAt.toDate   ? job.createdAt.toDate()   : new Date(job.createdAt);
+                    const completed = job.completedAt.toDate ? job.completedAt.toDate() : new Date(job.completedAt);
+                    const ms = completed - created;
+                    if (ms > 0) { summary.mechanicPerformance[mechanic].totalMs  += ms; summary.mechanicPerformance[mechanic].timeable += 1; }
+                } catch(e) {}
+            }
+
             const make = job.make || 'Unknown';
             summary.jobsByMake[make] = (summary.jobsByMake[make] || 0) + 1;
 
-            // Simple Parts Cost Estimation (Mock)
             if (job.replacementParts && job.replacementParts.length > 0) {
-                // A simple mock calculation: 1 "part" in the list counts as 1000 KES
-                // In a real system, you'd calculate costs from an invoice field
                 const partCount = job.replacementParts.split('\n').length; 
                 summary.totalParts += partCount * 1000;
             }
         });
         
-        // Convert counts to sorted arrays (Top 5)
         const sortAndSlice = (obj) => Object.entries(obj).sort((a, b) => b[1] - a[1]).slice(0, 5);
-        summary.jobsByType = sortAndSlice(summary.jobsByType);
+        summary.jobsByType     = sortAndSlice(summary.jobsByType);
         summary.jobsByMechanic = sortAndSlice(summary.jobsByMechanic);
-        summary.jobsByMake = sortAndSlice(summary.jobsByMake);
+        summary.jobsByMake     = sortAndSlice(summary.jobsByMake);
 
         return summary;
+    }
+
+    function fmtDuration(ms) {
+        if (!ms || ms <= 0) return 'N/A';
+        const h = Math.floor(ms / 3600000);
+        const d = Math.floor(h / 24);
+        if (d >= 1) return `${d}d ${h % 24}h`;
+        return `${h}h ${Math.floor((ms % 3600000) / 60000)}m`;
     }
 
     // Helper to convert summary object arrays to HTML list
@@ -3130,6 +3590,50 @@ function lookupClientDetails(section) {
     function renderReportContent(jobs, summary, title, dateRange, contentId, modalId) {
         const contentEl = document.getElementById(contentId);
         
+        // ── Mechanic Performance Table ──
+        const perfEntries = Object.entries(summary.mechanicPerformance)
+            .sort((a,b) => b[1].count - a[1].count);
+        const mechanicPerfHtml = perfEntries.length === 0
+            ? '<p class="text-gray-400 text-sm">No data.</p>'
+            : `<table class="w-full text-sm">
+                <thead><tr class="bg-indigo-50">
+                    <th class="text-left p-2 font-semibold">Mechanic</th>
+                    <th class="text-center p-2 font-semibold">Jobs Done</th>
+                    <th class="text-center p-2 font-semibold">Avg Completion</th>
+                </tr></thead>
+                <tbody>${perfEntries.map(([name, d]) => {
+                    const avg = d.timeable > 0 ? fmtDuration(d.totalMs / d.timeable) : 'N/A';
+                    return `<tr class="border-b hover:bg-gray-50">
+                        <td class="p-2 font-medium">${name}</td>
+                        <td class="p-2 text-center font-bold text-indigo-700">${d.count}</td>
+                        <td class="p-2 text-center text-gray-600">${avg}</td>
+                    </tr>`;
+                }).join('')}</tbody>
+            </table>`;
+
+        // ── Client Loyalty (from jobs in this period) ──
+        const clientMap = {};
+        jobs.forEach(job => {
+            const key = job.clientPhone || job.clientName || 'Unknown';
+            if (!clientMap[key]) clientMap[key] = { name: job.clientName || 'Unknown', phone: job.clientPhone || '—', count: 0 };
+            clientMap[key].count += 1;
+        });
+        const loyalClients = Object.values(clientMap).sort((a,b) => b.count - a.count).slice(0,5);
+        const clientLoyaltyHtml = loyalClients.length === 0
+            ? '<p class="text-gray-400 text-sm">No data.</p>'
+            : `<table class="w-full text-sm">
+                <thead><tr class="bg-orange-50">
+                    <th class="text-left p-2 font-semibold">Client</th>
+                    <th class="text-left p-2 font-semibold">Phone</th>
+                    <th class="text-center p-2 font-semibold">Visits</th>
+                </tr></thead>
+                <tbody>${loyalClients.map(c => `<tr class="border-b hover:bg-gray-50">
+                    <td class="p-2 font-medium">${c.name}</td>
+                    <td class="p-2 text-gray-600 font-mono text-xs">${c.phone}</td>
+                    <td class="p-2 text-center font-bold text-orange-700">${c.count}</td>
+                </tr>`).join('')}</tbody>
+            </table>`;
+
         // 1. Summary Section
         const summaryHtml = `
             <div class="text-center border-b pb-4 mb-4">
@@ -3143,16 +3647,16 @@ function lookupClientDetails(section) {
                 <p class="text-sm text-gray-500">Note: Financial figures are mock estimates.</p>
             </div>
 
-            <h3 class="text-xl font-bold text-purple-700 mt-6 border-b pb-1">Summary Charts & Graphs (Data Compilation) </h3>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <h3 class="text-xl font-bold text-purple-700 mt-6 border-b pb-1">Summary Breakdown</h3>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-4">
                 <div class="bg-gray-100 p-4 rounded-lg">
-                    <h5 class="font-bold text-lg text-blue-600 border-b pb-1 mb-2">Jobs by Type (Top)</h5>
+                    <h5 class="font-bold text-lg text-blue-600 border-b pb-1 mb-2">Jobs by Type</h5>
                     <ul class="list-disc list-inside space-y-1 text-sm">
                         ${objectToHtmlList(summary.jobsByType)}
                     </ul>
                 </div>
                 <div class="bg-gray-100 p-4 rounded-lg">
-                    <h5 class="font-bold text-lg text-green-600 border-b pb-1 mb-2">Top Mechanics</h5>
+                    <h5 class="font-bold text-lg text-green-600 border-b pb-1 mb-2">Top Mechanics (Volume)</h5>
                     <ul class="list-disc list-inside space-y-1 text-sm">
                         ${objectToHtmlList(summary.jobsByMechanic)}
                     </ul>
@@ -3164,6 +3668,12 @@ function lookupClientDetails(section) {
                     </ul>
                 </div>
             </div>
+
+            <h3 class="text-xl font-bold text-indigo-700 mt-8 border-b pb-1">🔧 Mechanic Performance Report</h3>
+            <div class="mt-3 bg-white rounded-lg shadow-sm overflow-hidden border">${mechanicPerfHtml}</div>
+
+            <h3 class="text-xl font-bold text-orange-700 mt-8 border-b pb-1">❤️ Client Loyalty (Top Returning Clients)</h3>
+            <div class="mt-3 bg-white rounded-lg shadow-sm overflow-hidden border">${clientLoyaltyHtml}</div>
             
             <h3 class="text-xl font-bold text-red-700 mt-8 border-b pb-1">Detailed Completed Jobs List (${jobs.length})</h3>
         `;
@@ -3347,7 +3857,33 @@ function lookupClientDetails(section) {
             columnStyles: { 0: { cellWidth: 50 } },
             margin: { left: 14, right: 14 }
         });
-        y = pdfDoc.autoTable.previous.finalY + 15;
+        y = pdfDoc.autoTable.previous.finalY + 10;
+
+        // ── Mechanic Performance Table ──
+        pdfDoc.setFontSize(13);
+        pdfDoc.setTextColor(...hexToRgbArr(branding.secondaryColor || '#1e3a5f'));
+        pdfDoc.text("Mechanic Performance Report", 14, y);
+        y += 4;
+
+        const perfEntries = Object.entries(summary.mechanicPerformance || {}).sort((a,b) => b[1].count - a[1].count);
+        if (perfEntries.length > 0) {
+            pdfDoc.autoTable({
+                startY: y,
+                head: [['Mechanic', 'Jobs Completed', 'Avg Completion Time']],
+                body: perfEntries.map(([name, d]) => [
+                    name,
+                    String(d.count),
+                    d.timeable > 0 ? fmtDuration(d.totalMs / d.timeable) : 'N/A'
+                ]),
+                theme: 'striped',
+                headStyles: { fillColor: primary },
+                styles: { fontSize: 9, cellPadding: 2 },
+                margin: { left: 14, right: 14 }
+            });
+            y = pdfDoc.autoTable.previous.finalY + 15;
+        } else {
+            y += 10;
+        }
 
         // ── Detailed Jobs List ──
         if (jobs.length > 0) {
@@ -3427,6 +3963,9 @@ function lookupClientDetails(section) {
         addRepairPlanCard('Full diagnostic and repair of error codes.', '');
         // Initialize vehicle intake checklist groups
         initChecklistGroups();
+
+        // Initialize signature pad
+        initSignaturePad();
 
         // MODIFICATION 4: Attach WhatsApp handler to the button element in the modal
         document.getElementById('whatsapp-btn').onclick = sendJobCardViaWhatsApp;
