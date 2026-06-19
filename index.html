@@ -859,7 +859,7 @@ ownerLoginBtn.addEventListener('click', async () => {
     ownerLoginBtn.disabled = true;
 
     try {
-        const result = await loginWithEmail(email, password, auth, db, collection, query, where, getDocs);
+        const result = await loginWithEmail(email, password, auth, signInWithEmailAndPassword, db, collection, query, where, getDocs);
         if (!result.ok) {
             ownerLoginMsg.textContent = result.error || 'Login failed.';
             ownerLoginBtn.disabled = false;
