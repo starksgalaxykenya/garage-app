@@ -100,6 +100,7 @@ export function can(permission) {
  * @param {string} email
  * @param {string} password
  * @param {object} auth   – Firebase Auth instance
+ * @param {function} signInFn     – Firestore `signInWithEmailAndPassword` (modular SDK)
  * @param {object} db     – Firestore instance
  * @param {function} collectionFn – Firestore `collection`
  * @param {function} queryFn      – Firestore `query`
@@ -107,9 +108,9 @@ export function can(permission) {
  * @param {function} getDocsFn    – Firestore `getDocs`
  * @returns {Promise<{ok:boolean, garageCode?:string, error?:string}>}
  */
-export async function loginWithEmail(email, password, auth, db, collectionFn, queryFn, whereFn, getDocsFn) {
+export async function loginWithEmail(email, password, auth, signInFn, db, collectionFn, queryFn, whereFn, getDocsFn) {
     try {
-        const userCredential = await auth.signInWithEmailAndPassword(email, password);
+        const userCredential = await signInFn(auth, email, password);
         const uid = userCredential.user.uid;
 
         // Query garages for this owner (by ownerEmail or ownerUid)
