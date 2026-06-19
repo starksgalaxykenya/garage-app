@@ -97,6 +97,7 @@ function getSuppliersRef()         { return garageCol(db, collection, 'suppliers
 function getPartsInventoryRef()    { return garageCol(db, collection, 'partsInventory'); }
 function getInvoicesRef()          { return garageCol(db, collection, 'invoices'); }
 function getQuotesRef()            { return garageCol(db, collection, 'quotes'); }
+function getInventoryLedgerRef()   { return garageCol(db, collection, 'inventoryLedger'); }
 
 // UI Elements
 const authSection      = document.getElementById('auth-section-management');
@@ -238,6 +239,7 @@ function grantManagementAccess(role) {
     listenForDailyTransactions();
     listenForSuppliers();
     listenForPartsInventory();
+    listenForInventoryLedger();   // ← Parts Ledger audit trail
     listenForInvoices();
     listenForQuotes();
 
@@ -686,9 +688,12 @@ sellPartForm.addEventListener('submit', async (e) => {
     const partId       = partSaleSelect.value;
     const partOption   = partSaleSelect.options[partSaleSelect.selectedIndex];
     const quantitySold = parseInt(partSaleQuantityInput.value);
-    const carPlate     = document.getElementById('part-sale-plate').value || 'N/A';
+    const carPlate     = (document.getElementById('part-sale-plate').value || '').trim().toUpperCase() || 'N/A';
+    const issuedTo     = (document.getElementById('part-sale-issued-to').value || '').trim();
+    const purpose      = (document.getElementById('part-sale-purpose').value || '').trim();
 
     if (!partId || quantitySold <= 0) return alert("Please select a part and specify quantity.");
+    if (!issuedTo) return alert("Please enter the name of the person receiving the part.");
 
     const stock = parseInt(partOption.dataset.stock);
     if (quantitySold > stock) return alert(`Cannot sell ${quantitySold}. Only ${stock} in stock.`);
@@ -700,15 +705,15 @@ sellPartForm.addEventListener('submit', async (e) => {
     const totalExpense  = supplierPrice * quantitySold;
     const totalProfit   = totalIncome - totalExpense;
 
-    if (!confirm(`Confirm sale of ${quantitySold} x ${partName} for $${totalIncome.toFixed(2)} (Profit: $${totalProfit.toFixed(2)})?`)) return;
+    if (!confirm(`Confirm:\n  ${quantitySold} x ${partName}\n  Issued to: ${issuedTo}\n  Vehicle: ${carPlate}\n  Revenue: $${totalIncome.toFixed(2)}   Profit: $${totalProfit.toFixed(2)}`)) return;
 
     commitPartSaleBtn.disabled = true;
     try {
-        const partRef    = garageDoc(db, doc, 'partsInventory', partId);
-        const transRef   = doc(getDailyTransactionsRef());
+        const partRef   = garageDoc(db, doc, 'partsInventory', partId);
+        const transRef  = doc(getDailyTransactionsRef());
+        const ledgerRef = doc(getInventoryLedgerRef());
 
         await runTransaction(db, async (transaction) => {
-            // Read live stock from Firestore — not the UI cache
             const partSnap = await transaction.get(partRef);
             if (!partSnap.exists()) throw new Error('Part no longer exists.');
 
@@ -718,15 +723,34 @@ sellPartForm.addEventListener('submit', async (e) => {
             }
 
             transaction.update(partRef, { quantity: liveStock - quantitySold });
+
             transaction.set(transRef, {
                 type: 'PART SALE', subtype: partName, plate: carPlate,
-                description: `${quantitySold} x ${partName} sold (Plate: ${carPlate})`,
+                description: `${quantitySold} x ${partName} → ${issuedTo} (Plate: ${carPlate})`,
                 income: totalIncome, expense: totalExpense, profit: totalProfit,
                 timestamp: serverTimestamp(), isJob: true, date: getUTCDateString()
             });
+
+            // ── Ledger entry — full traceability record ──────────────────────
+            transaction.set(ledgerRef, {
+                partId,
+                partName,
+                quantitySold,
+                issuedTo,
+                vehiclePlate:  carPlate,
+                purpose:       purpose || '',
+                sellingPrice,
+                supplierPrice,
+                totalIncome,
+                totalExpense,
+                totalProfit,
+                issuedBy:  sessionStorage.getItem('userRole') || 'unknown',
+                timestamp: serverTimestamp(),
+                date:      getUTCDateString(),
+            });
         });
 
-        alert(`Sale committed! Profit: $${totalProfit.toFixed(2)} recorded in Finance.`);
+        alert(`Sale committed! ${quantitySold} x ${partName} issued to ${issuedTo}.\nProfit: $${totalProfit.toFixed(2)} recorded in Finance.`);
         sellPartForm.reset();
         partSaleProfitDisplay.textContent = '$0.00';
     } catch (error) {
@@ -784,6 +808,64 @@ window.deletePart = (id) => {
         deleteDoc(garageDoc(db, doc, 'partsInventory', id))
             .catch(e => { alert('Failed to delete part.'); console.error("Delete Part Error", e); });
     }
+};
+
+// =================================================================
+// 5b. INVENTORY LEDGER — Audit Trail
+// =================================================================
+
+let _allLedgerEntries = [];
+
+function listenForInventoryLedger() {
+    const q = query(getInventoryLedgerRef(), orderBy('timestamp', 'desc'));
+    onSnapshot(q, snapshot => {
+        _allLedgerEntries = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        renderLedger(_allLedgerEntries);
+    }, err => console.error('Ledger listener error:', err));
+}
+
+function renderLedger(entries) {
+    const tbody    = document.getElementById('ledger-table-body');
+    const emptyMsg = document.getElementById('ledger-empty-msg');
+    if (!tbody) return;
+
+    if (entries.length === 0) {
+        tbody.innerHTML = '';
+        if (emptyMsg) emptyMsg.classList.remove('hidden');
+        return;
+    }
+    if (emptyMsg) emptyMsg.classList.add('hidden');
+
+    tbody.innerHTML = entries.map(e => {
+        const dateStr = e.timestamp?.toDate
+            ? e.timestamp.toDate().toLocaleString('en-KE', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+            : (e.date || 'N/A');
+        const plateHtml = (e.vehiclePlate && e.vehiclePlate !== 'N/A')
+            ? `<span class="font-mono font-bold text-blue-700">${e.vehiclePlate}</span>`
+            : `<span class="text-gray-400">—</span>`;
+        const profitCls = (e.totalProfit ?? 0) >= 0 ? 'text-green-600' : 'text-red-600';
+        return `
+            <tr class="hover:bg-indigo-50 transition">
+                <td class="px-4 py-3 whitespace-nowrap text-xs text-gray-500">${dateStr}</td>
+                <td class="px-4 py-3 text-sm font-medium text-gray-900">${e.partName}</td>
+                <td class="px-4 py-3 text-sm text-center font-bold text-gray-700">${e.quantitySold}</td>
+                <td class="px-4 py-3 text-sm font-semibold text-indigo-700">${e.issuedTo || '—'}</td>
+                <td class="px-4 py-3 text-sm">${plateHtml}</td>
+                <td class="px-4 py-3 text-sm text-gray-500">${e.purpose || '—'}</td>
+                <td class="px-4 py-3 text-sm font-semibold ${profitCls}">$${(e.totalIncome ?? 0).toFixed(2)}</td>
+            </tr>`;
+    }).join('');
+}
+
+window.filterLedger = function () {
+    const q = (document.getElementById('ledger-search')?.value || '').toLowerCase();
+    if (!q) { renderLedger(_allLedgerEntries); return; }
+    renderLedger(_allLedgerEntries.filter(e =>
+        (e.partName     || '').toLowerCase().includes(q) ||
+        (e.issuedTo     || '').toLowerCase().includes(q) ||
+        (e.vehiclePlate || '').toLowerCase().includes(q) ||
+        (e.purpose      || '').toLowerCase().includes(q)
+    ));
 };
 
 // =================================================================
