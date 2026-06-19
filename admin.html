@@ -73,8 +73,16 @@
                     <input id="new-owner-name" type="text" placeholder="Owner Full Name" class="w-full p-3 border rounded-lg" />
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-600 mb-1">Owner Phone / Email</label>
-                    <input id="new-owner-contact" type="text" placeholder="+2547... or email" class="w-full p-3 border rounded-lg" />
+                    <label class="block text-sm font-medium text-gray-600 mb-1">Owner Email</label>
+                    <input id="new-owner-email" type="email" placeholder="owner@garage.com" class="w-full p-3 border rounded-lg" />
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-600 mb-1">Owner Password</label>
+                    <input id="new-owner-password" type="password" placeholder="Min 6 chars" class="w-full p-3 border rounded-lg" />
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-600 mb-1">Owner Phone</label>
+                    <input id="new-owner-contact" type="text" placeholder="+2547..." class="w-full p-3 border rounded-lg" />
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-600 mb-1">Subscription Plan</label>
@@ -119,6 +127,7 @@
                             <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Garage Name</th>
                             <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Owner</th>
                             <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Contact</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Email</th>
                             <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Status</th>
                             <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Trial Start</th>
                             <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Actions</th>
@@ -134,7 +143,7 @@
 </div>
 
 <script>
-// ===== FIREBASE CONFIG — use the same config as your other files =====
+// ===== FIREBASE CONFIG =====
 const firebaseConfig = {
     apiKey: "AIzaSyBCvFltNyGj3SYR-ADUocWD5EVjljoCEp8",
     authDomain: "garage-manager-1ac7c.firebaseapp.com",
@@ -145,7 +154,6 @@ const firebaseConfig = {
 };
 
 // List of admin UIDs allowed to access this panel
-// Add your UID(s) here after checking Firebase Auth console
 const ALLOWED_ADMIN_UIDS = ['is3whxmhyCaPjFkPqWyto2Cmgbz2'];
 
 const app = firebase.initializeApp(firebaseConfig);
@@ -171,7 +179,6 @@ function adminLogout() {
 
 auth.onAuthStateChanged(user => {
     if (user) {
-        // Only allow whitelisted admin UIDs
         if (!ALLOWED_ADMIN_UIDS.includes(user.uid) && ALLOWED_ADMIN_UIDS[0] !== 'REPLACE_WITH_YOUR_ADMIN_UID') {
             auth.signOut();
             document.getElementById('admin-auth-msg').textContent = 'Access denied. Not an admin.';
@@ -194,18 +201,25 @@ function generateCode() {
     document.getElementById('new-garage-code').value = `${letters()}-${numbers()}`;
 }
 
-// ===== CREATE GARAGE =====
+// ===== CREATE GARAGE (with Firebase Auth user) =====
 async function createGarage() {
     const name = document.getElementById('new-garage-name').value.trim();
     const owner = document.getElementById('new-owner-name').value.trim();
+    const email = document.getElementById('new-owner-email').value.trim();
+    const password = document.getElementById('new-owner-password').value.trim();
     const contact = document.getElementById('new-owner-contact').value.trim();
     const status = document.getElementById('new-sub-status').value;
     const code = document.getElementById('new-garage-code').value.trim().toUpperCase();
     const msg = document.getElementById('create-msg');
 
-    if (!name || !owner || !code) {
+    if (!name || !owner || !code || !email || !password) {
         msg.className = 'mt-3 text-sm font-medium text-center text-red-600';
-        msg.textContent = 'Please fill in Garage Name, Owner, and Garage Code.';
+        msg.textContent = 'Please fill in Garage Name, Owner, Email, Password, and Garage Code.';
+        return;
+    }
+    if (password.length < 6) {
+        msg.className = 'mt-3 text-sm font-medium text-center text-red-600';
+        msg.textContent = 'Password must be at least 6 characters.';
         return;
     }
 
@@ -217,6 +231,7 @@ async function createGarage() {
     }
 
     try {
+        // 1. Check if garage code already exists
         const existing = await garagesRef.doc(code).get();
         if (existing.exists) {
             msg.className = 'mt-3 text-sm font-medium text-center text-red-600';
@@ -224,26 +239,41 @@ async function createGarage() {
             return;
         }
 
+        // 2. Create Firebase Auth user with email+password
+        const userCredential = await auth.createUserWithEmailAndPassword(email, password);
+        const uid = userCredential.user.uid;
+
+        // 3. Save garage document with owner email and UID
         await garagesRef.doc(code).set({
             garageName: name,
             ownerName: owner,
+            ownerEmail: email,
+            ownerUid: uid,
             ownerContact: contact,
             subscriptionStatus: status,
             garageCode: code,
             trialStartDate: status === 'trial' ? new Date().toISOString().split('T')[0] : null,
-            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            // Default PINs (can be changed later)
+            pins: {
+                mechanic: '1234',
+                admin: '5678',
+                manager: '9012'
+            }
         });
 
         msg.className = 'mt-3 text-sm font-medium text-center text-green-600';
-        msg.textContent = `✅ Garage created! Code: ${code} — Share this with the garage owner.`;
-        
+        msg.textContent = `✅ Garage created! Code: ${code} — Owner email: ${email}. Share the code with staff.`;
+
         // Clear form
-        ['new-garage-name','new-garage-code','new-owner-name','new-owner-contact'].forEach(id => {
+        ['new-garage-name','new-garage-code','new-owner-name','new-owner-email','new-owner-password','new-owner-contact'].forEach(id => {
             document.getElementById(id).value = '';
         });
+        document.getElementById('new-sub-status').value = 'trial';
     } catch (err) {
         msg.className = 'mt-3 text-sm font-medium text-center text-red-600';
         msg.textContent = 'Error creating garage: ' + err.message;
+        console.error(err);
     }
 }
 
@@ -269,7 +299,8 @@ function filterGarages() {
     const filtered = allGaragesData.filter(g =>
         (g.garageName || '').toLowerCase().includes(q) ||
         (g.garageCode || '').toLowerCase().includes(q) ||
-        (g.ownerName || '').toLowerCase().includes(q)
+        (g.ownerName || '').toLowerCase().includes(q) ||
+        (g.ownerEmail || '').toLowerCase().includes(q)
     );
     renderGarages(filtered);
 }
@@ -300,6 +331,7 @@ function renderGarages(data) {
             <td class="px-4 py-3 font-medium text-gray-900">${g.garageName || '—'}</td>
             <td class="px-4 py-3 text-gray-600">${g.ownerName || '—'}</td>
             <td class="px-4 py-3 text-gray-600">${g.ownerContact || '—'}</td>
+            <td class="px-4 py-3 text-gray-600">${g.ownerEmail || '—'}</td>
             <td class="px-4 py-3">
                 <select onchange="updateStatus('${g.id}', this.value)"
                         class="text-xs font-semibold px-2 py-1 rounded-full border-0 ${color} cursor-pointer">
