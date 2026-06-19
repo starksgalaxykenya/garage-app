@@ -15,44 +15,11 @@
 //   3. Enter PIN          → checked against garages/{code}.pins.{role}
 //   4. Grant access       → sessionStorage records role + garageCode
 //
-// PIN STORAGE (in Firestore garages/{garageCode}):
-//   pins: { mechanic: "1234", admin: "5678", manager: "9012" }
-//   Only a manager can write these via the Settings tab.
+// NEW: Email + Password login for garage owner.
+//   ownerEmail is stored in the garage document. After login, the garage
+//   code is retrieved and the PIN flow continues.
 // =================================================================
-// ─── In auth.js — add these exports ───────────────────────────────
 
-/**
- * Returns a Firestore CollectionReference scoped to the current garage.
- * Usage: garageCol(db, collection, 'cars')
- *
- * @param {Firestore} db
- * @param {Function}  collectionFn  – Firestore `collection` function
- * @param {string}    colName       – e.g. 'cars', 'clients', 'invoices'
- */
-export function garageCol(db, collectionFn, colName) {
-    const { garageCode } = getSession();
-    if (!garageCode) throw new Error('No active garage session.');
-    return collectionFn(db, 'garages', garageCode, colName);
-}
-
-/**
- * Returns a Firestore DocumentReference scoped to the current garage.
- * Usage: garageDoc(db, doc, 'cars', carId)
- */
-export function garageDoc(db, docFn, colName, docId) {
-    const { garageCode } = getSession();
-    if (!garageCode) throw new Error('No active garage session.');
-    return docFn(db, 'garages', garageCode, colName, docId);
-}
-
-/**
- * Returns the garage root DocumentReference.
- * Usage: garageRef(db, doc)
- */
-export function garageRef(db, docFn) {
-    const { garageCode } = getSession();
-    return docFn(db, 'garages', garageCode);
-}
 export const ROLES = {
     MECHANIC: 'mechanic',
     ADMIN:    'admin',
@@ -103,19 +70,21 @@ export function getSession() {
         garageCode: sessionStorage.getItem('garageCode') || '',
         role:       sessionStorage.getItem('userRole')   || '',
         authed:     sessionStorage.getItem('pinAuthed')  === 'true',
+        ownerEmail: sessionStorage.getItem('ownerEmail') || '',
     };
 }
 
-export function setSession(garageCode, role) {
+export function setSession(garageCode, role, ownerEmail = '') {
     sessionStorage.setItem('garageCode', garageCode.toUpperCase());
     sessionStorage.setItem('userRole',   role);
     sessionStorage.setItem('pinAuthed',  'true');
     sessionStorage.setItem('lastChecked', new Date().toDateString());
+    if (ownerEmail) sessionStorage.setItem('ownerEmail', ownerEmail);
 }
 
 export function clearSession() {
     ['garageCode','userRole','pinAuthed','lastChecked',
-     'subscriptionStatus','pendingGarageCode'].forEach(k => sessionStorage.removeItem(k));
+     'subscriptionStatus','pendingGarageCode','ownerEmail'].forEach(k => sessionStorage.removeItem(k));
 }
 
 export function can(permission) {
@@ -124,7 +93,56 @@ export function can(permission) {
     return !!(PERMISSIONS[role]?.[permission]);
 }
 
-// ─── PIN verification (reads from Firestore) ─────────────────────
+// ─── Email + Password login ──────────────────────────────────────
+
+/**
+ * Logs in the garage owner using email/password and retrieves the associated garage code.
+ * @param {string} email
+ * @param {string} password
+ * @param {object} auth   – Firebase Auth instance
+ * @param {object} db     – Firestore instance
+ * @param {function} collectionFn – Firestore `collection`
+ * @param {function} queryFn      – Firestore `query`
+ * @param {function} whereFn      – Firestore `where`
+ * @param {function} getDocsFn    – Firestore `getDocs`
+ * @returns {Promise<{ok:boolean, garageCode?:string, error?:string}>}
+ */
+export async function loginWithEmail(email, password, auth, db, collectionFn, queryFn, whereFn, getDocsFn) {
+    try {
+        const userCredential = await auth.signInWithEmailAndPassword(email, password);
+        const uid = userCredential.user.uid;
+
+        // Query garages for this owner (by ownerEmail or ownerUid)
+        const q = queryFn(
+            collectionFn(db, 'garages'),
+            whereFn('ownerUid', '==', uid)
+        );
+        const snap = await getDocsFn(q);
+
+        if (snap.empty) {
+            // Also try by email (in case the document was created with email but UID not set)
+            const q2 = queryFn(
+                collectionFn(db, 'garages'),
+                whereFn('ownerEmail', '==', email)
+            );
+            const snap2 = await getDocsFn(q2);
+            if (snap2.empty) {
+                return { ok: false, error: 'No garage associated with this email. Contact support.' };
+            }
+            const doc = snap2.docs[0];
+            return { ok: true, garageCode: doc.id };
+        }
+
+        const doc = snap.docs[0];
+        return { ok: true, garageCode: doc.id };
+
+    } catch (err) {
+        console.error('[Auth] Email login error:', err);
+        return { ok: false, error: err.message };
+    }
+}
+
+// ─── PIN verification (unchanged) ────────────────────────────────
 
 /**
  * Verify a PIN for a given garage + role.
@@ -134,7 +152,7 @@ export function can(permission) {
  * @param {object}   db          – Firestore instance
  * @param {function} docFn       – Firestore `doc`
  * @param {function} getDocFn    – Firestore `getDoc`
- * @returns {Promise<{ok:boolean, garageData?:object, error?:string}>}
+ * @returns {Promise<{ok:boolean, garageData?:object, error?:string, firstSetup?:boolean}>}
  */
 export async function verifyPin(garageCode, role, pin, db, docFn, getDocFn) {
     if (!pin || pin.length < 4) return { ok: false, error: 'PIN must be at least 4 digits.' };
@@ -199,4 +217,35 @@ export function showTrialBanner(garageData) {
     b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:#f59e0b;color:#1f2937;text-align:center;padding:8px;font-weight:bold;font-size:14px;';
     b.textContent = `⚠️ FREE TRIAL: ${daysLeft} day${daysLeft !== 1 ? 's' : ''} remaining. Upgrade to keep access.`;
     document.body.prepend(b);
+}
+
+// ─── Garage-scoped Firestore helpers ─────────────────────────────
+
+/**
+ * Returns a Firestore CollectionReference scoped to the current garage.
+ * Usage: garageCol(db, collection, 'cars')
+ */
+export function garageCol(db, collectionFn, colName) {
+    const { garageCode } = getSession();
+    if (!garageCode) throw new Error('No active garage session.');
+    return collectionFn(db, 'garages', garageCode, colName);
+}
+
+/**
+ * Returns a Firestore DocumentReference scoped to the current garage.
+ * Usage: garageDoc(db, doc, 'cars', carId)
+ */
+export function garageDoc(db, docFn, colName, docId) {
+    const { garageCode } = getSession();
+    if (!garageCode) throw new Error('No active garage session.');
+    return docFn(db, 'garages', garageCode, colName, docId);
+}
+
+/**
+ * Returns the garage root DocumentReference.
+ * Usage: garageRef(db, doc)
+ */
+export function garageRef(db, docFn) {
+    const { garageCode } = getSession();
+    return docFn(db, 'garages', garageCode);
 }
