@@ -98,6 +98,10 @@ function getPartsInventoryRef()    { return garageCol(db, collection, 'partsInve
 function getInvoicesRef()          { return garageCol(db, collection, 'invoices'); }
 function getQuotesRef()            { return garageCol(db, collection, 'quotes'); }
 function getInventoryLedgerRef()   { return garageCol(db, collection, 'inventoryLedger'); }
+function getEmployeesRef()         { return garageCol(db, collection, 'employees'); }
+function getPayrollRunsRef()       { return garageCol(db, collection, 'payrollRuns'); }
+function getCasualWorkersRef()     { return garageCol(db, collection, 'casualWorkers'); }
+function getCasualEarningsRef()    { return garageCol(db, collection, 'casualEarnings'); }
 
 // UI Elements
 const authSection      = document.getElementById('auth-section-management');
@@ -144,6 +148,21 @@ const invoiceCreationForm = document.getElementById('invoice-creation-form');
 const quoteCreationForm   = document.getElementById('quote-creation-form');
 const invoicesTableBody   = document.getElementById('invoices-table-body');
 const quotesTableBody     = document.getElementById('quotes-table-body');
+
+// Payroll UI Elements
+const addEmployeeForm        = document.getElementById('add-employee-form');
+const employeesListContainer = document.getElementById('employees-list-container');
+const addCasualForm          = document.getElementById('add-casual-form');
+const logCasualEarningForm   = document.getElementById('log-casual-earning-form');
+const casualWorkersListContainer = document.getElementById('casual-workers-list-container');
+const casualEarningsTableBody    = document.getElementById('casual-earnings-table-body');
+const payhistoryTableBody        = document.getElementById('payhistory-table-body');
+
+let allEmployees      = [];
+let allCasualWorkers  = [];
+let allCasualEarnings = [];
+let allPayrollRuns    = [];
+let _currentEmployeeId = null; // employee open in the payroll modal
 
 let currentDailyTransactions = [];
 let plChartInstance = null;
@@ -236,12 +255,22 @@ function grantManagementAccess(role) {
     const pinSection = document.getElementById('pin-management-section');
     if (pinSection) pinSection.style.display = can('managePins') ? '' : 'none';
 
+    // Payroll tab — financial data, manager only
+    const payrollTabBtn = document.getElementById('tab-payroll');
+    if (payrollTabBtn) payrollTabBtn.style.display = can('viewFinancials') ? '' : 'none';
+
     listenForDailyTransactions();
     listenForSuppliers();
     listenForPartsInventory();
     listenForInventoryLedger();   // ← Parts Ledger audit trail
     listenForInvoices();
     listenForQuotes();
+    if (can('viewFinancials')) {
+        listenForEmployees();
+        listenForCasualWorkers();
+        listenForCasualEarnings();
+        listenForPayrollRuns();
+    }
 
     // Hourly subscription re-check
     const garageCode = sessionStorage.getItem('garageCode');
@@ -1417,3 +1446,701 @@ window.savePinSettings = async function() {
         btn.disabled = false; btn.textContent = 'Save PINs';
     }
 };
+
+// =================================================================
+// 12. PAYROLL & LABOR MANAGEMENT
+//     (Full-Time Employees · Casual/Per-Job Workers · Payment History)
+//     Manager-only (gated via can('viewFinancials') at grant-access time)
+// =================================================================
+
+function escapeHtmlPR(str) {
+    if (!str) return '';
+    return String(str).replace(/[&<>]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[m] || m));
+}
+
+function sumLineItems(arr = []) {
+    return (arr || []).reduce((s, item) => s + (parseFloat(item.amount) || 0), 0);
+}
+
+// ── 12.0 — Payroll Sub-Tab Switching ──────────────────────────────
+function switchPayrollSubtab(target) {
+    document.querySelectorAll('.payroll-subcontent').forEach(el => el.classList.add('hidden'));
+    document.querySelectorAll('.payroll-subtab-btn').forEach(btn => {
+        btn.classList.remove('bg-indigo-700', 'text-white');
+        btn.classList.add('text-indigo-800');
+    });
+    const content = document.getElementById(`payroll-subcontent-${target}`);
+    const btn     = document.getElementById(`subtab-${target}`);
+    if (content) content.classList.remove('hidden');
+    if (btn) { btn.classList.add('bg-indigo-700', 'text-white'); btn.classList.remove('text-indigo-800'); }
+    if (target === 'payhistory') renderPayHistory();
+}
+document.getElementById('subtab-employees')?.addEventListener('click', () => switchPayrollSubtab('employees'));
+document.getElementById('subtab-casuals')?.addEventListener('click', () => switchPayrollSubtab('casuals'));
+document.getElementById('subtab-payhistory')?.addEventListener('click', () => switchPayrollSubtab('payhistory'));
+
+// =================================================================
+// 12.1 — FULL-TIME EMPLOYEES
+// =================================================================
+
+addEmployeeForm?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!can('viewFinancials')) { alert('Only managers can manage payroll.'); return; }
+
+    const msgEl = document.getElementById('emp-save-msg');
+    const employee = {
+        name:         document.getElementById('emp-name').value.trim(),
+        position:     document.getElementById('emp-position').value.trim(),
+        phone:        document.getElementById('emp-phone').value.trim(),
+        idNumber:     document.getElementById('emp-id-no').value.trim(),
+        baseSalary:   parseFloat(document.getElementById('emp-base-salary').value) || 0,
+        payFrequency: document.getElementById('emp-pay-frequency').value,
+        startDate:    document.getElementById('emp-start-date').value || '',
+        status:       document.getElementById('emp-status').value,
+        deductions:   [],
+        benefits:     [],
+        penalties:    [],
+        createdAt:    serverTimestamp(),
+    };
+
+    if (!employee.name || !employee.position) {
+        msgEl.textContent = '❌ Name and position are required.';
+        msgEl.className = 'text-red-500 text-sm';
+        return;
+    }
+
+    msgEl.textContent = 'Saving…'; msgEl.className = 'text-blue-500 text-sm';
+    try {
+        await addDoc(getEmployeesRef(), employee);
+        msgEl.textContent = '✅ Employee added successfully!';
+        msgEl.className = 'text-green-600 text-sm';
+        addEmployeeForm.reset();
+        document.getElementById('emp-pay-frequency').value = 'Monthly';
+        document.getElementById('emp-status').value = 'Active';
+    } catch (err) {
+        msgEl.textContent = `❌ Error: ${err.message}`;
+        msgEl.className = 'text-red-500 text-sm';
+        console.error('Add Employee Error:', err);
+    }
+});
+
+function listenForEmployees() {
+    onSnapshot(query(getEmployeesRef(), orderBy('name', 'asc')), snapshot => {
+        allEmployees = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        document.getElementById('employee-count').textContent = allEmployees.length;
+        renderEmployeesList(allEmployees);
+        populateCasualEarningWorkerSelect(); // no-op safeguard; real population happens in its own listener
+        // Keep open modal in sync if an employee is currently being viewed
+        if (_currentEmployeeId) {
+            const emp = allEmployees.find(e => e.id === _currentEmployeeId);
+            if (emp) renderEmployeeModalContent(emp);
+        }
+    }, err => console.error('Employees listener error:', err));
+}
+
+function netPayFor(emp) {
+    const benefits   = sumLineItems(emp.benefits);
+    const deductions = sumLineItems(emp.deductions);
+    const penalties  = sumLineItems(emp.penalties);
+    const net = (emp.baseSalary || 0) + benefits - deductions - penalties;
+    return { benefits, deductions, penalties, net };
+}
+
+function renderEmployeesList(employees) {
+    const container = employeesListContainer;
+    const noMsg = document.getElementById('no-employees-message');
+    const search = (document.getElementById('employee-search')?.value || '').toLowerCase();
+    const filtered = employees.filter(emp =>
+        emp.name.toLowerCase().includes(search) ||
+        (emp.position || '').toLowerCase().includes(search)
+    );
+
+    if (filtered.length === 0) {
+        container.innerHTML = '';
+        if (noMsg) { noMsg.style.display = 'block'; noMsg.textContent = 'No employees found.'; }
+        return;
+    }
+    if (noMsg) noMsg.style.display = 'none';
+
+    const statusColors = {
+        'Active':     'bg-green-100 text-green-700',
+        'On Leave':   'bg-yellow-100 text-yellow-700',
+        'Suspended':  'bg-orange-100 text-orange-700',
+        'Terminated': 'bg-red-100 text-red-700',
+    };
+
+    container.innerHTML = filtered.map(emp => {
+        const { net, penalties } = netPayFor(emp);
+        const penaltyFlag = penalties > 0 ? `<span class="text-xs bg-orange-100 text-orange-700 font-bold px-2 py-0.5 rounded-full ml-1">⚠️ $${penalties.toFixed(2)} pending</span>` : '';
+        return `
+            <div class="border rounded-lg p-4 hover:shadow-md transition flex justify-between items-center cursor-pointer" onclick="openEmployeeModal('${emp.id}')">
+                <div>
+                    <p class="font-bold text-gray-800">${escapeHtmlPR(emp.name)} ${penaltyFlag}</p>
+                    <p class="text-sm text-indigo-600">${escapeHtmlPR(emp.position)}</p>
+                    <p class="text-xs text-gray-400">${emp.payFrequency || 'Monthly'} · Base: $${(emp.baseSalary || 0).toFixed(2)}</p>
+                </div>
+                <div class="text-right">
+                    <span class="text-xs font-semibold px-2 py-1 rounded-full ${statusColors[emp.status] || 'bg-gray-100 text-gray-600'}">${emp.status || 'Active'}</span>
+                    <p class="text-sm font-bold text-gray-700 mt-1">Net: $${net.toFixed(2)}</p>
+                </div>
+            </div>`;
+    }).join('');
+}
+window.filterEmployees = () => renderEmployeesList(allEmployees);
+
+// ── Employee Payroll Modal ────────────────────────────────────────
+
+function openEmployeeModal(empId) {
+    _currentEmployeeId = empId;
+    const emp = allEmployees.find(e => e.id === empId);
+    if (!emp) return;
+    renderEmployeeModalContent(emp);
+    document.getElementById('employeePayrollModal').style.display = 'flex';
+}
+window.openEmployeeModal = openEmployeeModal;
+
+function closeEmployeeModal() {
+    document.getElementById('employeePayrollModal').style.display = 'none';
+    _currentEmployeeId = null;
+}
+window.closeEmployeeModal = closeEmployeeModal;
+
+function renderEmployeeModalContent(emp) {
+    document.getElementById('epm-emp-name').textContent = emp.name;
+    document.getElementById('epm-emp-position').textContent = `${emp.position} · ${emp.payFrequency || 'Monthly'} · ${emp.status || 'Active'}`;
+    document.getElementById('epm-base-salary').value = emp.baseSalary || 0;
+
+    const lineItemRow = (item, idx, type, colorCls) => `
+        <div class="flex justify-between items-center bg-white border rounded-lg px-3 py-2">
+            <span class="text-sm text-gray-700">${escapeHtmlPR(item.label)}</span>
+            <div class="flex items-center gap-2">
+                <span class="text-sm font-semibold ${colorCls}">$${(parseFloat(item.amount) || 0).toFixed(2)}</span>
+                <button onclick="removeEmployeeLineItem('${type}', ${idx})" class="text-gray-400 hover:text-red-500 text-xs font-bold">✕</button>
+            </div>
+        </div>`;
+
+    document.getElementById('epm-deductions-list').innerHTML = (emp.deductions || []).length
+        ? emp.deductions.map((d, i) => lineItemRow(d, i, 'deductions', 'text-red-600')).join('')
+        : `<p class="text-xs text-gray-400">No deductions.</p>`;
+
+    document.getElementById('epm-benefits-list').innerHTML = (emp.benefits || []).length
+        ? emp.benefits.map((b, i) => lineItemRow(b, i, 'benefits', 'text-green-600')).join('')
+        : `<p class="text-xs text-gray-400">No benefits.</p>`;
+
+    document.getElementById('epm-penalties-list').innerHTML = (emp.penalties || []).length
+        ? emp.penalties.map((p, i) => lineItemRow(p, i, 'penalties', 'text-orange-600')).join('')
+        : `<p class="text-xs text-gray-400">No pending penalties.</p>`;
+
+    updateEmployeeNetPayCalc(emp);
+    renderEmployeePayHistory(emp.id);
+}
+
+function updateEmployeeNetPayCalc(emp) {
+    const { benefits, deductions, penalties, net } = netPayFor(emp);
+    document.getElementById('epm-calc-base').textContent       = `$${(emp.baseSalary || 0).toFixed(2)}`;
+    document.getElementById('epm-calc-benefits').textContent   = `$${benefits.toFixed(2)}`;
+    document.getElementById('epm-calc-deductions').textContent = `$${deductions.toFixed(2)}`;
+    document.getElementById('epm-calc-penalties').textContent  = `$${penalties.toFixed(2)}`;
+    const netEl = document.getElementById('epm-calc-net');
+    netEl.textContent = `$${net.toFixed(2)}`;
+    netEl.className = net >= 0 ? 'text-green-700' : 'text-red-600';
+}
+
+window.updateEmployeeBaseSalary = async function () {
+    if (!_currentEmployeeId) return;
+    const newBase = parseFloat(document.getElementById('epm-base-salary').value) || 0;
+    try {
+        await updateDoc(garageDoc(db, doc, 'employees', _currentEmployeeId), { baseSalary: newBase });
+    } catch (err) {
+        alert(`Failed to update base salary: ${err.message}`);
+    }
+};
+
+window.addEmployeeLineItem = async function (type) {
+    if (!_currentEmployeeId) return;
+    const labelInput  = document.getElementById(`epm-new-${type === 'deductions' ? 'deduction' : type === 'benefits' ? 'benefit' : 'penalty'}-label`);
+    const amountInput = document.getElementById(`epm-new-${type === 'deductions' ? 'deduction' : type === 'benefits' ? 'benefit' : 'penalty'}-amount`);
+    const label  = labelInput.value.trim();
+    const amount = parseFloat(amountInput.value);
+
+    if (!label || isNaN(amount) || amount <= 0) {
+        alert('Please enter a valid label and amount.');
+        return;
+    }
+
+    const emp = allEmployees.find(e => e.id === _currentEmployeeId);
+    if (!emp) return;
+
+    const updated = [...(emp[type] || []), { label, amount, addedAt: new Date().toISOString() }];
+    try {
+        await updateDoc(garageDoc(db, doc, 'employees', _currentEmployeeId), { [type]: updated });
+        labelInput.value = ''; amountInput.value = '';
+    } catch (err) {
+        alert(`Failed to add ${type.slice(0, -1)}: ${err.message}`);
+    }
+};
+
+window.removeEmployeeLineItem = async function (type, idx) {
+    if (!_currentEmployeeId) return;
+    const emp = allEmployees.find(e => e.id === _currentEmployeeId);
+    if (!emp) return;
+    const updated = (emp[type] || []).filter((_, i) => i !== idx);
+    try {
+        await updateDoc(garageDoc(db, doc, 'employees', _currentEmployeeId), { [type]: updated });
+    } catch (err) {
+        alert(`Failed to remove item: ${err.message}`);
+    }
+};
+
+window.deleteEmployee = async function () {
+    if (!_currentEmployeeId) return;
+    const emp = allEmployees.find(e => e.id === _currentEmployeeId);
+    if (!emp) return;
+    if (!confirm(`Remove ${emp.name} from payroll? Past payment history will be kept for records.`)) return;
+    try {
+        await deleteDoc(garageDoc(db, doc, 'employees', _currentEmployeeId));
+        closeEmployeeModal();
+    } catch (err) {
+        alert(`Failed to remove employee: ${err.message}`);
+    }
+};
+
+// ── Run Payroll — writes payrollRuns doc + mirrors into dailyTransactions ──
+window.runEmployeePayroll = async function () {
+    if (!_currentEmployeeId) return;
+    if (!can('viewFinancials')) { alert('Only managers can run payroll.'); return; }
+
+    const emp = allEmployees.find(e => e.id === _currentEmployeeId);
+    if (!emp) return;
+
+    const { benefits, deductions, penalties, net } = netPayFor(emp);
+    const msgEl = document.getElementById('epm-payroll-msg');
+    const btn   = document.getElementById('epm-run-payroll-btn');
+
+    if (net <= 0) {
+        msgEl.textContent = '❌ Net pay must be greater than $0.00 to process.';
+        msgEl.className = 'text-sm mt-2 text-center text-red-600 font-semibold';
+        return;
+    }
+
+    if (!confirm(`Pay ${emp.name} a net amount of $${net.toFixed(2)}?\n\nThis records the payment in today's Finance expenses and clears pending penalties for this run.`)) return;
+
+    btn.disabled = true; btn.textContent = 'Processing…';
+    msgEl.textContent = '';
+
+    try {
+        const empRef     = garageDoc(db, doc, 'employees', _currentEmployeeId);
+        const payrollRef = doc(getPayrollRunsRef());
+        const transRef    = doc(getDailyTransactionsRef());
+
+        await runTransaction(db, async (transaction) => {
+            const empSnap = await transaction.get(empRef);
+            if (!empSnap.exists()) throw new Error('Employee record no longer exists.');
+            const liveEmp = empSnap.data();
+
+            // Record the payroll run (immutable snapshot of this payment)
+            transaction.set(payrollRef, {
+                employeeId:   _currentEmployeeId,
+                employeeName: liveEmp.name,
+                position:     liveEmp.position,
+                baseSalary:   liveEmp.baseSalary || 0,
+                benefits:     liveEmp.benefits   || [],
+                deductions:   liveEmp.deductions || [],
+                penalties:    liveEmp.penalties  || [],
+                benefitsTotal:   benefits,
+                deductionsTotal: deductions,
+                penaltiesTotal:  penalties,
+                netPay:       net,
+                paidBy:       getSession().role,
+                paidAt:       serverTimestamp(),
+                date:         getUTCDateString(),
+            });
+
+            // Mirror into daily transactions — affects today's P&L like every other expense
+            transaction.set(transRef, {
+                type: 'PAYROLL', subtype: 'Salary Payment', plate: 'N/A',
+                description: `Salary paid to ${liveEmp.name} (${liveEmp.position})`,
+                income: 0, expense: net, profit: -net,
+                timestamp: serverTimestamp(), isJob: false, date: getUTCDateString()
+            });
+
+            // Clear pending penalties (they've now been deducted) — base/benefits/deductions persist for next run
+            transaction.update(empRef, { penalties: [] });
+        });
+
+        msgEl.textContent = `✅ Paid $${net.toFixed(2)} to ${emp.name}. Recorded in Finance.`;
+        msgEl.className = 'text-sm mt-2 text-center text-green-600 font-semibold';
+    } catch (err) {
+        msgEl.textContent = `❌ ${err.message}`;
+        msgEl.className = 'text-sm mt-2 text-center text-red-600 font-semibold';
+        console.error('Run Payroll Error:', err);
+    } finally {
+        btn.disabled = false; btn.textContent = '💸 Pay Now & Record in Finance';
+    }
+};
+
+function listenForPayrollRuns() {
+    onSnapshot(query(getPayrollRunsRef(), orderBy('paidAt', 'desc')), snapshot => {
+        allPayrollRuns = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        if (_currentEmployeeId) renderEmployeePayHistory(_currentEmployeeId);
+        renderPayHistory();
+    }, err => console.error('Payroll runs listener error:', err));
+}
+
+function renderEmployeePayHistory(empId) {
+    const container = document.getElementById('epm-history-list');
+    if (!container) return;
+    const runs = allPayrollRuns.filter(r => r.employeeId === empId);
+    if (runs.length === 0) {
+        container.innerHTML = `<p class="text-gray-400 text-sm">No payroll history yet.</p>`;
+        return;
+    }
+    container.innerHTML = runs.map(r => {
+        const dateStr = r.paidAt?.toDate
+            ? r.paidAt.toDate().toLocaleString('en-KE', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+            : (r.date || 'N/A');
+        return `
+            <div class="flex justify-between items-center bg-gray-50 rounded-lg px-3 py-2 text-sm">
+                <span class="text-gray-500">${dateStr}</span>
+                <span class="font-bold text-indigo-700">$${(r.netPay || 0).toFixed(2)}</span>
+            </div>`;
+    }).join('');
+}
+
+// =================================================================
+// 12.2 — CASUAL LABORERS / CONTRACTORS / PER-JOB WORKERS
+// =================================================================
+
+addCasualForm?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!can('viewFinancials')) { alert('Only managers can manage labor records.'); return; }
+
+    const msgEl = document.getElementById('casual-save-msg');
+    const worker = {
+        name:      document.getElementById('casual-name').value.trim(),
+        phone:     document.getElementById('casual-phone').value.trim(),
+        role:      document.getElementById('casual-role').value.trim(),
+        workerType: document.getElementById('casual-type').value,
+        createdAt: serverTimestamp(),
+    };
+    if (!worker.name) { msgEl.textContent = '❌ Name is required.'; msgEl.className = 'text-red-500 text-sm'; return; }
+
+    msgEl.textContent = 'Saving…'; msgEl.className = 'text-blue-500 text-sm';
+    try {
+        await addDoc(getCasualWorkersRef(), worker);
+        msgEl.textContent = '✅ Worker registered!';
+        msgEl.className = 'text-green-600 text-sm';
+        addCasualForm.reset();
+    } catch (err) {
+        msgEl.textContent = `❌ Error: ${err.message}`;
+        msgEl.className = 'text-red-500 text-sm';
+    }
+});
+
+function listenForCasualWorkers() {
+    onSnapshot(query(getCasualWorkersRef(), orderBy('name', 'asc')), snapshot => {
+        allCasualWorkers = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        populateCasualEarningWorkerSelect();
+        populateCasualLedgerFilter();
+        renderCasualWorkersList();
+        renderCasualEarningsLedger();
+    }, err => console.error('Casual workers listener error:', err));
+}
+
+function populateCasualEarningWorkerSelect() {
+    const sel = document.getElementById('casual-earning-worker');
+    if (!sel) return;
+    const current = sel.value;
+    sel.innerHTML = '<option value="">-- Select Worker --</option>' +
+        allCasualWorkers.map(w => `<option value="${w.id}">${escapeHtmlPR(w.name)} (${w.workerType || 'Casual'})</option>`).join('');
+    if (current) sel.value = current;
+}
+
+function populateCasualLedgerFilter() {
+    const sel = document.getElementById('casual-ledger-filter');
+    if (!sel) return;
+    const current = sel.value;
+    sel.innerHTML = '<option value="all">All Workers</option>' +
+        allCasualWorkers.map(w => `<option value="${w.id}">${escapeHtmlPR(w.name)}</option>`).join('');
+    sel.value = current || 'all';
+}
+
+// Default the earning date input to today, once at load
+const casualEarningDateInput = document.getElementById('casual-earning-date');
+if (casualEarningDateInput) casualEarningDateInput.value = getUTCDateString();
+
+logCasualEarningForm?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!can('viewFinancials')) { alert('Only managers can log earnings.'); return; }
+
+    const msgEl     = document.getElementById('casual-earning-msg');
+    const workerId  = document.getElementById('casual-earning-worker').value;
+    const amount    = parseFloat(document.getElementById('casual-earning-amount').value);
+    const plate     = (document.getElementById('casual-earning-plate').value || '').trim().toUpperCase() || 'N/A';
+    const date      = document.getElementById('casual-earning-date').value || getUTCDateString();
+    const description = document.getElementById('casual-earning-desc').value.trim();
+
+    if (!workerId) { msgEl.textContent = '❌ Please select a worker.'; msgEl.className = 'text-red-500 text-sm'; return; }
+    if (isNaN(amount) || amount <= 0) { msgEl.textContent = '❌ Enter a valid amount.'; msgEl.className = 'text-red-500 text-sm'; return; }
+
+    const worker = allCasualWorkers.find(w => w.id === workerId);
+    if (!worker) { msgEl.textContent = '❌ Worker not found.'; msgEl.className = 'text-red-500 text-sm'; return; }
+
+    msgEl.textContent = 'Saving…'; msgEl.className = 'text-blue-500 text-sm';
+    try {
+        await addDoc(getCasualEarningsRef(), {
+            workerId,
+            workerName: worker.name,
+            amount,
+            plate,
+            date,
+            description: description || '',
+            paid: false,
+            paidAt: null,
+            loggedBy: getSession().role,
+            createdAt: serverTimestamp(),
+        });
+        msgEl.textContent = `✅ $${amount.toFixed(2)} logged as due for ${worker.name}.`;
+        msgEl.className = 'text-green-600 text-sm';
+        logCasualEarningForm.reset();
+        document.getElementById('casual-earning-date').value = getUTCDateString();
+    } catch (err) {
+        msgEl.textContent = `❌ Error: ${err.message}`;
+        msgEl.className = 'text-red-500 text-sm';
+        console.error('Log Casual Earning Error:', err);
+    }
+});
+
+function listenForCasualEarnings() {
+    onSnapshot(query(getCasualEarningsRef(), orderBy('createdAt', 'desc')), snapshot => {
+        allCasualEarnings = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        renderCasualWorkersList();
+        renderCasualEarningsLedger();
+        renderPayHistory();
+    }, err => console.error('Casual earnings listener error:', err));
+}
+
+function outstandingDuesFor(workerId) {
+    return allCasualEarnings
+        .filter(e => e.workerId === workerId && !e.paid)
+        .reduce((s, e) => s + (e.amount || 0), 0);
+}
+
+function renderCasualWorkersList() {
+    const container = casualWorkersListContainer;
+    const noMsg = document.getElementById('no-casuals-message');
+    if (!container) return;
+
+    if (allCasualWorkers.length === 0) {
+        container.innerHTML = '';
+        if (noMsg) noMsg.style.display = 'block';
+        return;
+    }
+    if (noMsg) noMsg.style.display = 'none';
+
+    container.innerHTML = allCasualWorkers.map(w => {
+        const due = outstandingDuesFor(w.id);
+        const dueCls = due > 0 ? 'text-orange-600 font-bold' : 'text-green-600';
+        return `
+            <div class="flex justify-between items-center bg-gray-50 rounded-lg px-4 py-3">
+                <div>
+                    <p class="font-semibold text-gray-800">${escapeHtmlPR(w.name)} <span class="text-xs text-gray-400 ml-1">(${w.workerType || 'Casual'})</span></p>
+                    <p class="text-xs text-gray-500">${escapeHtmlPR(w.role || 'General Labor')}${w.phone ? ' · ' + escapeHtmlPR(w.phone) : ''}</p>
+                </div>
+                <div class="text-right flex items-center gap-3">
+                    <div>
+                        <p class="text-xs text-gray-400">Outstanding Due</p>
+                        <p class="${dueCls}">$${due.toFixed(2)}</p>
+                    </div>
+                    ${due > 0 ? `<button onclick="payAllDuesForWorker('${w.id}')" class="bg-green-600 hover:bg-green-700 text-white text-xs font-bold py-1.5 px-3 rounded-lg">Pay All Due</button>` : ''}
+                    <button onclick="deleteCasualWorker('${w.id}','${escapeHtmlPR(w.name)}')" class="text-red-400 hover:text-red-600 text-xs">Remove</button>
+                </div>
+            </div>`;
+    }).join('');
+}
+
+window.deleteCasualWorker = async function (workerId, workerName) {
+    const due = outstandingDuesFor(workerId);
+    if (due > 0) {
+        alert(`Cannot remove ${workerName} — they have $${due.toFixed(2)} in outstanding dues. Settle their payment first.`);
+        return;
+    }
+    if (!confirm(`Remove ${workerName} from registered workers? Earnings history will be kept.`)) return;
+    try {
+        await deleteDoc(garageDoc(db, doc, 'casualWorkers', workerId));
+    } catch (err) {
+        alert(`Failed to remove worker: ${err.message}`);
+    }
+};
+
+// ── Pay a single earning entry ─────────────────────────────────────
+window.markCasualEarningPaid = async function (earningId) {
+    if (!can('viewFinancials')) { alert('Only managers can record payments.'); return; }
+    const entry = allCasualEarnings.find(e => e.id === earningId);
+    if (!entry || entry.paid) return;
+    if (!confirm(`Pay ${entry.workerName} $${entry.amount.toFixed(2)} for: ${entry.description || 'logged work'}?`)) return;
+
+    try {
+        const earningRef = garageDoc(db, doc, 'casualEarnings', earningId);
+        const transRef    = doc(getDailyTransactionsRef());
+
+        await runTransaction(db, async (transaction) => {
+            const snap = await transaction.get(earningRef);
+            if (!snap.exists()) throw new Error('Earning record no longer exists.');
+            if (snap.data().paid) throw new Error('This earning has already been paid.');
+
+            transaction.update(earningRef, { paid: true, paidAt: serverTimestamp() });
+            transaction.set(transRef, {
+                type: 'CASUAL LABOR', subtype: 'Casual/Per-Job Payment', plate: entry.plate || 'N/A',
+                description: `Paid ${entry.workerName}: ${entry.description || 'casual labor'} (Plate: ${entry.plate || 'N/A'})`,
+                income: 0, expense: entry.amount, profit: -entry.amount,
+                timestamp: serverTimestamp(), isJob: false, date: getUTCDateString()
+            });
+        });
+    } catch (err) {
+        alert(`Payment failed: ${err.message}`);
+        console.error('Mark Casual Earning Paid Error:', err);
+    }
+};
+
+// ── Pay all outstanding dues for one worker in a single batch ──────
+window.payAllDuesForWorker = async function (workerId) {
+    if (!can('viewFinancials')) { alert('Only managers can record payments.'); return; }
+    const worker = allCasualWorkers.find(w => w.id === workerId);
+    const dueEntries = allCasualEarnings.filter(e => e.workerId === workerId && !e.paid);
+    if (!worker || dueEntries.length === 0) return;
+
+    const total = dueEntries.reduce((s, e) => s + (e.amount || 0), 0);
+    if (!confirm(`Pay ${worker.name} a total of $${total.toFixed(2)} across ${dueEntries.length} due entr${dueEntries.length === 1 ? 'y' : 'ies'}?`)) return;
+
+    try {
+        const batch = writeBatch(db);
+        dueEntries.forEach(entry => {
+            batch.update(garageDoc(db, doc, 'casualEarnings', entry.id), { paid: true, paidAt: serverTimestamp() });
+        });
+        batch.set(doc(getDailyTransactionsRef()), {
+            type: 'CASUAL LABOR', subtype: 'Casual/Per-Job Bulk Payment', plate: 'N/A',
+            description: `Settled ${dueEntries.length} due payment(s) for ${worker.name}`,
+            income: 0, expense: total, profit: -total,
+            timestamp: serverTimestamp(), isJob: false, date: getUTCDateString()
+        });
+        await batch.commit();
+        alert(`✅ Paid $${total.toFixed(2)} to ${worker.name}.`);
+    } catch (err) {
+        alert(`Bulk payment failed: ${err.message}`);
+        console.error('Pay All Dues Error:', err);
+    }
+};
+
+window.deleteCasualEarning = async function (earningId) {
+    const entry = allCasualEarnings.find(e => e.id === earningId);
+    if (!entry) return;
+    if (entry.paid) { alert('Paid entries cannot be deleted — they are part of the permanent payment record.'); return; }
+    if (!confirm('Delete this unpaid earning entry?')) return;
+    try {
+        await deleteDoc(garageDoc(db, doc, 'casualEarnings', earningId));
+    } catch (err) {
+        alert(`Failed to delete entry: ${err.message}`);
+    }
+};
+
+function renderCasualEarningsLedger() {
+    const tbody = casualEarningsTableBody;
+    if (!tbody) return;
+    const workerFilter = document.getElementById('casual-ledger-filter')?.value || 'all';
+    const statusFilter = document.getElementById('casual-ledger-status-filter')?.value || 'all';
+
+    let filtered = allCasualEarnings;
+    if (workerFilter !== 'all') filtered = filtered.filter(e => e.workerId === workerFilter);
+    if (statusFilter === 'unpaid') filtered = filtered.filter(e => !e.paid);
+    if (statusFilter === 'paid')   filtered = filtered.filter(e => e.paid);
+
+    if (filtered.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" class="text-center py-8 text-gray-400">No earnings found.</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = filtered.map(e => {
+        const statusBadge = e.paid
+            ? `<span class="text-xs font-bold px-2 py-1 rounded-full bg-green-100 text-green-700">✅ Paid</span>`
+            : `<span class="text-xs font-bold px-2 py-1 rounded-full bg-orange-100 text-orange-700">⏳ Due</span>`;
+        const actionBtn = e.paid
+            ? `<span class="text-xs text-gray-400">—</span>`
+            : `<div class="flex gap-2">
+                 <button onclick="markCasualEarningPaid('${e.id}')" class="text-green-600 hover:text-green-800 text-xs font-bold">Pay</button>
+                 <button onclick="deleteCasualEarning('${e.id}')" class="text-red-400 hover:text-red-600 text-xs">Delete</button>
+               </div>`;
+        return `
+            <tr class="hover:bg-gray-50">
+                <td class="px-4 py-3 whitespace-nowrap text-xs text-gray-500">${e.date || 'N/A'}</td>
+                <td class="px-4 py-3 text-sm font-medium text-gray-900">${escapeHtmlPR(e.workerName)}</td>
+                <td class="px-4 py-3 text-sm text-gray-500">${escapeHtmlPR(e.description) || '—'}</td>
+                <td class="px-4 py-3 text-sm font-mono">${e.plate && e.plate !== 'N/A' ? escapeHtmlPR(e.plate) : '—'}</td>
+                <td class="px-4 py-3 text-sm font-semibold text-gray-800">$${(e.amount || 0).toFixed(2)}</td>
+                <td class="px-4 py-3 text-sm">${statusBadge}</td>
+                <td class="px-4 py-3 text-sm">${actionBtn}</td>
+            </tr>`;
+    }).join('');
+}
+window.renderCasualEarningsLedger = renderCasualEarningsLedger;
+
+// =================================================================
+// 12.3 — COMBINED PAYMENT HISTORY (Full-Time + Casual)
+// =================================================================
+
+function renderPayHistory() {
+    const tbody = payhistoryTableBody;
+    if (!tbody) return;
+    const search = (document.getElementById('payhistory-search')?.value || '').toLowerCase();
+
+    const payrollRows = allPayrollRuns.map(r => ({
+        date: r.paidAt?.toDate ? r.paidAt.toDate().toLocaleDateString('en-KE') : (r.date || 'N/A'),
+        sortTs: r.paidAt?.toDate ? r.paidAt.toDate().getTime() : 0,
+        name: r.employeeName,
+        type: 'Full-Time Salary',
+        typeColor: 'bg-indigo-100 text-indigo-700',
+        details: r.position || '',
+        amount: r.netPay || 0,
+    }));
+
+    const casualRows = allCasualEarnings.filter(e => e.paid).map(e => ({
+        date: e.paidAt?.toDate ? e.paidAt.toDate().toLocaleDateString('en-KE') : (e.date || 'N/A'),
+        sortTs: e.paidAt?.toDate ? e.paidAt.toDate().getTime() : 0,
+        name: e.workerName,
+        type: 'Casual / Per-Job',
+        typeColor: 'bg-green-100 text-green-700',
+        details: e.description || '',
+        amount: e.amount || 0,
+    }));
+
+    let rows = [...payrollRows, ...casualRows].sort((a, b) => b.sortTs - a.sortTs);
+    if (search) rows = rows.filter(r => r.name.toLowerCase().includes(search));
+
+    // Summary totals
+    const totalPayroll     = allPayrollRuns.reduce((s, r) => s + (r.netPay || 0), 0);
+    const totalCasualPaid  = allCasualEarnings.filter(e => e.paid).reduce((s, e) => s + (e.amount || 0), 0);
+    const totalOutstanding = allCasualEarnings.filter(e => !e.paid).reduce((s, e) => s + (e.amount || 0), 0)
+        + allEmployees.reduce((s, emp) => s + sumLineItems(emp.penalties), 0); // unpaid penalties also count as outstanding
+
+    const elPayroll = document.getElementById('ph-total-payroll');
+    const elCasual  = document.getElementById('ph-total-casual-paid');
+    const elOutstanding = document.getElementById('ph-total-outstanding');
+    if (elPayroll) elPayroll.textContent = `$${totalPayroll.toFixed(2)}`;
+    if (elCasual)  elCasual.textContent  = `$${totalCasualPaid.toFixed(2)}`;
+    if (elOutstanding) elOutstanding.textContent = `$${totalOutstanding.toFixed(2)}`;
+
+    if (rows.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" class="text-center py-8 text-gray-400">No payments recorded yet.</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = rows.map(r => `
+        <tr class="hover:bg-gray-50">
+            <td class="px-4 py-3 whitespace-nowrap text-xs text-gray-500">${r.date}</td>
+            <td class="px-4 py-3 text-sm font-medium text-gray-900">${escapeHtmlPR(r.name)}</td>
+            <td class="px-4 py-3 text-sm"><span class="text-xs font-bold px-2 py-1 rounded-full ${r.typeColor}">${r.type}</span></td>
+            <td class="px-4 py-3 text-sm text-gray-500">${escapeHtmlPR(r.details) || '—'}</td>
+            <td class="px-4 py-3 text-sm font-semibold text-gray-800">$${r.amount.toFixed(2)}</td>
+        </tr>`).join('');
+}
+window.renderPayHistory = renderPayHistory;
