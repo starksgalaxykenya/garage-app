@@ -904,11 +904,11 @@ proceedLoginBtn.addEventListener('click', () => {
 
 // ── Role step helper ──
 function showRoleStep(garageCode) {
-    document.getElementById('auth-section').querySelector('div').style.display = 'none'; // hide all login steps
-    document.getElementById('role-step').style.display = 'block';
-    document.getElementById('garage-code-display').textContent = `Garage: ${garageCode}`;
     ownerLoginStep.style.display = 'none';
     staffLoginStep.style.display = 'none';
+    document.getElementById('pin-step').style.display = 'none';
+    document.getElementById('role-step').style.display = 'block';
+    document.getElementById('garage-code-display').textContent = `Garage: ${garageCode}`;
 }
 
 // ── Back to code step (from role) ──
@@ -919,7 +919,6 @@ function backToCodeStep() {
     staffLoginStep.style.display = 'none';
     _pinBuffer = ''; _pendingRole = '';
     updatePinDots();
-    document.getElementById('auth-section').querySelector('div').style.display = 'block';
 }
 window.backToCodeStep = backToCodeStep;
 
