@@ -849,6 +849,43 @@ import { getSession, setSession, clearSession, can, verifyPin,
         { key: 'Completed',           label: 'Completed',           icon: '🏁', color: 'complete'},
     ];
 
+    // ── Repair Completion Helpers ────────────────────────────────────────
+    /**
+     * Computes repair completion % from repairPlanItems.
+     * Revoked items are excluded from both numerator and denominator.
+     */
+    function calcRepairCompletion(repairPlanItems = []) {
+        const active = repairPlanItems.filter(i => !i.revoked);
+        const done   = active.filter(i => i.done).length;
+        const total  = active.length;
+        const pct    = total > 0 ? Math.round((done / total) * 100) : 0;
+        return { done, total, pct };
+    }
+
+    /**
+     * Returns an HTML string for a compact or full progress bar.
+     * compact=true → used on job cards; compact=false → used inside the modal.
+     */
+    function completionBarHtml(repairPlanItems = [], compact = false) {
+        const { done, total, pct } = calcRepairCompletion(repairPlanItems);
+        if (total === 0) return '';
+        const barColor = pct === 100 ? 'bg-green-500' : pct >= 50 ? 'bg-blue-500' : 'bg-orange-400';
+        const label = compact
+            ? `${pct}%  (${done}/${total} tasks)`
+            : `Repair Progress: ${done} of ${total} tasks done (${pct}%)`;
+        const allDoneTag = (!compact && pct === 100)
+            ? `<span class="text-green-600 font-bold text-xs">✅ All Done</span>` : '';
+        return `
+            <div class="mt-2 mb-1">
+                <div class="flex justify-between text-xs text-gray-500 mb-0.5">
+                    <span>${label}</span>${allDoneTag}
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-2">
+                    <div class="${barColor} h-2 rounded-full transition-all duration-300" style="width:${pct}%"></div>
+                </div>
+            </div>`;
+    }
+
     // Status colours for cards
     const STATUS_BADGE_COLORS = {
         'Active':               'bg-blue-100 text-blue-800',
@@ -1387,6 +1424,11 @@ import { getSession, setSession, clearSession, can, verifyPin,
             
         const viewReportBtn = `<button onclick="openDetailedReport('${car.id}')" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-3 rounded transition duration-150 text-sm">View Report</button>`;
 
+        // Completion progress bar — standard repair jobs with repair plan items only
+        const completionBar = (car.jobType !== 'GeneralService' && car.repairPlanItems && car.repairPlanItems.length > 0)
+            ? completionBarHtml(car.repairPlanItems, true)
+            : '';
+
         card.innerHTML = `
             <div class="flex justify-between items-start mb-1">
                 <h3 class="text-2xl font-bold text-gray-900">${car.plate}</h3>
@@ -1397,6 +1439,7 @@ import { getSession, setSession, clearSession, can, verifyPin,
             <p class="text-sm text-gray-600">Mechanic: ${car.assignedMechanic || car.servicePerson || 'N/A'}</p>
             <p class="text-sm text-gray-600 mb-1">Due: ${car.deliveryDate || 'TBD'}</p>
             ${pipelineHtml}
+            ${completionBar}
             <div class="flex space-x-2 mt-3 flex-wrap gap-y-2">
                 ${actions}
                 ${viewReportBtn}
@@ -2404,6 +2447,7 @@ function lookupClientDetails(section) {
                 <p class="mt-2"><span class="font-bold">Diagnostic Notes:</span> <span class="whitespace-pre-wrap">${data.diagnosticNotes}</span></p>
                 
                 <h3 class="text-xl font-bold text-pink-700 mt-4 border-b-2 pb-1">Repair Plan & Parts</h3>
+                ${data.repairPlanItems && data.repairPlanItems.length > 0 ? completionBarHtml(data.repairPlanItems, false) : ''}
                 ${repairPlanHtml}
 
                 <h3 class="text-xl font-bold text-indigo-700 mt-4 border-b-2 pb-1">Job Status & Schedule</h3>
