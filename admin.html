@@ -162,6 +162,16 @@ const db = app.firestore();
 const garagesRef = db.collection('garages');
 const adminsRef = db.collection('admins');
 
+// ===== SECONDARY APP INSTANCE =====
+// Used ONLY for creating new garage-owner accounts. createUserWithEmailAndPassword
+// always signs in as the newly created user on whichever `auth` instance it's
+// called on. Calling it on the main `auth` above would silently replace the
+// admin's session, which is what caused the "logged out / access denied" bug.
+// This secondary app has its own isolated auth state, so the admin session
+// on `auth` (above) is never touched.
+const secondaryApp = firebase.initializeApp(firebaseConfig, 'Secondary');
+const secondaryAuth = secondaryApp.auth();
+
 let allGaragesData = [];
 
 // ===== AUTH =====
@@ -248,27 +258,41 @@ async function createGarage() {
             return;
         }
 
-        // 2. Create Firebase Auth user
-        const userCredential = await auth.createUserWithEmailAndPassword(email, password);
+        // 2. Create Firebase Auth user — on the SECONDARY auth instance so the
+        //    admin's own session (on `auth`) is left untouched.
+        const userCredential = await secondaryAuth.createUserWithEmailAndPassword(email, password);
         const uid = userCredential.user.uid;
+        // Immediately sign out of the secondary instance; we only needed it to
+        // mint the account, not to stay signed in as the new owner.
+        await secondaryAuth.signOut();
 
         // 3. Save garage document
-        await garagesRef.doc(code).set({
-            garageName: name,
-            ownerName: owner,
-            ownerEmail: email,
-            ownerUid: uid,
-            ownerContact: contact,
-            subscriptionStatus: status,
-            garageCode: code,
-            trialStartDate: status === 'trial' ? new Date().toISOString().split('T')[0] : null,
-            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-            pins: {
-                mechanic: '1234',
-                admin: '5678',
-                manager: '9012'
-            }
-        });
+        try {
+            await garagesRef.doc(code).set({
+                garageName: name,
+                ownerName: owner,
+                ownerEmail: email,
+                ownerUid: uid,
+                ownerContact: contact,
+                subscriptionStatus: status,
+                garageCode: code,
+                trialStartDate: status === 'trial' ? new Date().toISOString().split('T')[0] : null,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                pins: {
+                    mechanic: '1234',
+                    admin: '5678',
+                    manager: '9012'
+                }
+            });
+        } catch (firestoreErr) {
+            // The Auth account (uid above) now exists with no matching garage
+            // doc. We can't delete another user's Auth account from the client
+            // SDK, so surface this clearly instead of failing silently.
+            console.error('Firestore write failed after Auth user was created. Orphaned UID:', uid, firestoreErr);
+            msg.className = 'mt-3 text-sm font-medium text-center text-red-600';
+            msg.textContent = `Auth account was created for ${email} (UID: ${uid}) but the garage record failed to save: ${firestoreErr.message}. Delete this user manually in the Firebase Auth console, fix the issue, and try again.`;
+            return;
+        }
 
         msg.className = 'mt-3 text-sm font-medium text-center text-green-600';
         msg.textContent = `✅ Garage created! Code: ${code} — Owner email: ${email}. Share the code with staff.`;
