@@ -334,15 +334,22 @@ async function saveRolePermissions() {
     }
 }
 
+const ALL_TABS = ['tab-finance', 'tab-payroll', 'tab-inventory', 'tab-suppliers', 'tab-invoices', 'tab-quotes', 'tab-branding'];
+
 function applyRolePermissions(role) {
-    const garageData = window._garageData; // set during login
-    const perms = garageData?.rolePermissions || DEFAULT_PERMISSIONS;
-    const allowed = perms[role]?.allowedTabs || [];
-    // If no custom permissions, fallback to defaults for that role
-    if (allowed.length === 0) {
-        return DEFAULT_PERMISSIONS[role]?.allowedTabs || [];
+    // Manager always gets full access — never restrict
+    if (role === 'manager') return ALL_TABS;
+
+    const garageData = window._garageData;
+    const perms = garageData?.rolePermissions;
+
+    // Use saved custom permissions if they exist for this role
+    if (perms && perms[role] && Array.isArray(perms[role].allowedTabs) && perms[role].allowedTabs.length > 0) {
+        return perms[role].allowedTabs;
     }
-    return allowed;
+
+    // Fall back to hard-coded defaults
+    return DEFAULT_PERMISSIONS[role]?.allowedTabs || [];
 }
 
 function renderTabs(allowedTabs) {
@@ -397,12 +404,15 @@ function grantManagementAccess(role) {
     const allowedTabs = applyRolePermissions(role);
     renderTabs(allowedTabs);
 
-    // --- NEW: Show/hide the role permissions management section (Manager only) ---
+    // Role permissions section lives inside the Settings (branding) tab.
+    // Show it only for managers; it becomes visible naturally when that tab is opened.
     const permSection = document.getElementById('role-permissions-section');
     if (permSection) {
-        permSection.style.display = can('managePins') ? '' : 'none';
         if (can('managePins')) {
-            loadRolePermissions(); // load current settings into the table
+            permSection.style.display = '';   // visible (but only accessible via the Settings tab)
+            loadRolePermissions();
+        } else {
+            permSection.style.display = 'none';
         }
     }
 
@@ -450,9 +460,18 @@ function grantManagementAccess(role) {
 }
 
 // Boot: check for existing session or show login
-function bootManagement() {
+async function bootManagement() {
     const { garageCode, role, authed } = getSession();
     if (authed && garageCode && (role === 'manager' || role === 'admin')) {
+        // Re-fetch garage data so permissions work correctly on page refresh
+        try {
+            const snap = await getDoc(doc(db, 'garages', garageCode));
+            if (snap.exists()) {
+                window._garageData = snap.data();
+            }
+        } catch (e) {
+            console.warn('Could not refresh garage data on boot:', e);
+        }
         grantManagementAccess(role);
         return;
     }
