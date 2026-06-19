@@ -116,8 +116,11 @@
         <div class="bg-white rounded-xl shadow-lg p-6">
             <div class="flex justify-between items-center border-b pb-3 mb-4">
                 <h2 class="text-xl font-bold text-indigo-700">🏪 All Garages</h2>
-                <input id="search-garages" type="text" placeholder="Search by name, code, owner..." 
-                       oninput="filterGarages()" class="p-2 border rounded-lg text-sm w-64" />
+                <div class="flex gap-2">
+                    <input id="search-garages" type="text" placeholder="Search by name, code, owner..." 
+                           oninput="filterGarages()" class="p-2 border rounded-lg text-sm w-64" />
+                    <button onclick="refreshGarages()" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg text-sm">Refresh</button>
+                </div>
             </div>
             <div class="overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200 text-sm">
@@ -153,13 +156,11 @@ const firebaseConfig = {
     appId: "1:226684256206:web:13d600d6db4c603506759f"
 };
 
-// List of admin UIDs allowed to access this panel
-const ALLOWED_ADMIN_UIDS = ['is3whxmhyCaPjFkPqWyto2Cmgbz2'];
-
 const app = firebase.initializeApp(firebaseConfig);
 const auth = app.auth();
 const db = app.firestore();
 const garagesRef = db.collection('garages');
+const adminsRef = db.collection('admins');
 
 let allGaragesData = [];
 
@@ -177,16 +178,24 @@ function adminLogout() {
     auth.signOut();
 }
 
-auth.onAuthStateChanged(user => {
+auth.onAuthStateChanged(async user => {
     if (user) {
-        if (!ALLOWED_ADMIN_UIDS.includes(user.uid) && ALLOWED_ADMIN_UIDS[0] !== 'REPLACE_WITH_YOUR_ADMIN_UID') {
+        // Check if user is an admin by looking up their UID in the 'admins' collection
+        try {
+            const adminDoc = await adminsRef.doc(user.uid).get();
+            if (adminDoc.exists) {
+                document.getElementById('admin-auth').classList.add('hidden');
+                document.getElementById('admin-dashboard').classList.remove('hidden');
+                listenForGarages();
+            } else {
+                auth.signOut();
+                document.getElementById('admin-auth-msg').textContent = 'Access denied. Not an admin.';
+            }
+        } catch (err) {
+            console.error('Admin check error:', err);
             auth.signOut();
-            document.getElementById('admin-auth-msg').textContent = 'Access denied. Not an admin.';
-            return;
+            document.getElementById('admin-auth-msg').textContent = 'Error verifying admin status.';
         }
-        document.getElementById('admin-auth').classList.add('hidden');
-        document.getElementById('admin-dashboard').classList.remove('hidden');
-        listenForGarages();
     } else {
         document.getElementById('admin-auth').classList.remove('hidden');
         document.getElementById('admin-dashboard').classList.add('hidden');
@@ -201,7 +210,7 @@ function generateCode() {
     document.getElementById('new-garage-code').value = `${letters()}-${numbers()}`;
 }
 
-// ===== CREATE GARAGE (with Firebase Auth user) =====
+// ===== CREATE GARAGE =====
 async function createGarage() {
     const name = document.getElementById('new-garage-name').value.trim();
     const owner = document.getElementById('new-owner-name').value.trim();
@@ -239,11 +248,11 @@ async function createGarage() {
             return;
         }
 
-        // 2. Create Firebase Auth user with email+password
+        // 2. Create Firebase Auth user
         const userCredential = await auth.createUserWithEmailAndPassword(email, password);
         const uid = userCredential.user.uid;
 
-        // 3. Save garage document with owner email and UID
+        // 3. Save garage document
         await garagesRef.doc(code).set({
             garageName: name,
             ownerName: owner,
@@ -254,7 +263,6 @@ async function createGarage() {
             garageCode: code,
             trialStartDate: status === 'trial' ? new Date().toISOString().split('T')[0] : null,
             createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-            // Default PINs (can be changed later)
             pins: {
                 mechanic: '1234',
                 admin: '5678',
@@ -271,21 +279,44 @@ async function createGarage() {
         });
         document.getElementById('new-sub-status').value = 'trial';
     } catch (err) {
+        console.error('Full error:', err);
         msg.className = 'mt-3 text-sm font-medium text-center text-red-600';
         msg.textContent = 'Error creating garage: ' + err.message;
-        console.error(err);
     }
 }
 
 // ===== REAL-TIME LISTENER =====
 function listenForGarages() {
-    garagesRef.orderBy('createdAt', 'desc').onSnapshot(snap => {
+    garagesRef.orderBy('createdAt', 'desc').onSnapshot(
+        snap => {
+            allGaragesData = [];
+            snap.forEach(doc => allGaragesData.push({ id: doc.id, ...doc.data() }));
+            renderGarages(allGaragesData);
+            updateStats(allGaragesData);
+        },
+        error => {
+            console.error('Garages listener error:', error);
+            document.getElementById('garages-empty').textContent = 'Error loading garages: ' + error.message;
+            document.getElementById('garages-empty').classList.remove('hidden');
+        }
+    );
+}
+
+// ===== MANUAL REFRESH (for debugging) =====
+window.refreshGarages = async function() {
+    try {
+        const snap = await garagesRef.orderBy('createdAt', 'desc').get();
         allGaragesData = [];
         snap.forEach(doc => allGaragesData.push({ id: doc.id, ...doc.data() }));
         renderGarages(allGaragesData);
         updateStats(allGaragesData);
-    });
-}
+        document.getElementById('garages-empty').classList.add('hidden');
+    } catch (err) {
+        console.error('Refresh error:', err);
+        document.getElementById('garages-empty').textContent = 'Refresh error: ' + err.message;
+        document.getElementById('garages-empty').classList.remove('hidden');
+    }
+};
 
 function updateStats(data) {
     document.getElementById('stat-total').textContent = data.length;
@@ -381,6 +412,7 @@ window.deleteGarage = deleteGarage;
 window.filterGarages = filterGarages;
 window.adminLogin = adminLogin;
 window.adminLogout = adminLogout;
+window.refreshGarages = refreshGarages;
 </script>
  <script>
   if ('serviceWorker' in navigator) {
