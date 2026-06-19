@@ -782,21 +782,6 @@ import {
     onSnapshot, getDoc, serverTimestamp, getDocs
 } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js";
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-storage.js";
-// Add garageCol and garageDoc to your auth.js import:
-import { getSession, setSession, clearSession, can, verifyPin,
-         showTrialBanner, ROLES, garageCol, garageDoc } from './auth.js';
-    // NEW: Import the local error code dictionary
-    import { ERROR_CODE_LOOKUP } from "./error_codes_dictionary.js";
-    // MODIFICATION 2: Expose dictionary globally for functions called via onclick to access
-    window.GLOBAL_ERROR_CODE_LOOKUP = ERROR_CODE_LOOKUP;
-
-    // ── Branding module ───────────────────────────────────────────
-    import {
-        getBranding,
-        drawPdfHeader,
-        drawPdfFooter
-    } from "./garage-branding.js";
-
     // Helper: hex → [R,G,B] array for jsPDF headStyles
     function hexToRgbArr(hex) {
         const r = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex || '#1d4ed8');
@@ -806,13 +791,8 @@ import { getSession, setSession, clearSession, can, verifyPin,
     // ----------------------------------------------------------------------
     // 1. FIREBASE INITIALIZATION & CONFIGURATION (MODULAR)
     // ----------------------------------------------------------------------
-
-    // Import the functions you need from the SDKs
-    import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
-    // Auth is now PIN-based via auth.js — no Firebase email/password needed
-    import { getFirestore, collection, addDoc, doc, updateDoc, deleteDoc, query, where, orderBy, onSnapshot, getDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js"; // Note: Added 'where' for client lookup
-    import { getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-storage.js";
-    // auth.js already imported at top of this module — no duplicate import
+    // (imports for app/firestore/storage/auth.js are already declared at the
+    //  top of this module — do not re-import here)
 
     // Your web app's Firebase configuration
     const firebaseConfig = {
@@ -1058,7 +1038,6 @@ window.selectRole = selectRole;
     window.generateDailyReport = generateDailyReport;
     window.generateMonthlyReport = generateMonthlyReport; 
     window.generateReportPDF = generateReportPDF; // EXPOSE PDF FUNCTION
-    window.proceedToLogin = proceedToLogin;
     window.backToCodeStep = backToCodeStep;
     // END NEW
 
@@ -1108,48 +1087,6 @@ if (!checkExistingSession()) {
     ownerLoginStep.style.display = 'block';
     staffLoginStep.style.display = 'none';
 }
-
-    function proceedToLogin() {
-        const code = document.getElementById('garage-code-input').value.trim().toUpperCase();
-        const msg  = document.getElementById('garage-code-message');
-        if (!/^[A-Za-z]{3}-\d{5}$/.test(code)) {
-            msg.textContent = 'Format must be ABC-12345';
-            return;
-        }
-        msg.textContent = '';
-        _pendingGarageCode = code;
-        document.getElementById('garage-code-step').style.display = 'none';
-        document.getElementById('role-step').style.display  = 'block';
-        document.getElementById('garage-code-display').textContent = `Garage: ${code}`;
-    }
-
-    function backToCodeStep() {
-        document.getElementById('role-step').style.display       = 'none';
-        document.getElementById('pin-step').style.display        = 'none';
-        document.getElementById('garage-code-step').style.display = 'block';
-        _pinBuffer = ''; _pendingRole = '';
-        updatePinDots();
-    }
-
-    function backToRoleStep() {
-        document.getElementById('pin-step').style.display  = 'none';
-        document.getElementById('role-step').style.display = 'block';
-        _pinBuffer = ''; _pendingRole = '';
-        updatePinDots();
-        document.getElementById('pin-message').textContent = '';
-    }
-
-    function selectRole(role) {
-        _pendingRole  = role;
-        _pinBuffer    = '';
-        const labels  = { mechanic: '🔧 Mechanic', admin: '👤 Admin', manager: '💼 Manager' };
-        document.getElementById('pin-role-display').textContent  = labels[role] || role;
-        document.getElementById('garage-code-display2').textContent = `Garage: ${_pendingGarageCode}`;
-        document.getElementById('pin-message').textContent = '';
-        document.getElementById('role-step').style.display = 'none';
-        document.getElementById('pin-step').style.display  = 'block';
-        updatePinDots();
-    }
 
     function pinKey(val) {
         const msg = document.getElementById('pin-message');
@@ -1319,15 +1256,15 @@ if (!checkExistingSession()) {
         // Show login screen
         document.getElementById('auth-section').style.display = 'flex';
         // Reset auth steps to initial state
-        document.getElementById('garage-code-step').style.display = 'block';
+        ownerLoginStep.style.display = 'block';
+        staffLoginStep.style.display = 'none';
         document.getElementById('role-step').style.display = 'none';
         document.getElementById('pin-step').style.display = 'none';
         document.getElementById('garage-code-input').value = '';
         document.getElementById('garage-code-message').textContent = '';
-    };
+    });
 
     // Expose globals needed by HTML onclick attributes
-    window.proceedToLogin  = proceedToLogin;
     window.backToCodeStep  = backToCodeStep;
     window.backToRoleStep  = backToRoleStep;
     window.selectRole      = selectRole;
@@ -4098,7 +4035,7 @@ function lookupClientDetails(section) {
             const codeInput = document.getElementById('garage-code-input');
     if (codeInput) {
         codeInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') proceedToLogin();
+            if (e.key === 'Enter') document.getElementById('proceed-to-login-btn')?.click();
         });
     }
             const navButtons = [
@@ -4150,7 +4087,6 @@ function lookupClientDetails(section) {
     // ======================================================
     // Auth UI - Event Listeners (replace inline onclick)
     // ======================================================
-    document.getElementById('proceed-to-login-btn')?.addEventListener('click', proceedToLogin);
     document.getElementById('back-to-code-btn')?.addEventListener('click', backToCodeStep);
     document.getElementById('back-to-role-btn')?.addEventListener('click', backToRoleStep);
     document.getElementById('submit-pin-btn')?.addEventListener('click', submitPin);
