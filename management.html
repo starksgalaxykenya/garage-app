@@ -85,6 +85,7 @@
 
         <nav id="tab-nav" class="flex flex-wrap space-x-2 p-3 bg-white rounded-xl shadow-md mt-4">
             <button id="tab-finance" class="tab-button active-tab">Finance & Reports</button>
+            <button id="tab-payroll" class="tab-button">💰 Payroll & Labor</button>
             <button id="tab-inventory" class="tab-button">Parts Inventory</button>
             <button id="tab-suppliers" class="tab-button">Suppliers & Contacts</button>
             <button id="tab-invoices" class="tab-button">Invoices & Receipts</button>
@@ -180,6 +181,289 @@
                 <button id="view-reports-btn" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 rounded-lg mt-4">View Reports & Analytics</button>
 
             </div>
+
+            <!-- ====== PAYROLL & LABOR MANAGEMENT TAB ====== -->
+            <div id="content-payroll" class="tab-content hidden">
+                <h2 class="text-3xl font-bold text-gray-800 border-b pb-2 mb-2">💰 Payroll & Labor Management</h2>
+                <p class="text-gray-500 mb-6 text-sm">Manage full-time employee salaries, deductions, benefits and penalties — plus daily earnings for casual laborers, contractors and per-job staff. Every completed payment is automatically recorded in today's Finance transactions.</p>
+
+                <!-- Sub-tabs -->
+                <div class="flex flex-wrap gap-2 mb-6 bg-white p-2 rounded-xl shadow-md w-fit">
+                    <button id="subtab-employees" class="payroll-subtab-btn px-4 py-2 rounded-lg font-medium text-sm bg-indigo-700 text-white">👔 Full-Time Employees</button>
+                    <button id="subtab-casuals" class="payroll-subtab-btn px-4 py-2 rounded-lg font-medium text-sm text-indigo-800 hover:bg-indigo-100">🛠️ Casual / Per-Job Workers</button>
+                    <button id="subtab-payhistory" class="payroll-subtab-btn px-4 py-2 rounded-lg font-medium text-sm text-indigo-800 hover:bg-indigo-100">📜 Payment History</button>
+                </div>
+
+                <!-- ───────────── SUB-TAB: FULL-TIME EMPLOYEES ───────────── -->
+                <div id="payroll-subcontent-employees" class="payroll-subcontent space-y-6">
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <!-- Add Employee Form -->
+                        <div class="lg:col-span-1 bg-white p-6 rounded-xl shadow-lg">
+                            <h3 class="text-xl font-semibold mb-4 text-indigo-700 border-b pb-2">➕ Add Full-Time Employee</h3>
+                            <form id="add-employee-form" class="space-y-3">
+                                <input id="emp-name" type="text" placeholder="Full Name" required class="w-full p-2 border rounded-lg">
+                                <input id="emp-position" type="text" placeholder="Position / Role (e.g. Senior Mechanic)" required class="w-full p-2 border rounded-lg">
+                                <input id="emp-phone" type="tel" placeholder="Phone Number" class="w-full p-2 border rounded-lg">
+                                <input id="emp-id-no" type="text" placeholder="Employee ID / National ID" class="w-full p-2 border rounded-lg">
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-500 mb-1">Base Salary ($) — per pay period</label>
+                                    <input id="emp-base-salary" type="number" placeholder="0.00" step="0.01" min="0" required class="w-full p-2 border rounded-lg">
+                                </div>
+                                <select id="emp-pay-frequency" class="w-full p-2 border rounded-lg">
+                                    <option value="Monthly">Monthly</option>
+                                    <option value="Bi-Weekly">Bi-Weekly</option>
+                                    <option value="Weekly">Weekly</option>
+                                </select>
+                                <input id="emp-start-date" type="date" class="w-full p-2 border rounded-lg">
+                                <select id="emp-status" class="w-full p-2 border rounded-lg">
+                                    <option value="Active">Active</option>
+                                    <option value="On Leave">On Leave</option>
+                                    <option value="Suspended">Suspended</option>
+                                    <option value="Terminated">Terminated</option>
+                                </select>
+                                <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 rounded-lg">Add Employee</button>
+                                <p id="emp-save-msg" class="text-sm"></p>
+                            </form>
+                        </div>
+
+                        <!-- Employee List -->
+                        <div class="lg:col-span-2 bg-white p-6 rounded-xl shadow-lg">
+                            <div class="flex justify-between items-center mb-4 border-b pb-2">
+                                <h3 class="text-xl font-semibold text-indigo-700">Employees (<span id="employee-count">0</span>)</h3>
+                                <input id="employee-search" type="text" placeholder="Search name or position…" oninput="filterEmployees()" class="p-2 border rounded-lg text-sm w-56">
+                            </div>
+                            <div id="employees-list-container" class="space-y-3 max-h-[36rem] overflow-y-auto">
+                                <p class="text-center text-gray-400 py-8" id="no-employees-message">No employees added yet.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Employee Detail / Payroll Run Modal -->
+                <div id="employeePayrollModal" class="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center p-4 z-[300]" style="display:none;">
+                    <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[92vh] flex flex-col">
+                        <div class="bg-indigo-700 text-white p-5 rounded-t-xl flex justify-between items-center">
+                            <div>
+                                <h3 class="text-2xl font-bold" id="epm-emp-name">Employee Name</h3>
+                                <p class="text-indigo-200 text-sm" id="epm-emp-position"></p>
+                            </div>
+                            <button onclick="closeEmployeeModal()" class="text-white hover:text-red-300 text-3xl font-bold leading-none">&times;</button>
+                        </div>
+                        <div class="p-6 overflow-y-auto custom-scrollbar flex-1 space-y-6">
+
+                            <!-- Base Salary (editable) -->
+                            <div class="bg-gray-50 rounded-lg p-4">
+                                <h4 class="font-bold text-gray-700 mb-2">Base Salary</h4>
+                                <div class="flex gap-3 items-end">
+                                    <div class="flex-1">
+                                        <label class="block text-xs text-gray-500 mb-1">Amount ($) per pay period</label>
+                                        <input id="epm-base-salary" type="number" step="0.01" min="0" class="w-full p-2 border rounded-lg">
+                                    </div>
+                                    <button onclick="updateEmployeeBaseSalary()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg text-sm">Update</button>
+                                </div>
+                            </div>
+
+                            <!-- Deductions -->
+                            <div class="bg-red-50 rounded-lg p-4">
+                                <h4 class="font-bold text-red-700 mb-2">➖ Deductions (e.g. tax, loan repayment, advance)</h4>
+                                <div id="epm-deductions-list" class="space-y-2 mb-3"></div>
+                                <div class="flex gap-2">
+                                    <input id="epm-new-deduction-label" type="text" placeholder="Label (e.g. PAYE Tax)" class="flex-1 p-2 border rounded-lg text-sm">
+                                    <input id="epm-new-deduction-amount" type="number" placeholder="$0.00" step="0.01" min="0" class="w-28 p-2 border rounded-lg text-sm">
+                                    <button onclick="addEmployeeLineItem('deductions')" class="bg-red-500 hover:bg-red-600 text-white font-bold px-3 rounded-lg text-sm">Add</button>
+                                </div>
+                            </div>
+
+                            <!-- Benefits -->
+                            <div class="bg-green-50 rounded-lg p-4">
+                                <h4 class="font-bold text-green-700 mb-2">➕ Benefits (e.g. bonus, allowance, overtime)</h4>
+                                <div id="epm-benefits-list" class="space-y-2 mb-3"></div>
+                                <div class="flex gap-2">
+                                    <input id="epm-new-benefit-label" type="text" placeholder="Label (e.g. Transport Allowance)" class="flex-1 p-2 border rounded-lg text-sm">
+                                    <input id="epm-new-benefit-amount" type="number" placeholder="$0.00" step="0.01" min="0" class="w-28 p-2 border rounded-lg text-sm">
+                                    <button onclick="addEmployeeLineItem('benefits')" class="bg-green-500 hover:bg-green-600 text-white font-bold px-3 rounded-lg text-sm">Add</button>
+                                </div>
+                            </div>
+
+                            <!-- Pending Penalties -->
+                            <div class="bg-orange-50 rounded-lg p-4">
+                                <h4 class="font-bold text-orange-700 mb-2">⚠️ Pending Penalties / Fines</h4>
+                                <div id="epm-penalties-list" class="space-y-2 mb-3"></div>
+                                <div class="flex gap-2">
+                                    <input id="epm-new-penalty-label" type="text" placeholder="Reason (e.g. Late arrival)" class="flex-1 p-2 border rounded-lg text-sm">
+                                    <input id="epm-new-penalty-amount" type="number" placeholder="$0.00" step="0.01" min="0" class="w-28 p-2 border rounded-lg text-sm">
+                                    <button onclick="addEmployeeLineItem('penalties')" class="bg-orange-500 hover:bg-orange-600 text-white font-bold px-3 rounded-lg text-sm">Add</button>
+                                </div>
+                            </div>
+
+                            <!-- Net Pay Calculation -->
+                            <div class="bg-indigo-50 rounded-lg p-4 border-2 border-indigo-200">
+                                <h4 class="font-bold text-indigo-700 mb-3">🧮 Net Pay Calculation (this run)</h4>
+                                <div class="space-y-1 text-sm">
+                                    <div class="flex justify-between"><span>Base Salary</span><span id="epm-calc-base" class="font-semibold">$0.00</span></div>
+                                    <div class="flex justify-between text-green-600"><span>+ Benefits</span><span id="epm-calc-benefits" class="font-semibold">$0.00</span></div>
+                                    <div class="flex justify-between text-red-600"><span>− Deductions</span><span id="epm-calc-deductions" class="font-semibold">$0.00</span></div>
+                                    <div class="flex justify-between text-orange-600"><span>− Pending Penalties</span><span id="epm-calc-penalties" class="font-semibold">$0.00</span></div>
+                                    <div class="flex justify-between text-lg font-extrabold border-t pt-2 mt-2 text-indigo-800"><span>NET PAY</span><span id="epm-calc-net">$0.00</span></div>
+                                </div>
+                                <button id="epm-run-payroll-btn" onclick="runEmployeePayroll()" class="w-full mt-4 bg-indigo-700 hover:bg-indigo-800 text-white font-bold py-3 rounded-lg transition">
+                                    💸 Pay Now & Record in Finance
+                                </button>
+                                <p id="epm-payroll-msg" class="text-sm mt-2 text-center"></p>
+                            </div>
+
+                            <!-- Past payroll runs for this employee -->
+                            <div>
+                                <h4 class="font-bold text-gray-700 mb-2 border-b pb-1">📜 Past Pay Runs</h4>
+                                <div id="epm-history-list" class="space-y-2 max-h-48 overflow-y-auto">
+                                    <p class="text-gray-400 text-sm">No payroll history yet.</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="p-4 border-t flex justify-between items-center">
+                            <button onclick="deleteEmployee()" class="text-red-500 hover:text-red-700 text-sm font-semibold">🗑️ Remove Employee</button>
+                            <button onclick="closeEmployeeModal()" class="bg-gray-400 hover:bg-gray-500 text-white font-bold py-2 px-6 rounded-lg">Close</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ───────────── SUB-TAB: CASUAL / PER-JOB WORKERS ───────────── -->
+                <div id="payroll-subcontent-casuals" class="payroll-subcontent space-y-6 hidden">
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <!-- Add Casual Worker -->
+                        <div class="lg:col-span-1 bg-white p-6 rounded-xl shadow-lg">
+                            <h3 class="text-xl font-semibold mb-4 text-indigo-700 border-b pb-2">➕ Register Casual Worker</h3>
+                            <form id="add-casual-form" class="space-y-3">
+                                <input id="casual-name" type="text" placeholder="Full Name" required class="w-full p-2 border rounded-lg">
+                                <input id="casual-phone" type="tel" placeholder="Phone Number" class="w-full p-2 border rounded-lg">
+                                <input id="casual-role" type="text" placeholder="Role / Skill (e.g. Panel Beater, Cleaner)" class="w-full p-2 border rounded-lg">
+                                <select id="casual-type" class="w-full p-2 border rounded-lg">
+                                    <option value="Casual Laborer">Casual Laborer</option>
+                                    <option value="Contractor">Contractor</option>
+                                    <option value="Per-Job Worker">Per-Job Worker (Piece-rate)</option>
+                                </select>
+                                <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 rounded-lg">Register Worker</button>
+                                <p id="casual-save-msg" class="text-sm"></p>
+                            </form>
+                        </div>
+
+                        <!-- Log Daily Earning -->
+                        <div class="lg:col-span-2 bg-white p-6 rounded-xl shadow-lg">
+                            <h3 class="text-xl font-semibold mb-4 text-indigo-700 border-b pb-2">📝 Log Day's / Job's Earning</h3>
+                            <form id="log-casual-earning-form" class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-500 mb-1">Worker</label>
+                                    <select id="casual-earning-worker" required class="w-full p-2 border rounded-lg">
+                                        <option value="">-- Select Worker --</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-500 mb-1">Amount Earned ($)</label>
+                                    <input id="casual-earning-amount" type="number" step="0.01" min="0" required class="w-full p-2 border rounded-lg">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-500 mb-1">Related Vehicle Plate (Optional)</label>
+                                    <input id="casual-earning-plate" type="text" class="w-full p-2 border rounded-lg">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-500 mb-1">Date</label>
+                                    <input id="casual-earning-date" type="date" required class="w-full p-2 border rounded-lg">
+                                </div>
+                                <div class="md:col-span-2">
+                                    <label class="block text-xs font-medium text-gray-500 mb-1">Work Description</label>
+                                    <input id="casual-earning-desc" type="text" placeholder="e.g. Helped with panel respray, full day labor" class="w-full p-2 border rounded-lg">
+                                </div>
+                                <button type="submit" class="md:col-span-2 w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 rounded-lg">➕ Log Earning (Unpaid / Due)</button>
+                                <p id="casual-earning-msg" class="text-sm md:col-span-2"></p>
+                            </form>
+
+                            <!-- Outstanding dues summary -->
+                            <div class="mt-6 pt-4 border-t">
+                                <h4 class="font-semibold text-gray-700 mb-3">Workers & Outstanding Dues</h4>
+                                <div id="casual-workers-list-container" class="space-y-2 max-h-72 overflow-y-auto">
+                                    <p class="text-gray-400 text-sm" id="no-casuals-message">No casual workers registered yet.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Earnings ledger for casuals -->
+                    <div class="bg-white p-6 rounded-xl shadow-lg">
+                        <div class="flex justify-between items-center mb-4 border-b pb-2">
+                            <h3 class="text-xl font-semibold text-indigo-700">📋 Casual Earnings Ledger</h3>
+                            <div class="flex gap-2">
+                                <select id="casual-ledger-filter" onchange="renderCasualEarningsLedger()" class="p-2 border rounded-lg text-sm">
+                                    <option value="all">All Workers</option>
+                                </select>
+                                <select id="casual-ledger-status-filter" onchange="renderCasualEarningsLedger()" class="p-2 border rounded-lg text-sm">
+                                    <option value="all">All (Paid + Due)</option>
+                                    <option value="unpaid">Due / Unpaid Only</option>
+                                    <option value="paid">Paid Only</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full divide-y divide-gray-200 text-sm">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Worker</th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Description</th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Plate</th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Amount ($)</th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="casual-earnings-table-body" class="bg-white divide-y divide-gray-200">
+                                    <tr><td colspan="7" class="text-center py-8 text-gray-400">Loading earnings…</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ───────────── SUB-TAB: PAYMENT HISTORY (combined) ───────────── -->
+                <div id="payroll-subcontent-payhistory" class="payroll-subcontent space-y-6 hidden">
+                    <div class="bg-white p-6 rounded-xl shadow-lg">
+                        <div class="flex justify-between items-center mb-4 border-b pb-2">
+                            <h3 class="text-xl font-semibold text-indigo-700">📜 All Payroll & Casual Payments</h3>
+                            <input id="payhistory-search" type="text" placeholder="Search name…" oninput="renderPayHistory()" class="p-2 border rounded-lg text-sm w-56">
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                            <div class="bg-indigo-50 rounded-lg p-4 text-center">
+                                <p class="text-xs text-indigo-500 uppercase font-semibold">Total Paid (Full-Time)</p>
+                                <p id="ph-total-payroll" class="text-2xl font-bold text-indigo-700">$0.00</p>
+                            </div>
+                            <div class="bg-green-50 rounded-lg p-4 text-center">
+                                <p class="text-xs text-green-500 uppercase font-semibold">Total Paid (Casuals)</p>
+                                <p id="ph-total-casual-paid" class="text-2xl font-bold text-green-700">$0.00</p>
+                            </div>
+                            <div class="bg-orange-50 rounded-lg p-4 text-center">
+                                <p class="text-xs text-orange-500 uppercase font-semibold">Total Outstanding Dues</p>
+                                <p id="ph-total-outstanding" class="text-2xl font-bold text-orange-700">$0.00</p>
+                            </div>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full divide-y divide-gray-200 text-sm">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Details</th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Amount ($)</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="payhistory-table-body" class="bg-white divide-y divide-gray-200">
+                                    <tr><td colspan="5" class="text-center py-8 text-gray-400">Loading history…</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- ====== END PAYROLL & LABOR MANAGEMENT TAB ====== -->
 
             <div id="content-inventory" class="tab-content hidden">
                  <h2 class="text-3xl font-bold text-gray-800 border-b pb-2 mb-6">Parts Inventory Management</h2>
