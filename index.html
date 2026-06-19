@@ -1238,7 +1238,8 @@ if (!checkExistingSession()) {
         clearSession();
         signOut(auth).catch(() => {}); 
         currentUserRole = null;
-        _mechanicsUnsubscribe = null; // reset so it re-attaches on next login
+        _mechanicsUnsubscribe = null;
+_clientsUnsubscribe = null;   // ← add this line
         // Hide all nav buttons immediately so nothing is accessible
         ['nav-car-entry','nav-general-service','nav-clients-list','nav-mechanics',
          'nav-car-list','nav-completed-list','nav-reports-section',
@@ -1553,30 +1554,28 @@ if (!checkExistingSession()) {
      * Listens to the 'clients' collection and updates the global clientCache.
      * Also populates the client datalist for autofill.
      */
-    function listenForClients() {
-        // Use onSnapshot to get real-time updates
-        onSnapshot(garageCol(db, collection, 'clients'), (snapshot) => {
-            clientCache = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
-            
-            // Update client count
-            document.getElementById('client-count').textContent = clientCache.length;
+   let _clientsUnsubscribe = null;
+function listenForClients() {
+    if (_clientsUnsubscribe) return;
+    _clientsUnsubscribe = onSnapshot(garageCol(db, collection, 'clients'), (snapshot) => {
+        clientCache = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+        
+        document.getElementById('client-count').textContent = clientCache.length;
 
-            // Populate Datalist for Autofill
-            const datalist = document.getElementById('client-suggestions-list');
-            datalist.innerHTML = clientCache.map(client => 
-                `<option value="${client.clientPhone} (${client.clientName})">`
-            ).join('');
+        const datalist = document.getElementById('client-suggestions-list');
+        datalist.innerHTML = clientCache.map(client => 
+            `<option value="${client.clientPhone} (${client.clientName})">`
+        ).join('');
 
-            // If the clients section is visible, re-render the list
-            if (document.getElementById('clients-section').style.display === 'block') {
-                renderClientList(clientCache);
-            }
+        if (document.getElementById('clients-section').style.display === 'block') {
+            renderClientList(clientCache);
+        }
 
-        }, (error) => {
-            console.error("Error listening to clients collection: ", error);
-            document.getElementById('no-clients-message').textContent = 'Error loading clients.';
-        });
-    }
+    }, (error) => {
+        console.error("Error listening to clients collection: ", error);
+        document.getElementById('no-clients-message').textContent = 'Error loading clients.';
+    });
+}
     
     // ----------------------------------------------------------------------
     // 5b. MECHANICS MANAGEMENT LOGIC
@@ -1847,13 +1846,15 @@ if (!checkExistingSession()) {
      * Renders the list of clients in the clients-section.
      */
     function renderClientList(clients) {
-        const container = document.getElementById('clients-list-container');
-        const searchInput = document.getElementById('client-search');
-        const noClientsMsg = document.getElementById('no-clients-message');
-        
-        // Filter logic is handled by filterClients, this is the initial/full render
-        const displayClients = clients.filter(client => {
-            const searchTerm = searchInput.value.toLowerCase();
+    const container = document.getElementById('clients-list-container');
+    const searchInput = document.getElementById('client-search');
+    const noClientsMsg = document.getElementById('no-clients-message');
+
+    // Guard: if section elements aren't in DOM yet, bail out
+    if (!container || !searchInput || !noClientsMsg) return;
+
+    const displayClients = clients.filter(client => {
+        const searchTerm = searchInput.value.toLowerCase();
             return client.clientName.toLowerCase().includes(searchTerm) || 
                    client.clientPhone.toLowerCase().includes(searchTerm);
         });
