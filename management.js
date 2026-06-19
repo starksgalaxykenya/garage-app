@@ -223,6 +223,9 @@ async function enterPinAndLogin() {
         return;
     }
 
+    // --- NEW: Store garage data globally for permissions ---
+    window._garageData = result.garageData;
+
     if (result.firstSetup) {
         msg.textContent = '';
         alert('Welcome! Default manager PIN is 0000. Please set your PINs in Settings immediately.');
@@ -1454,15 +1457,6 @@ function deleteQuote(id) {
 window.generateQuotePDF = generateQuotePDF;
 window.deleteQuote      = deleteQuote;
 
-// =================================================================
-// 9. INITIALIZATION
-// =================================================================
-
-document.addEventListener('DOMContentLoaded', () => {
-    if (document.getElementById('invoice-items-container')) addInvoiceItemRow();
-    if (document.getElementById('quote-items-container'))   addQuoteItemRow();
-});
-
 window.addInvoiceItemRow = addInvoiceItemRow;
 window.addQuoteItemRow   = addQuoteItemRow;
 window.calculateTotal    = calculateTotal;
@@ -1553,9 +1547,20 @@ window.applyColorPreset = function(primary, secondary, accent) {
 };
 
 document.addEventListener('DOMContentLoaded', () => {
+    // Existing initializations
+    if (document.getElementById('invoice-items-container')) addInvoiceItemRow();
+    if (document.getElementById('quote-items-container'))   addQuoteItemRow();
+
+    // Branding tab setup
     const brandingTabBtn = document.getElementById('tab-branding');
     if (brandingTabBtn) {
         brandingTabBtn.addEventListener('click', setupBrandingTab);
+    }
+
+    // --- NEW: Save permissions button ---
+    const savePermBtn = document.getElementById('role-perm-save-btn');
+    if (savePermBtn) {
+        savePermBtn.addEventListener('click', saveRolePermissions);
     }
 });
 
