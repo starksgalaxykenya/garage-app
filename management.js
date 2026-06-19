@@ -234,6 +234,144 @@ async function enterPinAndLogin() {
 }
 window.enterPinAndLogin = enterPinAndLogin;
 
+const DEFAULT_PERMISSIONS = {
+    admin: {
+        allowedTabs: ['tab-finance', 'tab-inventory', 'tab-suppliers', 'tab-invoices', 'tab-quotes', 'tab-branding']
+    },
+    mechanic: {
+        allowedTabs: ['tab-inventory', 'tab-invoices', 'tab-quotes']
+    }
+};
+
+async function loadRolePermissions() {
+    const permsSection = document.getElementById('role-permissions-section');
+    // Only managers can see this section
+    if (!can('managePins')) {
+        if (permsSection) permsSection.style.display = 'none';
+        return;
+    }
+    if (permsSection) permsSection.style.display = '';
+
+    const garageCode = sessionStorage.getItem('garageCode');
+    if (!garageCode) return;
+
+    try {
+        const snap = await getDoc(doc(db, 'garages', garageCode));
+        if (!snap.exists()) return;
+        const data = snap.data();
+        const perms = data.rolePermissions || DEFAULT_PERMISSIONS;
+
+        const tbody = document.getElementById('role-permissions-tbody');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+
+        const roles = ['admin', 'mechanic'];
+        const tabIds = ['tab-finance', 'tab-payroll', 'tab-inventory', 'tab-suppliers', 'tab-invoices', 'tab-quotes', 'tab-branding'];
+        const roleLabels = { admin: '👤 Admin', mechanic: '🔧 Mechanic' };
+
+        roles.forEach(role => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td class="px-4 py-2 font-medium">${roleLabels[role]}</td>`;
+            const allowed = perms[role]?.allowedTabs || [];
+            tabIds.forEach(tabId => {
+                const checked = allowed.includes(tabId) ? 'checked' : '';
+                tr.innerHTML += `
+                    <td class="px-4 py-2 text-center">
+                        <input type="checkbox" class="role-perm-checkbox" data-role="${role}" data-tab="${tabId}" ${checked}>
+                    </td>
+                `;
+            });
+            tbody.appendChild(tr);
+        });
+    } catch (err) {
+        console.error('Error loading permissions:', err);
+    }
+}
+
+async function saveRolePermissions() {
+    const msg = document.getElementById('role-perm-save-msg');
+    if (!msg) return;
+
+    msg.textContent = 'Saving…';
+    msg.className = 'text-blue-500 text-sm font-semibold';
+
+    const garageCode = sessionStorage.getItem('garageCode');
+    if (!garageCode) {
+        msg.textContent = 'No garage session.';
+        msg.className = 'text-red-500 text-sm font-semibold';
+        return;
+    }
+
+    const checkboxes = document.querySelectorAll('.role-perm-checkbox');
+    const perms = {
+        admin: { allowedTabs: [] },
+        mechanic: { allowedTabs: [] }
+    };
+
+    checkboxes.forEach(cb => {
+        const role = cb.dataset.role;
+        const tab = cb.dataset.tab;
+        if (cb.checked) {
+            perms[role].allowedTabs.push(tab);
+        }
+    });
+
+    try {
+        await updateDoc(doc(db, 'garages', garageCode), { rolePermissions: perms });
+        msg.textContent = '✅ Permissions saved successfully!';
+        msg.className = 'text-green-600 text-sm font-semibold';
+
+        // Re‑apply current user's permissions (in case the manager changed their own)
+        const { role } = getSession();
+        const allowed = applyRolePermissions(role);
+        renderTabs(allowed);
+    } catch (err) {
+        msg.textContent = `❌ Error: ${err.message}`;
+        msg.className = 'text-red-600 text-sm font-semibold';
+    }
+}
+
+function applyRolePermissions(role) {
+    const garageData = window._garageData; // set during login
+    const perms = garageData?.rolePermissions || DEFAULT_PERMISSIONS;
+    const allowed = perms[role]?.allowedTabs || [];
+    // If no custom permissions, fallback to defaults for that role
+    if (allowed.length === 0) {
+        return DEFAULT_PERMISSIONS[role]?.allowedTabs || [];
+    }
+    return allowed;
+}
+
+function renderTabs(allowedTabs) {
+    const allTabButtons = document.querySelectorAll('.tab-button');
+    let firstVisible = null;
+
+    allTabButtons.forEach(btn => {
+        const id = btn.id;
+        if (allowedTabs.includes(id)) {
+            btn.style.display = '';
+            if (!firstVisible) firstVisible = btn;
+        } else {
+            btn.style.display = 'none';
+            // Also hide the associated content panel
+            const contentId = id.replace('tab-', 'content-');
+            const content = document.getElementById(contentId);
+            if (content) content.classList.add('hidden');
+        }
+    });
+
+    // Activate the first visible tab, or fallback to the first tab overall
+    if (firstVisible) {
+        firstVisible.click();
+    } else {
+        // If nothing is visible (should not happen), show the first tab
+        const fallback = document.querySelector('.tab-button');
+        if (fallback) fallback.click();
+    }
+}
+
+
+
 function grantManagementAccess(role) {
     authSection.style.display = 'none';
     dashboardSection.classList.remove('hidden');
@@ -251,18 +389,37 @@ function grantManagementAccess(role) {
         badge.className = `text-xs font-bold px-3 py-1 rounded-full ${c.cls}`;
     }
 
+    // --- NEW: Apply dynamic tab permissions for this role ---
+    // Ensure garage data is available (should have been set during login)
+    const allowedTabs = applyRolePermissions(role);
+    renderTabs(allowedTabs);
+
+    // --- NEW: Show/hide the role permissions management section (Manager only) ---
+    const permSection = document.getElementById('role-permissions-section');
+    if (permSection) {
+        permSection.style.display = can('managePins') ? '' : 'none';
+        if (can('managePins')) {
+            loadRolePermissions(); // load current settings into the table
+        }
+    }
+
     // PIN management tab/section visible to manager only
     const pinSection = document.getElementById('pin-management-section');
     if (pinSection) pinSection.style.display = can('managePins') ? '' : 'none';
 
-    // Payroll tab — financial data, manager only
-    const payrollTabBtn = document.getElementById('tab-payroll');
-    if (payrollTabBtn) payrollTabBtn.style.display = can('viewFinancials') ? '' : 'none';
+    // The Payroll tab visibility is now controlled by the permission system
+    // so we remove the old hardcoded line:
+    // const payrollTabBtn = document.getElementById('tab-payroll');
+    // if (payrollTabBtn) payrollTabBtn.style.display = can('viewFinancials') ? '' : 'none';
 
+    // Start listeners – these will still run for all roles,
+    // but the UI will only show the allowed tabs.
+    // You could optionally conditionally start listeners based on allowedTabs,
+    // but it's safe to keep them all running.
     listenForDailyTransactions();
     listenForSuppliers();
     listenForPartsInventory();
-    listenForInventoryLedger();   // ← Parts Ledger audit trail
+    listenForInventoryLedger();
     listenForInvoices();
     listenForQuotes();
     if (can('viewFinancials')) {
