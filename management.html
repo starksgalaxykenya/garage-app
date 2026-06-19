@@ -974,7 +974,38 @@
                 </div>
             </div>
             <!-- ====== END GARAGE BRANDING SETTINGS TAB ====== -->
-
+<!-- Role Permissions (Manager only) -->
+<div id="role-permissions-section" class="bg-white p-6 rounded-xl shadow-lg mt-6" style="display:none;">
+    <h3 class="text-xl font-semibold text-indigo-700 border-b pb-2 mb-4">🔑 Role Permissions</h3>
+    <p class="text-sm text-gray-500 mb-4">
+        Select which tabs each role can access. Manager always has full access.
+    </p>
+    <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200 text-sm">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Role</th>
+                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Finance</th>
+                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Payroll</th>
+                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Inventory</th>
+                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Suppliers</th>
+                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Invoices</th>
+                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Quotes</th>
+                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Settings</th>
+                </tr>
+            </thead>
+            <tbody id="role-permissions-tbody">
+                <!-- populated by JavaScript -->
+            </tbody>
+        </table>
+    </div>
+    <div class="flex items-center justify-between mt-4">
+        <p id="role-perm-save-msg" class="text-sm font-semibold"></p>
+        <button id="role-perm-save-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-6 rounded-lg transition">
+            Save Permissions
+        </button>
+    </div>
+</div>
         </main>
     </div>
 
