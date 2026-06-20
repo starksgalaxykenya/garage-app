@@ -143,6 +143,37 @@ export async function loginWithEmail(email, password, auth, signInFn, db, collec
     }
 }
 
+// ─── Password reset ────────────────────────────────────────────────
+
+/**
+ * Sends a password reset email to the garage owner via Firebase Auth.
+ * Firebase handles the email delivery and the reset link itself — no
+ * password is ever read or stored by this app.
+ * @param {string}   email
+ * @param {object}   auth                – Firebase Auth instance
+ * @param {function} sendPasswordResetFn – Firestore `sendPasswordResetEmail` (modular SDK)
+ * @returns {Promise<{ok:boolean, error?:string}>}
+ */
+export async function sendPasswordReset(email, auth, sendPasswordResetFn) {
+    if (!email || !/^\S+@\S+\.\S+$/.test(email)) {
+        return { ok: false, error: 'Please enter a valid email address.' };
+    }
+
+    try {
+        await sendPasswordResetFn(auth, email);
+        return { ok: true };
+    } catch (err) {
+        console.error('[Auth] Password reset error:', err);
+        // Firebase throws 'auth/user-not-found' for unregistered emails.
+        // We intentionally show the same generic success-style message either way
+        // so the form can't be used to discover which emails are registered.
+        if (err.code === 'auth/invalid-email') {
+            return { ok: false, error: 'Please enter a valid email address.' };
+        }
+        return { ok: true };
+    }
+}
+
 // ─── PIN verification (unchanged) ────────────────────────────────
 
 /**
