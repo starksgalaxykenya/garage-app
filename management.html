@@ -109,9 +109,9 @@
                                     <option value="Diagnostics">Diagnostics</option>
                                 </select>
                                 <input id="job-plate" type="text" placeholder="Car Plate (Optional)" class="w-full p-2 border rounded-lg">
-                                <input id="job-income" type="number" placeholder="Income Amount ($)" step="0.01" min="0" required class="w-full p-2 border rounded-lg">
-                                <input id="job-expense" type="number" placeholder="Associated Expense ($)" step="0.01" min="0" value="0" class="w-full p-2 border rounded-lg">
-                                <div id="job-profit-display" class="text-center font-bold text-lg text-gray-500">Profit: $0.00</div>
+                                <input id="job-income" type="number" placeholder="Income Amount (KSh)" step="0.01" min="0" required class="w-full p-2 border rounded-lg">
+                                <input id="job-expense" type="number" placeholder="Associated Expense (KSh)" step="0.01" min="0" value="0" class="w-full p-2 border rounded-lg">
+                                <div id="job-profit-display" class="text-center font-bold text-lg text-gray-500">Profit: KSh0.00</div>
                                 <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 rounded-lg">Record Job</button>
                             </form>
                         </div>
@@ -124,7 +124,7 @@
                                     <option value="Rent">Rent (Expense)</option>
                                     <option value="Other Income">Other Income</option>
                                 </select>
-                                <input id="general-amount" type="number" placeholder="Amount ($)" step="0.01" min="0" required class="w-full p-2 border rounded-lg">
+                                <input id="general-amount" type="number" placeholder="Amount (KSh)" step="0.01" min="0" required class="w-full p-2 border rounded-lg">
                                 <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded-lg">Record Transaction</button>
                             </form>
                         </div>
@@ -153,9 +153,9 @@
                         <div class="bg-white p-6 rounded-xl shadow-lg">
                             <h3 class="text-xl font-semibold mb-4 text-indigo-700 border-b pb-2">Daily Summary</h3>
                             <div class="flex justify-around text-center">
-                                <div><span class="text-sm text-gray-500">Income</span><p id="summary-income" class="text-2xl font-bold text-green-600">$0.00</p></div>
-                                <div><span class="text-sm text-gray-500">Expense</span><p id="summary-expense" class="text-2xl font-bold text-red-600">$0.00</p></div>
-                                <div><span class="text-sm text-gray-500">Net Profit</span><p id="summary-profit" class="text-2xl font-bold text-indigo-600">$0.00</p></div>
+                                <div><span class="text-sm text-gray-500">Income</span><p id="summary-income" class="text-2xl font-bold text-green-600">KSh0.00</p></div>
+                                <div><span class="text-sm text-gray-500">Expense</span><p id="summary-expense" class="text-2xl font-bold text-red-600">KSh0.00</p></div>
+                                <div><span class="text-sm text-gray-500">Net Profit</span><p id="summary-profit" class="text-2xl font-bold text-indigo-600">KSh0.00</p></div>
                             </div>
                             <button id="end-day-btn" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 rounded-lg mt-4 disabled:opacity-50" disabled>End Day & Save P&L Report</button>
                         </div>
@@ -206,7 +206,7 @@
                                 <input id="emp-phone" type="tel" placeholder="Phone Number" class="w-full p-2 border rounded-lg">
                                 <input id="emp-id-no" type="text" placeholder="Employee ID / National ID" class="w-full p-2 border rounded-lg">
                                 <div>
-                                    <label class="block text-xs font-medium text-gray-500 mb-1">Base Salary ($) — per pay period</label>
+                                    <label class="block text-xs font-medium text-gray-500 mb-1">Base Salary (KSh) — per pay period</label>
                                     <input id="emp-base-salary" type="number" placeholder="0.00" step="0.01" min="0" required class="w-full p-2 border rounded-lg">
                                 </div>
                                 <select id="emp-pay-frequency" class="w-full p-2 border rounded-lg">
@@ -256,7 +256,7 @@
                                 <h4 class="font-bold text-gray-700 mb-2">Base Salary</h4>
                                 <div class="flex gap-3 items-end">
                                     <div class="flex-1">
-                                        <label class="block text-xs text-gray-500 mb-1">Amount ($) per pay period</label>
+                                        <label class="block text-xs text-gray-500 mb-1">Amount (KSh) per pay period</label>
                                         <input id="epm-base-salary" type="number" step="0.01" min="0" class="w-full p-2 border rounded-lg">
                                     </div>
                                     <button onclick="updateEmployeeBaseSalary()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg text-sm">Update</button>
@@ -269,7 +269,7 @@
                                 <div id="epm-deductions-list" class="space-y-2 mb-3"></div>
                                 <div class="flex gap-2">
                                     <input id="epm-new-deduction-label" type="text" placeholder="Label (e.g. PAYE Tax)" class="flex-1 p-2 border rounded-lg text-sm">
-                                    <input id="epm-new-deduction-amount" type="number" placeholder="$0.00" step="0.01" min="0" class="w-28 p-2 border rounded-lg text-sm">
+                                    <input id="epm-new-deduction-amount" type="number" placeholder="KSh0.00" step="0.01" min="0" class="w-28 p-2 border rounded-lg text-sm">
                                     <button onclick="addEmployeeLineItem('deductions')" class="bg-red-500 hover:bg-red-600 text-white font-bold px-3 rounded-lg text-sm">Add</button>
                                 </div>
                             </div>
@@ -280,7 +280,7 @@
                                 <div id="epm-benefits-list" class="space-y-2 mb-3"></div>
                                 <div class="flex gap-2">
                                     <input id="epm-new-benefit-label" type="text" placeholder="Label (e.g. Transport Allowance)" class="flex-1 p-2 border rounded-lg text-sm">
-                                    <input id="epm-new-benefit-amount" type="number" placeholder="$0.00" step="0.01" min="0" class="w-28 p-2 border rounded-lg text-sm">
+                                    <input id="epm-new-benefit-amount" type="number" placeholder="KSh0.00" step="0.01" min="0" class="w-28 p-2 border rounded-lg text-sm">
                                     <button onclick="addEmployeeLineItem('benefits')" class="bg-green-500 hover:bg-green-600 text-white font-bold px-3 rounded-lg text-sm">Add</button>
                                 </div>
                             </div>
@@ -291,7 +291,7 @@
                                 <div id="epm-penalties-list" class="space-y-2 mb-3"></div>
                                 <div class="flex gap-2">
                                     <input id="epm-new-penalty-label" type="text" placeholder="Reason (e.g. Late arrival)" class="flex-1 p-2 border rounded-lg text-sm">
-                                    <input id="epm-new-penalty-amount" type="number" placeholder="$0.00" step="0.01" min="0" class="w-28 p-2 border rounded-lg text-sm">
+                                    <input id="epm-new-penalty-amount" type="number" placeholder="KSh0.00" step="0.01" min="0" class="w-28 p-2 border rounded-lg text-sm">
                                     <button onclick="addEmployeeLineItem('penalties')" class="bg-orange-500 hover:bg-orange-600 text-white font-bold px-3 rounded-lg text-sm">Add</button>
                                 </div>
                             </div>
@@ -300,11 +300,11 @@
                             <div class="bg-indigo-50 rounded-lg p-4 border-2 border-indigo-200">
                                 <h4 class="font-bold text-indigo-700 mb-3">🧮 Net Pay Calculation (this run)</h4>
                                 <div class="space-y-1 text-sm">
-                                    <div class="flex justify-between"><span>Base Salary</span><span id="epm-calc-base" class="font-semibold">$0.00</span></div>
-                                    <div class="flex justify-between text-green-600"><span>+ Benefits</span><span id="epm-calc-benefits" class="font-semibold">$0.00</span></div>
-                                    <div class="flex justify-between text-red-600"><span>− Deductions</span><span id="epm-calc-deductions" class="font-semibold">$0.00</span></div>
-                                    <div class="flex justify-between text-orange-600"><span>− Pending Penalties</span><span id="epm-calc-penalties" class="font-semibold">$0.00</span></div>
-                                    <div class="flex justify-between text-lg font-extrabold border-t pt-2 mt-2 text-indigo-800"><span>NET PAY</span><span id="epm-calc-net">$0.00</span></div>
+                                    <div class="flex justify-between"><span>Base Salary</span><span id="epm-calc-base" class="font-semibold">KSh0.00</span></div>
+                                    <div class="flex justify-between text-green-600"><span>+ Benefits</span><span id="epm-calc-benefits" class="font-semibold">KSh0.00</span></div>
+                                    <div class="flex justify-between text-red-600"><span>− Deductions</span><span id="epm-calc-deductions" class="font-semibold">KSh0.00</span></div>
+                                    <div class="flex justify-between text-orange-600"><span>− Pending Penalties</span><span id="epm-calc-penalties" class="font-semibold">KSh0.00</span></div>
+                                    <div class="flex justify-between text-lg font-extrabold border-t pt-2 mt-2 text-indigo-800"><span>NET PAY</span><span id="epm-calc-net">KSh0.00</span></div>
                                 </div>
                                 <button id="epm-run-payroll-btn" onclick="runEmployeePayroll()" class="w-full mt-4 bg-indigo-700 hover:bg-indigo-800 text-white font-bold py-3 rounded-lg transition">
                                     💸 Pay Now & Record in Finance
@@ -358,7 +358,7 @@
                                     </select>
                                 </div>
                                 <div>
-                                    <label class="block text-xs font-medium text-gray-500 mb-1">Amount Earned ($)</label>
+                                    <label class="block text-xs font-medium text-gray-500 mb-1">Amount Earned (KSh)</label>
                                     <input id="casual-earning-amount" type="number" step="0.01" min="0" required class="w-full p-2 border rounded-lg">
                                 </div>
                                 <div>
@@ -410,7 +410,7 @@
                                         <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Worker</th>
                                         <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Description</th>
                                         <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Plate</th>
-                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Amount ($)</th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Amount (KSh)</th>
                                         <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                                         <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Action</th>
                                     </tr>
@@ -433,15 +433,15 @@
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                             <div class="bg-indigo-50 rounded-lg p-4 text-center">
                                 <p class="text-xs text-indigo-500 uppercase font-semibold">Total Paid (Full-Time)</p>
-                                <p id="ph-total-payroll" class="text-2xl font-bold text-indigo-700">$0.00</p>
+                                <p id="ph-total-payroll" class="text-2xl font-bold text-indigo-700">KSh0.00</p>
                             </div>
                             <div class="bg-green-50 rounded-lg p-4 text-center">
                                 <p class="text-xs text-green-500 uppercase font-semibold">Total Paid (Casuals)</p>
-                                <p id="ph-total-casual-paid" class="text-2xl font-bold text-green-700">$0.00</p>
+                                <p id="ph-total-casual-paid" class="text-2xl font-bold text-green-700">KSh0.00</p>
                             </div>
                             <div class="bg-orange-50 rounded-lg p-4 text-center">
                                 <p class="text-xs text-orange-500 uppercase font-semibold">Total Outstanding Dues</p>
-                                <p id="ph-total-outstanding" class="text-2xl font-bold text-orange-700">$0.00</p>
+                                <p id="ph-total-outstanding" class="text-2xl font-bold text-orange-700">KSh0.00</p>
                             </div>
                         </div>
                         <div class="overflow-x-auto">
@@ -452,7 +452,7 @@
                                         <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
                                         <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
                                         <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Details</th>
-                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Amount ($)</th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Amount (KSh)</th>
                                     </tr>
                                 </thead>
                                 <tbody id="payhistory-table-body" class="bg-white divide-y divide-gray-200">
@@ -527,7 +527,7 @@
                                  </div>
                                  <div class="flex flex-col justify-end">
                                      <span class="text-sm font-medium text-gray-700 mb-1">Estimated Profit:</span>
-                                     <p id="part-sale-profit-display" class="font-bold text-xl text-gray-500">$0.00</p>
+                                     <p id="part-sale-profit-display" class="font-bold text-xl text-gray-500">KSh0.00</p>
                                  </div>
                              </div>
                              <button id="commit-part-sale-btn" type="submit" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 rounded-lg disabled:opacity-50 mt-2" disabled>
@@ -554,7 +554,7 @@
                                          <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Issued To</th>
                                          <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Vehicle Plate</th>
                                          <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Purpose</th>
-                                         <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Value ($)</th>
+                                         <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Value (KSh)</th>
                                      </tr>
                                  </thead>
                                  <tbody id="ledger-table-body" class="bg-white divide-y divide-gray-200">
@@ -583,7 +583,7 @@
                                  </select>
                                  <input id="supplier-contact" type="tel" placeholder="Contact Phone (WhatsApp)" required class="w-full p-2 border rounded-lg">
                                  <input id="supplier-location" type="text" placeholder="Location/Address" class="w-full p-2 border rounded-lg">
-                                 <input id="supplier-owed" type="number" placeholder="Amount Owed ($0.00)" step="0.01" value="0" class="w-full p-2 border rounded-lg">
+                                 <input id="supplier-owed" type="number" placeholder="Amount Owed (KSh0.00)" step="0.01" value="0" class="w-full p-2 border rounded-lg">
                                  <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 rounded-lg">Add Supplier</button>
                              </form>
                          </div>
@@ -649,8 +649,8 @@
     <div class="flex space-x-2 invoice-item-row mb-2">
         <input type="text" placeholder="Description" class="invoice-item-desc form-input flex-grow" required/>
         <input type="number" value="1" min="1" placeholder="Qty" class="invoice-item-qty form-input w-24" oninput="calculateTotal('invoice')" required/>
-        <input type="number" placeholder="Unit Price ($)" value="0.00" min="0" step="0.01" class="invoice-item-unit-price form-input w-36" oninput="calculateTotal('invoice')" required/>
-        <input type="text" placeholder="Total Amount ($)" value="0.00" class="invoice-item-amount form-input w-40 bg-gray-100" readonly>
+        <input type="number" placeholder="Unit Price (KSh)" value="0.00" min="0" step="0.01" class="invoice-item-unit-price form-input w-36" oninput="calculateTotal('invoice')" required/>
+        <input type="text" placeholder="Total Amount (KSh)" value="0.00" class="invoice-item-amount form-input w-40 bg-gray-100" readonly>
         <button type="button" onclick="this.parentNode.remove(); calculateTotal('invoice');" class="delete-item-btn p-2 text-red-500 hover:text-red-700">X</button>
     </div>
 </div>
@@ -659,7 +659,7 @@
                             
                             <div class="pt-4 border-t mt-4 flex justify-between items-center">
                                 <span class="text-xl font-bold text-gray-700">TOTAL AMOUNT:</span>
-                                <span id="invoice-total-display" class="text-2xl font-extrabold text-indigo-600">$0.00</span>
+                                <span id="invoice-total-display" class="text-2xl font-extrabold text-indigo-600">KSh0.00</span>
                             </div>
                             
                             <button type="submit" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg transition duration-150"><i class="fas fa-file-export mr-2"></i>Generate & Commit Invoice</button>
@@ -674,7 +674,7 @@
                                         <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Invoice No.</th>
                                         <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
                                         <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Client / Plate</th>
-                                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount ($)</th>
+                                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount (KSh)</th>
                                         <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                                     </tr>
                                 </thead>
@@ -703,8 +703,8 @@
     <div class="flex space-x-2 quote-item-row mb-2">
         <input type="text" placeholder="Description" class="quote-item-desc form-input flex-grow" required/>
         <input type="number" value="1" min="1" placeholder="Qty" class="quote-item-qty form-input w-24" oninput="calculateTotal('quote')" required/>
-        <input type="number" placeholder="Unit Price ($)" value="0.00" min="0" step="0.01" class="quote-item-unit-price form-input w-36" oninput="calculateTotal('quote')" required/>
-        <input type="text" placeholder="Total Amount ($)" value="0.00" class="quote-item-amount form-input w-40 bg-gray-100" readonly>
+        <input type="number" placeholder="Unit Price (KSh)" value="0.00" min="0" step="0.01" class="quote-item-unit-price form-input w-36" oninput="calculateTotal('quote')" required/>
+        <input type="text" placeholder="Total Amount (KSh)" value="0.00" class="quote-item-amount form-input w-40 bg-gray-100" readonly>
         <button type="button" onclick="this.parentNode.remove(); calculateTotal('quote');" class="delete-item-btn p-2 text-red-500 hover:text-red-700">X</button>
     </div>
 </div>
@@ -713,7 +713,7 @@
 
                             <div class="pt-4 border-t mt-4 flex justify-between items-center">
                                 <span class="text-xl font-bold text-gray-700">TOTAL ESTIMATE:</span>
-                                <span id="quote-total-display" class="text-2xl font-extrabold text-indigo-600">$0.00</span>
+                                <span id="quote-total-display" class="text-2xl font-extrabold text-indigo-600">KSh0.00</span>
                             </div>
 
                             <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition duration-150"><i class="fas fa-file-export mr-2"></i>Generate & Share Quote</button>
@@ -728,7 +728,7 @@
                                         <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quote No.</th>
                                         <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
                                         <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Client / Plate</th>
-                                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount ($)</th>
+                                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount (KSh)</th>
                                         <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                                     </tr>
                                 </thead>
