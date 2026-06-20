@@ -87,8 +87,26 @@
                         Sign In as Owner
                     </button>
                     <p id="owner-login-message" class="text-red-500 text-sm mt-1 text-center"></p>
+                    <div class="text-center text-sm mb-2">
+                        <button id="forgot-password-btn" class="text-blue-500 hover:underline">Forgot password?</button>
+                    </div>
                     <div class="text-center text-sm text-gray-400">
                         <button id="switch-to-staff-btn" class="text-blue-500 hover:underline">Are you staff? Use Garage Code</button>
+                    </div>
+                </div>
+
+                <!-- ── FORGOT PASSWORD (Email reset link) ── -->
+                <div id="forgot-password-step" style="display:none;">
+                    <p class="text-sm text-gray-600 text-center mb-4">Enter your owner email and we'll send you a link to reset your password.</p>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Owner Email</label>
+                    <input id="reset-email-input" type="email" placeholder="owner@garage.com"
+                           class="w-full p-3 mb-4 border border-gray-300 rounded-lg" />
+                    <button id="send-reset-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg mb-3">
+                        Send Reset Link
+                    </button>
+                    <p id="reset-password-message" class="text-sm mt-1 text-center"></p>
+                    <div class="text-center text-sm text-gray-400">
+                        <button id="back-to-owner-login-btn" class="text-blue-500 hover:underline">← Back to Sign In</button>
                     </div>
                 </div>
 
@@ -767,6 +785,7 @@
 <script type="module">
     // ── Add these imports ──
 import { getSession, setSession, clearSession, can, verifyPin, loginWithEmail,
+         sendPasswordReset,
          showTrialBanner, ROLES, garageCol, garageDoc, garageRef } from './auth.js';
 import { ERROR_CODE_LOOKUP } from "./error_codes_dictionary.js";
 window.GLOBAL_ERROR_CODE_LOOKUP = ERROR_CODE_LOOKUP;
@@ -775,7 +794,7 @@ import { getBranding, drawPdfHeader, drawPdfFooter } from "./garage-branding.js"
 
 // ── Import Firebase modular SDK ──
 import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
-import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-auth.js";
+import { getAuth, signInWithEmailAndPassword, sendPasswordResetEmail, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-auth.js";
 import {
     getFirestore,
     collection, addDoc, doc, updateDoc, deleteDoc, query, where, orderBy,
@@ -888,6 +907,61 @@ switchToOwnerBtn.addEventListener('click', () => {
     staffLoginStep.style.display = 'none';
     ownerLoginStep.style.display = 'block';
     ownerLoginMsg.textContent = '';
+});
+
+// ── Forgot Password ──
+const forgotPasswordBtn = document.getElementById('forgot-password-btn');
+const forgotPasswordStep = document.getElementById('forgot-password-step');
+const resetEmailInput = document.getElementById('reset-email-input');
+const sendResetBtn = document.getElementById('send-reset-btn');
+const resetPasswordMsg = document.getElementById('reset-password-message');
+const backToOwnerLoginBtn = document.getElementById('back-to-owner-login-btn');
+
+forgotPasswordBtn.addEventListener('click', () => {
+    ownerLoginStep.style.display = 'none';
+    forgotPasswordStep.style.display = 'block';
+    resetPasswordMsg.textContent = '';
+    resetPasswordMsg.className = 'text-sm mt-1 text-center';
+    // Pre-fill with whatever email the owner already typed, if any.
+    resetEmailInput.value = ownerEmailInput.value.trim();
+});
+
+backToOwnerLoginBtn.addEventListener('click', () => {
+    forgotPasswordStep.style.display = 'none';
+    ownerLoginStep.style.display = 'block';
+});
+
+sendResetBtn.addEventListener('click', async () => {
+    const email = resetEmailInput.value.trim();
+    if (!email) {
+        resetPasswordMsg.textContent = 'Please enter your email.';
+        resetPasswordMsg.className = 'text-sm mt-1 text-center text-red-500';
+        return;
+    }
+    sendResetBtn.disabled = true;
+    resetPasswordMsg.textContent = '⏳ Sending...';
+    resetPasswordMsg.className = 'text-sm mt-1 text-center text-gray-500';
+
+    try {
+        const result = await sendPasswordReset(email, auth, sendPasswordResetEmail);
+        if (!result.ok) {
+            resetPasswordMsg.textContent = result.error || 'Could not send reset email.';
+            resetPasswordMsg.className = 'text-sm mt-1 text-center text-red-500';
+        } else {
+            resetPasswordMsg.textContent = '✅ If an account exists for that email, a reset link has been sent.';
+            resetPasswordMsg.className = 'text-sm mt-1 text-center text-green-600';
+        }
+    } catch (err) {
+        resetPasswordMsg.textContent = err.message || 'Something went wrong.';
+        resetPasswordMsg.className = 'text-sm mt-1 text-center text-red-500';
+        console.error(err);
+    } finally {
+        sendResetBtn.disabled = false;
+    }
+});
+
+resetEmailInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') sendResetBtn.click();
 });
 
 // ── Staff Login (Garage Code) ──
