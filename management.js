@@ -274,13 +274,13 @@ async function loadRolePermissions() {
 
         roles.forEach(role => {
             const tr = document.createElement('tr');
-            tr.innerHTML = `<td class="px-4 py-2 font-medium">${roleLabels[role]}</td>`;
+            tr.innerHTML = `<td class="px-4 py-2 font-medium">KSh{roleLabels[role]}</td>`;
             const allowed = perms[role]?.allowedTabs || [];
             tabIds.forEach(tabId => {
                 const checked = allowed.includes(tabId) ? 'checked' : '';
                 tr.innerHTML += `
                     <td class="px-4 py-2 text-center">
-                        <input type="checkbox" class="role-perm-checkbox" data-role="${role}" data-tab="${tabId}" ${checked}>
+                        <input type="checkbox" class="role-perm-checkbox" data-role="KSh{role}" data-tab="KSh{tabId}" KSh{checked}>
                     </td>
                 `;
             });
@@ -329,7 +329,7 @@ async function saveRolePermissions() {
         const allowed = applyRolePermissions(role);
         renderTabs(allowed);
     } catch (err) {
-        msg.textContent = `❌ Error: ${err.message}`;
+        msg.textContent = `❌ Error: KSh{err.message}`;
         msg.className = 'text-red-600 text-sm font-semibold';
     }
 }
@@ -396,7 +396,7 @@ function grantManagementAccess(role) {
         };
         const c = cfg[role] || cfg.admin;
         badge.textContent = c.label;
-        badge.className = `text-xs font-bold px-3 py-1 rounded-full ${c.cls}`;
+        badge.className = `text-xs font-bold px-3 py-1 rounded-full KSh{c.cls}`;
     }
 
     // --- NEW: Apply dynamic tab permissions for this role ---
@@ -512,7 +512,7 @@ tabNav.addEventListener('click', (event) => {
         const income  = parseFloat(jobIncomeInput.value) || 0;
         const expense = parseFloat(jobExpenseInput.value) || 0;
         const profit  = income - expense;
-        jobProfitDisplay.textContent = `Profit: $${profit.toFixed(2)}`;
+        jobProfitDisplay.textContent = `Profit: KShKSh{profit.toFixed(2)}`;
         jobProfitDisplay.className = profit >= 0
             ? 'font-bold text-lg text-green-600'
             : 'font-bold text-lg text-red-600';
@@ -529,7 +529,7 @@ jobForm.addEventListener('submit', async (e) => {
         type:        'JOB',
         subtype:     document.getElementById('job-type').value,
         plate:       document.getElementById('job-plate').value || 'N/A',
-        description: document.getElementById('job-type').value + (document.getElementById('job-plate').value ? ` for plate ${document.getElementById('job-plate').value}` : ''),
+        description: document.getElementById('job-type').value + (document.getElementById('job-plate').value ? ` for plate KSh{document.getElementById('job-plate').value}` : ''),
         income,
         expense,
         profit,
@@ -541,7 +541,7 @@ jobForm.addEventListener('submit', async (e) => {
     try {
         await addDoc(getDailyTransactionsRef(), transaction);
         jobForm.reset();
-        jobProfitDisplay.textContent = 'Profit: $0.00';
+        jobProfitDisplay.textContent = 'Profit: KSh0.00';
     } catch (error) {
         alert('Failed to record job transaction.');
         console.error('Job Transaction Error: ', error);
@@ -620,23 +620,23 @@ function listenForDailyTransactions() {
             tr.className = 'hover:bg-gray-50';
             const profitClass = profit >= 0 ? 'text-green-600 font-medium' : 'text-red-600 font-medium';
             tr.innerHTML = `
-                <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500">${displayTime}</td>
-                <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900">${escapeHtml(data.subtype || 'Other')}</td>
-                <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500">${escapeHtml(data.plate || 'N/A')}</td>
-                <td class="px-3 py-2 whitespace-nowrap text-sm text-green-600">$${safeToFixed(safeIncome)}</td>
-                <td class="px-3 py-2 whitespace-nowrap text-sm text-red-600">$${safeToFixed(safeExpense)}</td>
-                <td class="px-3 py-2 whitespace-nowrap text-sm ${profitClass}">$${safeToFixed(profit)}</td>
+                <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500">KSh{displayTime}</td>
+                <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900">KSh{escapeHtml(data.subtype || 'Other')}</td>
+                <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500">KSh{escapeHtml(data.plate || 'N/A')}</td>
+                <td class="px-3 py-2 whitespace-nowrap text-sm text-green-600">KShKSh{safeToFixed(safeIncome)}</td>
+                <td class="px-3 py-2 whitespace-nowrap text-sm text-red-600">KShKSh{safeToFixed(safeExpense)}</td>
+                <td class="px-3 py-2 whitespace-nowrap text-sm KSh{profitClass}">KShKSh{safeToFixed(profit)}</td>
                 <td class="px-3 py-2 whitespace-nowrap text-sm">
-                    <button onclick="deleteTransaction('${docSnap.id}')" class="text-red-500 hover:text-red-700">Delete</button>
+                    <button onclick="deleteTransaction('KSh{docSnap.id}')" class="text-red-500 hover:text-red-700">Delete</button>
                 </td>
             `;
             dailyTransactionsBody.appendChild(tr);
         });
 
         const netProfit = totalIncome - totalExpense;
-        summaryIncome.textContent  = `$${safeToFixed(totalIncome)}`;
-        summaryExpense.textContent = `$${safeToFixed(totalExpense)}`;
-        summaryProfit.textContent  = `$${safeToFixed(netProfit)}`;
+        summaryIncome.textContent  = `KShKSh{safeToFixed(totalIncome)}`;
+        summaryExpense.textContent = `KShKSh{safeToFixed(totalExpense)}`;
+        summaryProfit.textContent  = `KShKSh{safeToFixed(netProfit)}`;
         summaryProfit.className    = netProfit >= 0 ? 'font-bold text-indigo-600' : 'font-bold text-red-600';
         endDayBtn.disabled         = currentDailyTransactions.length === 0;
     }, error => console.error("Error listening to daily transactions: ", error));
@@ -700,9 +700,9 @@ endDayBtn.addEventListener('click', async () => {
             });
         });
 
-        alert(`Day closed! Net profit: $${(parseFloat(summaryProfit.textContent.replace('$','')) || 0).toFixed(2)}`);
+        alert(`Day closed! Net profit: KShKSh{(parseFloat(summaryProfit.textContent.replace('KSh','')) || 0).toFixed(2)}`);
     } catch (err) {
-        alert(`Could not save report: ${err.message}`);
+        alert(`Could not save report: KSh{err.message}`);
         console.error('End Day Error:', err);
     } finally {
         endDayBtn.disabled = currentDailyTransactions.length === 0;
@@ -733,9 +733,9 @@ viewReportsBtn.addEventListener('click', () => {
             const listItem = document.createElement('div');
             listItem.className = 'flex justify-between items-center p-2 bg-gray-50 rounded-lg shadow-sm';
             listItem.innerHTML = `
-                <span class="font-medium">${data.date}</span>
-                <span class="${data.netProfit >= 0 ? 'text-green-600' : 'text-red-600'} font-bold">$${(data.netProfit ?? 0).toFixed(2)}</span>
-                <button onclick="generateDailyReportPDF('${docSnap.id}')" class="text-blue-500 hover:text-blue-700 text-sm">Print/View</button>
+                <span class="font-medium">KSh{data.date}</span>
+                <span class="KSh{data.netProfit >= 0 ? 'text-green-600' : 'text-red-600'} font-bold">KShKSh{(data.netProfit ?? 0).toFixed(2)}</span>
+                <button onclick="generateDailyReportPDF('KSh{docSnap.id}')" class="text-blue-500 hover:text-blue-700 text-sm">Print/View</button>
             `;
             pastReportsList.appendChild(listItem);
         });
@@ -759,7 +759,7 @@ function renderFinancialChart(monthTotals) {
         data: {
             labels: sortedMonths,
             datasets: [{
-                label: 'Monthly Net Profit ($)',
+                label: 'Monthly Net Profit (KSh)',
                 data: profits,
                 backgroundColor: profits.map(p => p >= 0 ? 'rgba(52, 211, 153, 0.7)' : 'rgba(239, 68, 68, 0.7)'),
                 borderColor:     profits.map(p => p >= 0 ? 'rgba(52, 211, 153, 1)'   : 'rgba(239, 68, 68, 1)'),
@@ -768,7 +768,7 @@ function renderFinancialChart(monthTotals) {
         },
         options: {
             responsive: true,
-            scales: { y: { beginAtZero: true, title: { display: true, text: 'Profit/Loss ($)' } } }
+            scales: { y: { beginAtZero: true, title: { display: true, text: 'Profit/Loss (KSh)' } } }
         }
     });
 }
@@ -785,13 +785,13 @@ async function generateDailyReportPDF(reportId) {
 
         pdfDoc.setFontSize(10);
         pdfDoc.setTextColor(60, 60, 60);
-        pdfDoc.text(`Date: ${report.date}`, 14, y);
-        pdfDoc.text(`Generated: ${new Date().toLocaleString()}`, 14, y + 5);
+        pdfDoc.text(`Date: KSh{report.date}`, 14, y);
+        pdfDoc.text(`Generated: KSh{new Date().toLocaleString()}`, 14, y + 5);
         y += 14;
 
         pdfDoc.autoTable({
             startY: y,
-            head: [['Metric', 'Amount ($)']],
+            head: [['Metric', 'Amount (KSh)']],
             body: [
                 ['Total Income',  (report.totalIncome  ?? 0).toFixed(2)],
                 ['Total Expense', (report.totalExpense ?? 0).toFixed(2)],
@@ -815,14 +815,14 @@ async function generateDailyReportPDF(reportId) {
 
         pdfDoc.autoTable({
             startY: pdfDoc.autoTable.previous.finalY + 15,
-            head: [['Time', 'Description', 'Income ($)', 'Expense ($)', 'Profit ($)']],
+            head: [['Time', 'Description', 'Income (KSh)', 'Expense (KSh)', 'Profit (KSh)']],
             body: transactionBody,
             theme: 'striped', styles: { fontSize: 8 },
             headStyles: { fillColor: hexToRgbArr(branding.primaryColor) }
         });
 
         drawPdfFooter(pdfDoc, branding);
-        pdfDoc.save(`Report_${report.date}.pdf`);
+        pdfDoc.save(`Report_KSh{report.date}.pdf`);
     } catch (error) {
         console.error("PDF Generation Error: ", error);
         alert("Failed to generate PDF report.");
@@ -845,7 +845,7 @@ addPartForm.addEventListener('submit', async (e) => {
         createdAt:     serverTimestamp()
     };
     if (part.sellingPrice < part.supplierPrice) {
-        if (!confirm(`Warning: Selling Price ($${part.sellingPrice.toFixed(2)}) is less than Supplier Price ($${part.supplierPrice.toFixed(2)}). Continue?`)) return;
+        if (!confirm(`Warning: Selling Price (KShKSh{part.sellingPrice.toFixed(2)}) is less than Supplier Price (KShKSh{part.supplierPrice.toFixed(2)}). Continue?`)) return;
     }
     try {
         await addDoc(getPartsInventoryRef(), part);
@@ -870,7 +870,7 @@ function calculatePartSaleProfit() {
     const quantitySold = parseInt(partSaleQuantityInput.value) || 0;
 
     commitPartSaleBtn.disabled = true;
-    partSaleProfitDisplay.textContent = '$0.00';
+    partSaleProfitDisplay.textContent = 'KSh0.00';
     partSaleProfitDisplay.className   = 'font-bold text-xl text-gray-500';
 
     if (!partOption || !partOption.value || quantitySold <= 0) return;
@@ -886,7 +886,7 @@ function calculatePartSaleProfit() {
     const sellingPrice  = parseFloat(partOption.dataset.sellingPrice);
     const totalProfit   = (sellingPrice - supplierPrice) * quantitySold;
 
-    partSaleProfitDisplay.textContent = `$${totalProfit.toFixed(2)}`;
+    partSaleProfitDisplay.textContent = `KShKSh{totalProfit.toFixed(2)}`;
     partSaleProfitDisplay.className   = totalProfit >= 0 ? 'font-bold text-xl text-green-600' : 'font-bold text-xl text-red-600';
     commitPartSaleBtn.disabled = false;
 }
@@ -904,7 +904,7 @@ sellPartForm.addEventListener('submit', async (e) => {
     if (!issuedTo) return alert("Please enter the name of the person receiving the part.");
 
     const stock = parseInt(partOption.dataset.stock);
-    if (quantitySold > stock) return alert(`Cannot sell ${quantitySold}. Only ${stock} in stock.`);
+    if (quantitySold > stock) return alert(`Cannot sell KSh{quantitySold}. Only KSh{stock} in stock.`);
 
     const supplierPrice = parseFloat(partOption.dataset.supplierPrice);
     const sellingPrice  = parseFloat(partOption.dataset.sellingPrice);
@@ -913,7 +913,7 @@ sellPartForm.addEventListener('submit', async (e) => {
     const totalExpense  = supplierPrice * quantitySold;
     const totalProfit   = totalIncome - totalExpense;
 
-    if (!confirm(`Confirm:\n  ${quantitySold} x ${partName}\n  Issued to: ${issuedTo}\n  Vehicle: ${carPlate}\n  Revenue: $${totalIncome.toFixed(2)}   Profit: $${totalProfit.toFixed(2)}`)) return;
+    if (!confirm(`Confirm:\n  KSh{quantitySold} x KSh{partName}\n  Issued to: KSh{issuedTo}\n  Vehicle: KSh{carPlate}\n  Revenue: KShKSh{totalIncome.toFixed(2)}   Profit: KShKSh{totalProfit.toFixed(2)}`)) return;
 
     commitPartSaleBtn.disabled = true;
     try {
@@ -927,14 +927,14 @@ sellPartForm.addEventListener('submit', async (e) => {
 
             const liveStock = partSnap.data().quantity ?? 0;
             if (quantitySold > liveStock) {
-                throw new Error(`Only ${liveStock} unit(s) left in stock. Another session may have just sold some.`);
+                throw new Error(`Only KSh{liveStock} unit(s) left in stock. Another session may have just sold some.`);
             }
 
             transaction.update(partRef, { quantity: liveStock - quantitySold });
 
             transaction.set(transRef, {
                 type: 'PART SALE', subtype: partName, plate: carPlate,
-                description: `${quantitySold} x ${partName} → ${issuedTo} (Plate: ${carPlate})`,
+                description: `KSh{quantitySold} x KSh{partName} → KSh{issuedTo} (Plate: KSh{carPlate})`,
                 income: totalIncome, expense: totalExpense, profit: totalProfit,
                 timestamp: serverTimestamp(), isJob: true, date: getUTCDateString()
             });
@@ -958,11 +958,11 @@ sellPartForm.addEventListener('submit', async (e) => {
             });
         });
 
-        alert(`Sale committed! ${quantitySold} x ${partName} issued to ${issuedTo}.\nProfit: $${totalProfit.toFixed(2)} recorded in Finance.`);
+        alert(`Sale committed! KSh{quantitySold} x KSh{partName} issued to KSh{issuedTo}.\nProfit: KShKSh{totalProfit.toFixed(2)} recorded in Finance.`);
         sellPartForm.reset();
-        partSaleProfitDisplay.textContent = '$0.00';
+        partSaleProfitDisplay.textContent = 'KSh0.00';
     } catch (error) {
-        alert(`Sale failed: ${error.message}`);
+        alert(`Sale failed: KSh{error.message}`);
         console.error('Part Sale Error: ', error);
     } finally {
         commitPartSaleBtn.disabled = false;
@@ -986,12 +986,12 @@ function listenForPartsInventory() {
             const tr = document.createElement('tr');
             tr.className = 'hover:bg-gray-50';
             tr.innerHTML = `
-                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${data.name} (${data.sku || 'N/A'})</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm ${quantityClass}">${data.quantity}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-red-600">$${(data.supplierPrice ?? 0).toFixed(2)}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-green-600">$${(data.sellingPrice ?? 0).toFixed(2)}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">KSh{data.name} (KSh{data.sku || 'N/A'})</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm KSh{quantityClass}">KSh{data.quantity}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-red-600">KShKSh{(data.supplierPrice ?? 0).toFixed(2)}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-green-600">KShKSh{(data.sellingPrice ?? 0).toFixed(2)}</td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <button onclick="deletePart('${docSnap.id}')" class="text-red-600 hover:text-red-900">Delete</button>
+                    <button onclick="deletePart('KSh{docSnap.id}')" class="text-red-600 hover:text-red-900">Delete</button>
                 </td>
             `;
             partsInventoryBody.appendChild(tr);
@@ -999,7 +999,7 @@ function listenForPartsInventory() {
             if (data.quantity > 0) {
                 const option = document.createElement('option');
                 option.value = docSnap.id;
-                option.textContent = `${data.name} (Stock: ${data.quantity}, Profit/Unit: $${profitPerUnit.toFixed(2)})`;
+                option.textContent = `KSh{data.name} (Stock: KSh{data.quantity}, Profit/Unit: KShKSh{profitPerUnit.toFixed(2)})`;
                 option.dataset.supplierPrice = data.supplierPrice;
                 option.dataset.sellingPrice  = data.sellingPrice;
                 option.dataset.stock         = data.quantity;
@@ -1049,18 +1049,18 @@ function renderLedger(entries) {
             ? e.timestamp.toDate().toLocaleString('en-KE', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
             : (e.date || 'N/A');
         const plateHtml = (e.vehiclePlate && e.vehiclePlate !== 'N/A')
-            ? `<span class="font-mono font-bold text-blue-700">${e.vehiclePlate}</span>`
+            ? `<span class="font-mono font-bold text-blue-700">KSh{e.vehiclePlate}</span>`
             : `<span class="text-gray-400">—</span>`;
         const profitCls = (e.totalProfit ?? 0) >= 0 ? 'text-green-600' : 'text-red-600';
         return `
             <tr class="hover:bg-indigo-50 transition">
-                <td class="px-4 py-3 whitespace-nowrap text-xs text-gray-500">${dateStr}</td>
-                <td class="px-4 py-3 text-sm font-medium text-gray-900">${e.partName}</td>
-                <td class="px-4 py-3 text-sm text-center font-bold text-gray-700">${e.quantitySold}</td>
-                <td class="px-4 py-3 text-sm font-semibold text-indigo-700">${e.issuedTo || '—'}</td>
-                <td class="px-4 py-3 text-sm">${plateHtml}</td>
-                <td class="px-4 py-3 text-sm text-gray-500">${e.purpose || '—'}</td>
-                <td class="px-4 py-3 text-sm font-semibold ${profitCls}">$${(e.totalIncome ?? 0).toFixed(2)}</td>
+                <td class="px-4 py-3 whitespace-nowrap text-xs text-gray-500">KSh{dateStr}</td>
+                <td class="px-4 py-3 text-sm font-medium text-gray-900">KSh{e.partName}</td>
+                <td class="px-4 py-3 text-sm text-center font-bold text-gray-700">KSh{e.quantitySold}</td>
+                <td class="px-4 py-3 text-sm font-semibold text-indigo-700">KSh{e.issuedTo || '—'}</td>
+                <td class="px-4 py-3 text-sm">KSh{plateHtml}</td>
+                <td class="px-4 py-3 text-sm text-gray-500">KSh{e.purpose || '—'}</td>
+                <td class="px-4 py-3 text-sm font-semibold KSh{profitCls}">KShKSh{(e.totalIncome ?? 0).toFixed(2)}</td>
             </tr>`;
     }).join('');
 }
@@ -1114,13 +1114,13 @@ function listenForSuppliers() {
             const tr = document.createElement('tr');
             tr.className = 'hover:bg-gray-50';
             tr.innerHTML = `
-                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${data.name}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${data.type}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${data.contact}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm ${data.owed > 0 ? 'text-red-600 font-bold' : 'text-green-600'}">$${(data.owed ?? 0).toFixed(2)}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">KSh{data.name}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">KSh{data.type}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">KSh{data.contact}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm KSh{data.owed > 0 ? 'text-red-600 font-bold' : 'text-green-600'}">KShKSh{(data.owed ?? 0).toFixed(2)}</td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <button onclick="editSupplier('${docSnap.id}')" class="text-indigo-600 hover:text-indigo-900 mr-2">Edit</button>
-                    <button onclick="deleteSupplier('${docSnap.id}')" class="text-red-600 hover:text-red-900">Delete</button>
+                    <button onclick="editSupplier('KSh{docSnap.id}')" class="text-indigo-600 hover:text-indigo-900 mr-2">Edit</button>
+                    <button onclick="deleteSupplier('KSh{docSnap.id}')" class="text-red-600 hover:text-red-900">Delete</button>
                 </td>
             `;
             suppliersTableBody.appendChild(tr);
@@ -1150,19 +1150,19 @@ orderWhatsappBtn.addEventListener('click', () => {
 
     const supplier = allSuppliers.find(s => s.id === supplierId);
     if (!supplier) { alert("Supplier data not found."); return; }
-    if (!supplier.contact) { alert(`Supplier contact not found for ${supplier.name}.`); return; }
+    if (!supplier.contact) { alert(`Supplier contact not found for KSh{supplier.name}.`); return; }
 
     const cleanedContact = cleanPhoneNumber(supplier.contact);
     if (cleanedContact.length < 9) {
-        alert(`The contact number for ${supplier.name} seems invalid: ${supplier.contact}`);
+        alert(`The contact number for KSh{supplier.name} seems invalid: KSh{supplier.contact}`);
         return;
     }
 
-    const message = `*Supply Request for ${supplier.name}*\n\n--- REQUIRED ITEMS ---\n\n${suppliesText}\n\n--- END OF LIST ---\n\n*Garage Manager PRO*`;
-    window.open(`https://wa.me/${cleanedContact}?text=${encodeURIComponent(message)}`, '_blank');
+    const message = `*Supply Request for KSh{supplier.name}*\n\n--- REQUIRED ITEMS ---\n\nKSh{suppliesText}\n\n--- END OF LIST ---\n\n*Garage Manager PRO*`;
+    window.open(`https://wa.me/KSh{cleanedContact}?text=KSh{encodeURIComponent(message)}`, '_blank');
 });
 
-function editSupplier(id) { alert(`Editing supplier ${id}...`); }
+function editSupplier(id) { alert(`Editing supplier KSh{id}...`); }
 function deleteSupplier(id) {
     if (confirm("Are you sure you want to delete this supplier?")) {
         deleteDoc(garageDoc(db, doc, 'suppliers', id)).catch(e => console.error("Delete Error", e));
@@ -1182,8 +1182,8 @@ function addInvoiceItemRow() {
     row.innerHTML = `
         <input type="text" placeholder="Description" class="invoice-item-desc form-input flex-grow">
         <input type="number" placeholder="Qty" value="1" min="1" class="invoice-item-qty form-input w-24" oninput="calculateTotal('invoice')">
-        <input type="number" placeholder="Unit Price ($)" value="0.00" min="0" step="0.01" class="invoice-item-unit-price form-input w-36" oninput="calculateTotal('invoice')">
-        <input type="text" placeholder="Total Amount ($)" value="0.00" class="invoice-item-amount form-input w-40 bg-gray-100" readonly>
+        <input type="number" placeholder="Unit Price (KSh)" value="0.00" min="0" step="0.01" class="invoice-item-unit-price form-input w-36" oninput="calculateTotal('invoice')">
+        <input type="text" placeholder="Total Amount (KSh)" value="0.00" class="invoice-item-amount form-input w-40 bg-gray-100" readonly>
         <button type="button" onclick="this.parentNode.remove(); calculateTotal('invoice');" class="delete-item-btn p-2 text-red-500 hover:text-red-700">X</button>
     `;
     container.appendChild(row);
@@ -1191,18 +1191,18 @@ function addInvoiceItemRow() {
 }
 
 function calculateTotal(type) {
-    const container = document.getElementById(`${type}-items-container`);
-    const itemRows  = container.querySelectorAll(`.${type}-item-row`);
+    const container = document.getElementById(`KSh{type}-items-container`);
+    const itemRows  = container.querySelectorAll(`.KSh{type}-item-row`);
     let total = 0;
     itemRows.forEach(row => {
-        const qty        = parseFloat(row.querySelector(`.${type}-item-qty`).value) || 0;
-        const unitPrice  = parseFloat(row.querySelector(`.${type}-item-unit-price`).value) || 0;
+        const qty        = parseFloat(row.querySelector(`.KSh{type}-item-qty`).value) || 0;
+        const unitPrice  = parseFloat(row.querySelector(`.KSh{type}-item-unit-price`).value) || 0;
         const itemAmount = qty * unitPrice;
-        const lineTotal  = row.querySelector(`.${type}-item-amount`);
+        const lineTotal  = row.querySelector(`.KSh{type}-item-amount`);
         if (lineTotal) lineTotal.value = itemAmount.toFixed(2);
         total += itemAmount;
     });
-    document.getElementById(`${type}-total-display`).textContent = `$${total.toFixed(2)}`;
+    document.getElementById(`KSh{type}-total-display`).textContent = `KShKSh{total.toFixed(2)}`;
     return total;
 }
 
@@ -1226,7 +1226,7 @@ invoiceCreationForm.addEventListener('submit', async (e) => {
     }
 
     const invoice = {
-        invoiceNo:   `INV-${Date.now().toString().slice(-6)}`,
+        invoiceNo:   `INV-KSh{Date.now().toString().slice(-6)}`,
         clientName:  document.getElementById('invoice-client-name').value,
         clientPhone: document.getElementById('invoice-client-phone').value,
         carPlate:    document.getElementById('invoice-car-plate').value,
@@ -1238,7 +1238,7 @@ invoiceCreationForm.addEventListener('submit', async (e) => {
         await addDoc(getInvoicesRef(), invoice);
         await addDoc(getDailyTransactionsRef(), {
             type: 'JOB', subtype: 'Invoice/Receipt', plate: invoice.carPlate,
-            description: `Invoice #${invoice.invoiceNo} paid by ${invoice.clientName}`,
+            description: `Invoice #KSh{invoice.invoiceNo} paid by KSh{invoice.clientName}`,
             income: totalAmount, expense: 0, profit: totalAmount,
             timestamp: serverTimestamp(), isJob: true, date: getUTCDateString()
         });
@@ -1261,13 +1261,13 @@ function listenForInvoices() {
             const tr = document.createElement('tr');
             tr.className = 'hover:bg-gray-50';
             tr.innerHTML = `
-                <td class="px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-900">${data.invoiceNo}</td>
-                <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500">${data.date}</td>
-                <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500">${data.clientName} / ${data.carPlate}</td>
-                <td class="px-3 py-2 whitespace-nowrap text-sm text-green-600 font-bold">$${(data.total ?? 0).toFixed(2)}</td>
+                <td class="px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-900">KSh{data.invoiceNo}</td>
+                <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500">KSh{data.date}</td>
+                <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500">KSh{data.clientName} / KSh{data.carPlate}</td>
+                <td class="px-3 py-2 whitespace-nowrap text-sm text-green-600 font-bold">KShKSh{(data.total ?? 0).toFixed(2)}</td>
                 <td class="px-3 py-2 whitespace-nowrap text-sm">
-                    <button onclick="generateInvoicePDF('${docSnap.id}', '${data.clientPhone}')" class="text-blue-500 hover:text-blue-700 mr-2">PDF/Share</button>
-                    <button onclick="deleteInvoice('${docSnap.id}')" class="text-red-500 hover:text-red-700">Delete</button>
+                    <button onclick="generateInvoicePDF('KSh{docSnap.id}', 'KSh{data.clientPhone}')" class="text-blue-500 hover:text-blue-700 mr-2">PDF/Share</button>
+                    <button onclick="deleteInvoice('KSh{docSnap.id}')" class="text-red-500 hover:text-red-700">Delete</button>
                 </td>
             `;
             invoicesTableBody.appendChild(tr);
@@ -1292,22 +1292,22 @@ async function generateInvoicePDF(invoiceId, clientPhone) {
         let y = drawPdfHeader(pdfDoc, branding, "INVOICE / RECEIPT");
 
         pdfDoc.setFontSize(10); pdfDoc.setTextColor(60, 60, 60);
-        pdfDoc.text(`Invoice No: ${invoice.invoiceNo}`, 14, y);
-        pdfDoc.text(`Date: ${invoice.date}`, 110, y); y += 6;
-        pdfDoc.text(`Client: ${invoice.clientName}`, 14, y);
-        pdfDoc.text(`Phone: ${invoice.clientPhone}`, 110, y); y += 6;
-        pdfDoc.text(`Vehicle Plate: ${invoice.carPlate}`, 14, y); y += 8;
+        pdfDoc.text(`Invoice No: KSh{invoice.invoiceNo}`, 14, y);
+        pdfDoc.text(`Date: KSh{invoice.date}`, 110, y); y += 6;
+        pdfDoc.text(`Client: KSh{invoice.clientName}`, 14, y);
+        pdfDoc.text(`Phone: KSh{invoice.clientPhone}`, 110, y); y += 6;
+        pdfDoc.text(`Vehicle Plate: KSh{invoice.carPlate}`, 14, y); y += 8;
 
         pdfDoc.autoTable({
             startY: y,
-            head: [['Description', 'Qty', 'Unit Price ($)', 'Line Total ($)']],
+            head: [['Description', 'Qty', 'Unit Price (KSh)', 'Line Total (KSh)']],
             body: invoice.items.map(item => [
                 item.description,
                 (item.quantity ?? 0).toString(),
-                `$${(item.unitPrice ?? 0).toFixed(2)}`,
-                `$${(item.amount   ?? 0).toFixed(2)}`
+                `KShKSh{(item.unitPrice ?? 0).toFixed(2)}`,
+                `KShKSh{(item.amount   ?? 0).toFixed(2)}`
             ]),
-            foot: [['', '', 'Total', `$${(invoice.total ?? 0).toFixed(2)}`]],
+            foot: [['', '', 'Total', `KShKSh{(invoice.total ?? 0).toFixed(2)}`]],
             theme: 'grid', styles: { fontSize: 10 },
             headStyles: { fillColor: hexToRgbArr(branding.primaryColor) },
             footStyles: { fillColor: [230, 230, 255], textColor: [0, 0, 0], fontSize: 12, fontStyle: 'bold' }
@@ -1316,11 +1316,11 @@ async function generateInvoicePDF(invoiceId, clientPhone) {
         drawPdfFooter(pdfDoc, branding);
 
         if (confirm('Share summary via WhatsApp?')) {
-            const message = `*${branding.garageName || 'Garage Manager PRO'} Invoice* (No. ${invoice.invoiceNo})\n\nDear ${invoice.clientName},\n\nYour invoice total: *$${(invoice.total ?? 0).toFixed(2)}*.\n\nThank you!`;
-            window.open(`https://wa.me/${cleanPhoneNumber(clientPhone)}?text=${encodeURIComponent(message)}`, '_blank');
+            const message = `*KSh{branding.garageName || 'Garage Manager PRO'} Invoice* (No. KSh{invoice.invoiceNo})\n\nDear KSh{invoice.clientName},\n\nYour invoice total: *KShKSh{(invoice.total ?? 0).toFixed(2)}*.\n\nThank you!`;
+            window.open(`https://wa.me/KSh{cleanPhoneNumber(clientPhone)}?text=KSh{encodeURIComponent(message)}`, '_blank');
         }
 
-        pdfDoc.save(`Invoice_${invoice.invoiceNo}.pdf`);
+        pdfDoc.save(`Invoice_KSh{invoice.invoiceNo}.pdf`);
     } catch (error) {
         console.error("Invoice PDF/Share Error: ", error);
         alert("Failed to generate or share invoice.");
@@ -1346,8 +1346,8 @@ function addQuoteItemRow() {
     row.innerHTML = `
         <input type="text" placeholder="Description" class="quote-item-desc form-input flex-grow">
         <input type="number" placeholder="Qty" value="1" min="1" class="quote-item-qty form-input w-24" oninput="calculateTotal('quote')">
-        <input type="number" placeholder="Unit Price ($)" value="0.00" min="0" step="0.01" class="quote-item-unit-price form-input w-36" oninput="calculateTotal('quote')">
-        <input type="text" placeholder="Total Amount ($)" value="0.00" class="quote-item-amount form-input w-40 bg-gray-100" readonly>
+        <input type="number" placeholder="Unit Price (KSh)" value="0.00" min="0" step="0.01" class="quote-item-unit-price form-input w-36" oninput="calculateTotal('quote')">
+        <input type="text" placeholder="Total Amount (KSh)" value="0.00" class="quote-item-amount form-input w-40 bg-gray-100" readonly>
         <button type="button" onclick="this.parentNode.remove(); calculateTotal('quote');" class="delete-item-btn p-2 text-red-500 hover:text-red-700">X</button>
     `;
     container.appendChild(row);
@@ -1374,7 +1374,7 @@ quoteCreationForm.addEventListener('submit', async (e) => {
     }
 
     const quote = {
-        quoteNo:     `QUO-${Date.now().toString().slice(-6)}`,
+        quoteNo:     `QUO-KSh{Date.now().toString().slice(-6)}`,
         clientName:  document.getElementById('quote-client-name').value,
         clientPhone: document.getElementById('quote-client-phone').value,
         carPlate:    document.getElementById('quote-car-plate').value,
@@ -1404,13 +1404,13 @@ function listenForQuotes() {
             const tr = document.createElement('tr');
             tr.className = 'hover:bg-gray-50';
             tr.innerHTML = `
-                <td class="px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-900">${data.quoteNo}</td>
-                <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500">${data.date}</td>
-                <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500">${data.clientName} / ${data.carPlate}</td>
-                <td class="px-3 py-2 whitespace-nowrap text-sm text-indigo-600 font-bold">$${(data.total ?? 0).toFixed(2)} (Est.)</td>
+                <td class="px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-900">KSh{data.quoteNo}</td>
+                <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500">KSh{data.date}</td>
+                <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500">KSh{data.clientName} / KSh{data.carPlate}</td>
+                <td class="px-3 py-2 whitespace-nowrap text-sm text-indigo-600 font-bold">KShKSh{(data.total ?? 0).toFixed(2)} (Est.)</td>
                 <td class="px-3 py-2 whitespace-nowrap text-sm">
-                    <button onclick="generateQuotePDF('${docSnap.id}', '${data.clientPhone}')" class="text-blue-500 hover:text-blue-700 mr-2">PDF/Share</button>
-                    <button onclick="deleteQuote('${docSnap.id}')" class="text-red-500 hover:text-red-700">Delete</button>
+                    <button onclick="generateQuotePDF('KSh{docSnap.id}', 'KSh{data.clientPhone}')" class="text-blue-500 hover:text-blue-700 mr-2">PDF/Share</button>
+                    <button onclick="deleteQuote('KSh{docSnap.id}')" class="text-red-500 hover:text-red-700">Delete</button>
                 </td>
             `;
             quotesTableBody.appendChild(tr);
@@ -1429,23 +1429,23 @@ async function generateQuotePDF(quoteId, clientPhone) {
         let y = drawPdfHeader(pdfDoc, branding, "REPAIR QUOTE");
 
         pdfDoc.setFontSize(10); pdfDoc.setTextColor(60, 60, 60);
-        pdfDoc.text(`Quote No: ${quote.quoteNo}`, 14, y);
-        pdfDoc.text(`Date: ${quote.date}`, 110, y); y += 6;
-        pdfDoc.text(`Client: ${quote.clientName}`, 14, y);
-        pdfDoc.text(`Phone: ${quote.clientPhone}`, 110, y); y += 6;
-        pdfDoc.text(`Vehicle: ${quote.carMake}`, 14, y);
-        pdfDoc.text(`Plate: ${quote.carPlate}`, 110, y); y += 8;
+        pdfDoc.text(`Quote No: KSh{quote.quoteNo}`, 14, y);
+        pdfDoc.text(`Date: KSh{quote.date}`, 110, y); y += 6;
+        pdfDoc.text(`Client: KSh{quote.clientName}`, 14, y);
+        pdfDoc.text(`Phone: KSh{quote.clientPhone}`, 110, y); y += 6;
+        pdfDoc.text(`Vehicle: KSh{quote.carMake}`, 14, y);
+        pdfDoc.text(`Plate: KSh{quote.carPlate}`, 110, y); y += 8;
 
         pdfDoc.autoTable({
             startY: y,
-            head: [['Item/Service', 'Qty', 'Est. Unit Cost ($)', 'Est. Line Total ($)']],
+            head: [['Item/Service', 'Qty', 'Est. Unit Cost (KSh)', 'Est. Line Total (KSh)']],
             body: quote.items.map(item => [
                 item.description,
                 (item.quantity ?? 0).toString(),
-                `$${(item.unitPrice ?? 0).toFixed(2)}`,
-                `$${(item.amount   ?? 0).toFixed(2)}`
+                `KShKSh{(item.unitPrice ?? 0).toFixed(2)}`,
+                `KShKSh{(item.amount   ?? 0).toFixed(2)}`
             ]),
-            foot: [['', '', 'Estimated Total', `$${(quote.total ?? 0).toFixed(2)}`]],
+            foot: [['', '', 'Estimated Total', `KShKSh{(quote.total ?? 0).toFixed(2)}`]],
             theme: 'grid', styles: { fontSize: 10 },
             headStyles: { fillColor: hexToRgbArr(branding.primaryColor) },
             footStyles: { fillColor: [230, 230, 255], textColor: [0, 0, 0], fontSize: 12, fontStyle: 'bold' }
@@ -1457,11 +1457,11 @@ async function generateQuotePDF(quoteId, clientPhone) {
         drawPdfFooter(pdfDoc, branding);
 
         if (confirm('Share summary via WhatsApp?')) {
-            const message = `*${branding.garageName || 'Garage Manager PRO'} Repair Quote* (No. ${quote.quoteNo})\n\nDear ${quote.clientName},\n\nYour repair quote for the ${quote.carMake} is *$${(quote.total ?? 0).toFixed(2)}* (Estimated).\n\nPlease reply to confirm.`;
-            window.open(`https://wa.me/${cleanPhoneNumber(clientPhone)}?text=${encodeURIComponent(message)}`, '_blank');
+            const message = `*KSh{branding.garageName || 'Garage Manager PRO'} Repair Quote* (No. KSh{quote.quoteNo})\n\nDear KSh{quote.clientName},\n\nYour repair quote for the KSh{quote.carMake} is *KShKSh{(quote.total ?? 0).toFixed(2)}* (Estimated).\n\nPlease reply to confirm.`;
+            window.open(`https://wa.me/KSh{cleanPhoneNumber(clientPhone)}?text=KSh{encodeURIComponent(message)}`, '_blank');
         }
 
-        pdfDoc.save(`Quote_${quote.quoteNo}.pdf`);
+        pdfDoc.save(`Quote_KSh{quote.quoteNo}.pdf`);
     } catch (error) {
         console.error("Quote PDF/Share Error: ", error);
         alert("Failed to generate or share quote.");
@@ -1485,22 +1485,22 @@ window.calculateTotal    = calculateTotal;
 // =================================================================
 
 function hexToRgbArr(hex) {
-    const r = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex || '#1d4ed8');
+    const r = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})KSh/i.exec(hex || '#1d4ed8');
     return r ? [parseInt(r[1],16), parseInt(r[2],16), parseInt(r[3],16)] : [29,78,216];
 }
 
 function setupBrandingTab() {
     ['garageName','tagline','phone','email','address'].forEach(f => {
-        const el = document.getElementById(`branding-${f}`);
+        const el = document.getElementById(`branding-KSh{f}`);
         if (!el) return;
         el.addEventListener('input', updateBrandingPreview);
     });
 
     ['primaryColor','secondaryColor','accentColor'].forEach(f => {
-        const el = document.getElementById(`branding-${f}`);
+        const el = document.getElementById(`branding-KSh{f}`);
         if (!el) return;
         el.addEventListener('input', () => {
-            const span = document.getElementById(`branding-${f}-hex`);
+            const span = document.getElementById(`branding-KSh{f}-hex`);
             if (span) span.textContent = el.value;
             updateColorPreviews();
             updateBrandingPreview();
@@ -1541,9 +1541,9 @@ function updateBrandingPreview() {
     const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
     set('branding-preview-name',        name);
     set('branding-preview-tagline',     tagline);
-    set('branding-preview-phone',       phone   ? `📞 ${phone}` : '');
-    set('branding-preview-email',       email   ? `✉ ${email}`  : '');
-    set('branding-preview-footer-left', `${name}${address ? '  |  ' + address : ''}`);
+    set('branding-preview-phone',       phone   ? `📞 KSh{phone}` : '');
+    set('branding-preview-email',       email   ? `✉ KSh{email}`  : '');
+    set('branding-preview-footer-left', `KSh{name}KSh{address ? '  |  ' + address : ''}`);
 
     const footerBar = document.getElementById('branding-footer-preview');
     if (footerBar) footerBar.style.background = primary;
@@ -1555,7 +1555,7 @@ window.applyColorPreset = function(primary, secondary, accent) {
     const setColor = (id, val) => {
         const el = document.getElementById(id);
         if (el) el.value = val;
-        const span = document.getElementById(`${id}-hex`);
+        const span = document.getElementById(`KSh{id}-hex`);
         if (span) span.textContent = val;
     };
     setColor('branding-primaryColor',   primary);
@@ -1603,10 +1603,10 @@ window.savePinSettings = async function() {
         const merged   = { ...existing };
 
         for (const role of ['mechanic', 'admin', 'manager']) {
-            const val = document.getElementById(`pin-${role}`)?.value?.trim();
+            const val = document.getElementById(`pin-KSh{role}`)?.value?.trim();
             if (val && val.length >= 4)      merged[role] = val;
             else if (val && val.length > 0) {
-                msg.textContent = `❌ ${role} PIN must be at least 4 digits.`;
+                msg.textContent = `❌ KSh{role} PIN must be at least 4 digits.`;
                 msg.className = 'text-red-600 text-sm font-semibold mt-2';
                 btn.disabled = false; btn.textContent = 'Save PINs';
                 return;
@@ -1617,11 +1617,11 @@ window.savePinSettings = async function() {
         msg.textContent = '✅ PINs saved successfully!';
         msg.className = 'text-green-600 text-sm font-semibold mt-2';
         ['mechanic','admin','manager'].forEach(role => {
-            const el = document.getElementById(`pin-${role}`);
+            const el = document.getElementById(`pin-KSh{role}`);
             if (el) el.value = '';
         });
     } catch (err) {
-        msg.textContent = `❌ Error: ${err.message}`;
+        msg.textContent = `❌ Error: KSh{err.message}`;
         msg.className = 'text-red-600 text-sm font-semibold mt-2';
     } finally {
         btn.disabled = false; btn.textContent = 'Save PINs';
@@ -1650,8 +1650,8 @@ function switchPayrollSubtab(target) {
         btn.classList.remove('bg-indigo-700', 'text-white');
         btn.classList.add('text-indigo-800');
     });
-    const content = document.getElementById(`payroll-subcontent-${target}`);
-    const btn     = document.getElementById(`subtab-${target}`);
+    const content = document.getElementById(`payroll-subcontent-KSh{target}`);
+    const btn     = document.getElementById(`subtab-KSh{target}`);
     if (content) content.classList.remove('hidden');
     if (btn) { btn.classList.add('bg-indigo-700', 'text-white'); btn.classList.remove('text-indigo-800'); }
     if (target === 'payhistory') renderPayHistory();
@@ -1699,7 +1699,7 @@ addEmployeeForm?.addEventListener('submit', async (e) => {
         document.getElementById('emp-pay-frequency').value = 'Monthly';
         document.getElementById('emp-status').value = 'Active';
     } catch (err) {
-        msgEl.textContent = `❌ Error: ${err.message}`;
+        msgEl.textContent = `❌ Error: KSh{err.message}`;
         msgEl.className = 'text-red-500 text-sm';
         console.error('Add Employee Error:', err);
     }
@@ -1752,17 +1752,17 @@ function renderEmployeesList(employees) {
 
     container.innerHTML = filtered.map(emp => {
         const { net, penalties } = netPayFor(emp);
-        const penaltyFlag = penalties > 0 ? `<span class="text-xs bg-orange-100 text-orange-700 font-bold px-2 py-0.5 rounded-full ml-1">⚠️ $${penalties.toFixed(2)} pending</span>` : '';
+        const penaltyFlag = penalties > 0 ? `<span class="text-xs bg-orange-100 text-orange-700 font-bold px-2 py-0.5 rounded-full ml-1">⚠️ KShKSh{penalties.toFixed(2)} pending</span>` : '';
         return `
-            <div class="border rounded-lg p-4 hover:shadow-md transition flex justify-between items-center cursor-pointer" onclick="openEmployeeModal('${emp.id}')">
+            <div class="border rounded-lg p-4 hover:shadow-md transition flex justify-between items-center cursor-pointer" onclick="openEmployeeModal('KSh{emp.id}')">
                 <div>
-                    <p class="font-bold text-gray-800">${escapeHtmlPR(emp.name)} ${penaltyFlag}</p>
-                    <p class="text-sm text-indigo-600">${escapeHtmlPR(emp.position)}</p>
-                    <p class="text-xs text-gray-400">${emp.payFrequency || 'Monthly'} · Base: $${(emp.baseSalary || 0).toFixed(2)}</p>
+                    <p class="font-bold text-gray-800">KSh{escapeHtmlPR(emp.name)} KSh{penaltyFlag}</p>
+                    <p class="text-sm text-indigo-600">KSh{escapeHtmlPR(emp.position)}</p>
+                    <p class="text-xs text-gray-400">KSh{emp.payFrequency || 'Monthly'} · Base: KShKSh{(emp.baseSalary || 0).toFixed(2)}</p>
                 </div>
                 <div class="text-right">
-                    <span class="text-xs font-semibold px-2 py-1 rounded-full ${statusColors[emp.status] || 'bg-gray-100 text-gray-600'}">${emp.status || 'Active'}</span>
-                    <p class="text-sm font-bold text-gray-700 mt-1">Net: $${net.toFixed(2)}</p>
+                    <span class="text-xs font-semibold px-2 py-1 rounded-full KSh{statusColors[emp.status] || 'bg-gray-100 text-gray-600'}">KSh{emp.status || 'Active'}</span>
+                    <p class="text-sm font-bold text-gray-700 mt-1">Net: KShKSh{net.toFixed(2)}</p>
                 </div>
             </div>`;
     }).join('');
@@ -1788,15 +1788,15 @@ window.closeEmployeeModal = closeEmployeeModal;
 
 function renderEmployeeModalContent(emp) {
     document.getElementById('epm-emp-name').textContent = emp.name;
-    document.getElementById('epm-emp-position').textContent = `${emp.position} · ${emp.payFrequency || 'Monthly'} · ${emp.status || 'Active'}`;
+    document.getElementById('epm-emp-position').textContent = `KSh{emp.position} · KSh{emp.payFrequency || 'Monthly'} · KSh{emp.status || 'Active'}`;
     document.getElementById('epm-base-salary').value = emp.baseSalary || 0;
 
     const lineItemRow = (item, idx, type, colorCls) => `
         <div class="flex justify-between items-center bg-white border rounded-lg px-3 py-2">
-            <span class="text-sm text-gray-700">${escapeHtmlPR(item.label)}</span>
+            <span class="text-sm text-gray-700">KSh{escapeHtmlPR(item.label)}</span>
             <div class="flex items-center gap-2">
-                <span class="text-sm font-semibold ${colorCls}">$${(parseFloat(item.amount) || 0).toFixed(2)}</span>
-                <button onclick="removeEmployeeLineItem('${type}', ${idx})" class="text-gray-400 hover:text-red-500 text-xs font-bold">✕</button>
+                <span class="text-sm font-semibold KSh{colorCls}">KShKSh{(parseFloat(item.amount) || 0).toFixed(2)}</span>
+                <button onclick="removeEmployeeLineItem('KSh{type}', KSh{idx})" class="text-gray-400 hover:text-red-500 text-xs font-bold">✕</button>
             </div>
         </div>`;
 
@@ -1818,12 +1818,12 @@ function renderEmployeeModalContent(emp) {
 
 function updateEmployeeNetPayCalc(emp) {
     const { benefits, deductions, penalties, net } = netPayFor(emp);
-    document.getElementById('epm-calc-base').textContent       = `$${(emp.baseSalary || 0).toFixed(2)}`;
-    document.getElementById('epm-calc-benefits').textContent   = `$${benefits.toFixed(2)}`;
-    document.getElementById('epm-calc-deductions').textContent = `$${deductions.toFixed(2)}`;
-    document.getElementById('epm-calc-penalties').textContent  = `$${penalties.toFixed(2)}`;
+    document.getElementById('epm-calc-base').textContent       = `KShKSh{(emp.baseSalary || 0).toFixed(2)}`;
+    document.getElementById('epm-calc-benefits').textContent   = `KShKSh{benefits.toFixed(2)}`;
+    document.getElementById('epm-calc-deductions').textContent = `KShKSh{deductions.toFixed(2)}`;
+    document.getElementById('epm-calc-penalties').textContent  = `KShKSh{penalties.toFixed(2)}`;
     const netEl = document.getElementById('epm-calc-net');
-    netEl.textContent = `$${net.toFixed(2)}`;
+    netEl.textContent = `KShKSh{net.toFixed(2)}`;
     netEl.className = net >= 0 ? 'text-green-700' : 'text-red-600';
 }
 
@@ -1833,14 +1833,14 @@ window.updateEmployeeBaseSalary = async function () {
     try {
         await updateDoc(garageDoc(db, doc, 'employees', _currentEmployeeId), { baseSalary: newBase });
     } catch (err) {
-        alert(`Failed to update base salary: ${err.message}`);
+        alert(`Failed to update base salary: KSh{err.message}`);
     }
 };
 
 window.addEmployeeLineItem = async function (type) {
     if (!_currentEmployeeId) return;
-    const labelInput  = document.getElementById(`epm-new-${type === 'deductions' ? 'deduction' : type === 'benefits' ? 'benefit' : 'penalty'}-label`);
-    const amountInput = document.getElementById(`epm-new-${type === 'deductions' ? 'deduction' : type === 'benefits' ? 'benefit' : 'penalty'}-amount`);
+    const labelInput  = document.getElementById(`epm-new-KSh{type === 'deductions' ? 'deduction' : type === 'benefits' ? 'benefit' : 'penalty'}-label`);
+    const amountInput = document.getElementById(`epm-new-KSh{type === 'deductions' ? 'deduction' : type === 'benefits' ? 'benefit' : 'penalty'}-amount`);
     const label  = labelInput.value.trim();
     const amount = parseFloat(amountInput.value);
 
@@ -1857,7 +1857,7 @@ window.addEmployeeLineItem = async function (type) {
         await updateDoc(garageDoc(db, doc, 'employees', _currentEmployeeId), { [type]: updated });
         labelInput.value = ''; amountInput.value = '';
     } catch (err) {
-        alert(`Failed to add ${type.slice(0, -1)}: ${err.message}`);
+        alert(`Failed to add KSh{type.slice(0, -1)}: KSh{err.message}`);
     }
 };
 
@@ -1869,7 +1869,7 @@ window.removeEmployeeLineItem = async function (type, idx) {
     try {
         await updateDoc(garageDoc(db, doc, 'employees', _currentEmployeeId), { [type]: updated });
     } catch (err) {
-        alert(`Failed to remove item: ${err.message}`);
+        alert(`Failed to remove item: KSh{err.message}`);
     }
 };
 
@@ -1877,12 +1877,12 @@ window.deleteEmployee = async function () {
     if (!_currentEmployeeId) return;
     const emp = allEmployees.find(e => e.id === _currentEmployeeId);
     if (!emp) return;
-    if (!confirm(`Remove ${emp.name} from payroll? Past payment history will be kept for records.`)) return;
+    if (!confirm(`Remove KSh{emp.name} from payroll? Past payment history will be kept for records.`)) return;
     try {
         await deleteDoc(garageDoc(db, doc, 'employees', _currentEmployeeId));
         closeEmployeeModal();
     } catch (err) {
-        alert(`Failed to remove employee: ${err.message}`);
+        alert(`Failed to remove employee: KSh{err.message}`);
     }
 };
 
@@ -1899,12 +1899,12 @@ window.runEmployeePayroll = async function () {
     const btn   = document.getElementById('epm-run-payroll-btn');
 
     if (net <= 0) {
-        msgEl.textContent = '❌ Net pay must be greater than $0.00 to process.';
+        msgEl.textContent = '❌ Net pay must be greater than KSh0.00 to process.';
         msgEl.className = 'text-sm mt-2 text-center text-red-600 font-semibold';
         return;
     }
 
-    if (!confirm(`Pay ${emp.name} a net amount of $${net.toFixed(2)}?\n\nThis records the payment in today's Finance expenses and clears pending penalties for this run.`)) return;
+    if (!confirm(`Pay KSh{emp.name} a net amount of KShKSh{net.toFixed(2)}?\n\nThis records the payment in today's Finance expenses and clears pending penalties for this run.`)) return;
 
     btn.disabled = true; btn.textContent = 'Processing…';
     msgEl.textContent = '';
@@ -1940,7 +1940,7 @@ window.runEmployeePayroll = async function () {
             // Mirror into daily transactions — affects today's P&L like every other expense
             transaction.set(transRef, {
                 type: 'PAYROLL', subtype: 'Salary Payment', plate: 'N/A',
-                description: `Salary paid to ${liveEmp.name} (${liveEmp.position})`,
+                description: `Salary paid to KSh{liveEmp.name} (KSh{liveEmp.position})`,
                 income: 0, expense: net, profit: -net,
                 timestamp: serverTimestamp(), isJob: false, date: getUTCDateString()
             });
@@ -1949,10 +1949,10 @@ window.runEmployeePayroll = async function () {
             transaction.update(empRef, { penalties: [] });
         });
 
-        msgEl.textContent = `✅ Paid $${net.toFixed(2)} to ${emp.name}. Recorded in Finance.`;
+        msgEl.textContent = `✅ Paid KShKSh{net.toFixed(2)} to KSh{emp.name}. Recorded in Finance.`;
         msgEl.className = 'text-sm mt-2 text-center text-green-600 font-semibold';
     } catch (err) {
-        msgEl.textContent = `❌ ${err.message}`;
+        msgEl.textContent = `❌ KSh{err.message}`;
         msgEl.className = 'text-sm mt-2 text-center text-red-600 font-semibold';
         console.error('Run Payroll Error:', err);
     } finally {
@@ -1982,8 +1982,8 @@ function renderEmployeePayHistory(empId) {
             : (r.date || 'N/A');
         return `
             <div class="flex justify-between items-center bg-gray-50 rounded-lg px-3 py-2 text-sm">
-                <span class="text-gray-500">${dateStr}</span>
-                <span class="font-bold text-indigo-700">$${(r.netPay || 0).toFixed(2)}</span>
+                <span class="text-gray-500">KSh{dateStr}</span>
+                <span class="font-bold text-indigo-700">KShKSh{(r.netPay || 0).toFixed(2)}</span>
             </div>`;
     }).join('');
 }
@@ -2013,7 +2013,7 @@ addCasualForm?.addEventListener('submit', async (e) => {
         msgEl.className = 'text-green-600 text-sm';
         addCasualForm.reset();
     } catch (err) {
-        msgEl.textContent = `❌ Error: ${err.message}`;
+        msgEl.textContent = `❌ Error: KSh{err.message}`;
         msgEl.className = 'text-red-500 text-sm';
     }
 });
@@ -2033,7 +2033,7 @@ function populateCasualEarningWorkerSelect() {
     if (!sel) return;
     const current = sel.value;
     sel.innerHTML = '<option value="">-- Select Worker --</option>' +
-        allCasualWorkers.map(w => `<option value="${w.id}">${escapeHtmlPR(w.name)} (${w.workerType || 'Casual'})</option>`).join('');
+        allCasualWorkers.map(w => `<option value="KSh{w.id}">KSh{escapeHtmlPR(w.name)} (KSh{w.workerType || 'Casual'})</option>`).join('');
     if (current) sel.value = current;
 }
 
@@ -2042,7 +2042,7 @@ function populateCasualLedgerFilter() {
     if (!sel) return;
     const current = sel.value;
     sel.innerHTML = '<option value="all">All Workers</option>' +
-        allCasualWorkers.map(w => `<option value="${w.id}">${escapeHtmlPR(w.name)}</option>`).join('');
+        allCasualWorkers.map(w => `<option value="KSh{w.id}">KSh{escapeHtmlPR(w.name)}</option>`).join('');
     sel.value = current || 'all';
 }
 
@@ -2081,12 +2081,12 @@ logCasualEarningForm?.addEventListener('submit', async (e) => {
             loggedBy: getSession().role,
             createdAt: serverTimestamp(),
         });
-        msgEl.textContent = `✅ $${amount.toFixed(2)} logged as due for ${worker.name}.`;
+        msgEl.textContent = `✅ KShKSh{amount.toFixed(2)} logged as due for KSh{worker.name}.`;
         msgEl.className = 'text-green-600 text-sm';
         logCasualEarningForm.reset();
         document.getElementById('casual-earning-date').value = getUTCDateString();
     } catch (err) {
-        msgEl.textContent = `❌ Error: ${err.message}`;
+        msgEl.textContent = `❌ Error: KSh{err.message}`;
         msgEl.className = 'text-red-500 text-sm';
         console.error('Log Casual Earning Error:', err);
     }
@@ -2125,16 +2125,16 @@ function renderCasualWorkersList() {
         return `
             <div class="flex justify-between items-center bg-gray-50 rounded-lg px-4 py-3">
                 <div>
-                    <p class="font-semibold text-gray-800">${escapeHtmlPR(w.name)} <span class="text-xs text-gray-400 ml-1">(${w.workerType || 'Casual'})</span></p>
-                    <p class="text-xs text-gray-500">${escapeHtmlPR(w.role || 'General Labor')}${w.phone ? ' · ' + escapeHtmlPR(w.phone) : ''}</p>
+                    <p class="font-semibold text-gray-800">KSh{escapeHtmlPR(w.name)} <span class="text-xs text-gray-400 ml-1">(KSh{w.workerType || 'Casual'})</span></p>
+                    <p class="text-xs text-gray-500">KSh{escapeHtmlPR(w.role || 'General Labor')}KSh{w.phone ? ' · ' + escapeHtmlPR(w.phone) : ''}</p>
                 </div>
                 <div class="text-right flex items-center gap-3">
                     <div>
                         <p class="text-xs text-gray-400">Outstanding Due</p>
-                        <p class="${dueCls}">$${due.toFixed(2)}</p>
+                        <p class="KSh{dueCls}">KShKSh{due.toFixed(2)}</p>
                     </div>
-                    ${due > 0 ? `<button onclick="payAllDuesForWorker('${w.id}')" class="bg-green-600 hover:bg-green-700 text-white text-xs font-bold py-1.5 px-3 rounded-lg">Pay All Due</button>` : ''}
-                    <button onclick="deleteCasualWorker('${w.id}','${escapeHtmlPR(w.name)}')" class="text-red-400 hover:text-red-600 text-xs">Remove</button>
+                    KSh{due > 0 ? `<button onclick="payAllDuesForWorker('KSh{w.id}')" class="bg-green-600 hover:bg-green-700 text-white text-xs font-bold py-1.5 px-3 rounded-lg">Pay All Due</button>` : ''}
+                    <button onclick="deleteCasualWorker('KSh{w.id}','KSh{escapeHtmlPR(w.name)}')" class="text-red-400 hover:text-red-600 text-xs">Remove</button>
                 </div>
             </div>`;
     }).join('');
@@ -2143,14 +2143,14 @@ function renderCasualWorkersList() {
 window.deleteCasualWorker = async function (workerId, workerName) {
     const due = outstandingDuesFor(workerId);
     if (due > 0) {
-        alert(`Cannot remove ${workerName} — they have $${due.toFixed(2)} in outstanding dues. Settle their payment first.`);
+        alert(`Cannot remove KSh{workerName} — they have KShKSh{due.toFixed(2)} in outstanding dues. Settle their payment first.`);
         return;
     }
-    if (!confirm(`Remove ${workerName} from registered workers? Earnings history will be kept.`)) return;
+    if (!confirm(`Remove KSh{workerName} from registered workers? Earnings history will be kept.`)) return;
     try {
         await deleteDoc(garageDoc(db, doc, 'casualWorkers', workerId));
     } catch (err) {
-        alert(`Failed to remove worker: ${err.message}`);
+        alert(`Failed to remove worker: KSh{err.message}`);
     }
 };
 
@@ -2159,7 +2159,7 @@ window.markCasualEarningPaid = async function (earningId) {
     if (!can('viewFinancials')) { alert('Only managers can record payments.'); return; }
     const entry = allCasualEarnings.find(e => e.id === earningId);
     if (!entry || entry.paid) return;
-    if (!confirm(`Pay ${entry.workerName} $${entry.amount.toFixed(2)} for: ${entry.description || 'logged work'}?`)) return;
+    if (!confirm(`Pay KSh{entry.workerName} KShKSh{entry.amount.toFixed(2)} for: KSh{entry.description || 'logged work'}?`)) return;
 
     try {
         const earningRef = garageDoc(db, doc, 'casualEarnings', earningId);
@@ -2173,13 +2173,13 @@ window.markCasualEarningPaid = async function (earningId) {
             transaction.update(earningRef, { paid: true, paidAt: serverTimestamp() });
             transaction.set(transRef, {
                 type: 'CASUAL LABOR', subtype: 'Casual/Per-Job Payment', plate: entry.plate || 'N/A',
-                description: `Paid ${entry.workerName}: ${entry.description || 'casual labor'} (Plate: ${entry.plate || 'N/A'})`,
+                description: `Paid KSh{entry.workerName}: KSh{entry.description || 'casual labor'} (Plate: KSh{entry.plate || 'N/A'})`,
                 income: 0, expense: entry.amount, profit: -entry.amount,
                 timestamp: serverTimestamp(), isJob: false, date: getUTCDateString()
             });
         });
     } catch (err) {
-        alert(`Payment failed: ${err.message}`);
+        alert(`Payment failed: KSh{err.message}`);
         console.error('Mark Casual Earning Paid Error:', err);
     }
 };
@@ -2192,7 +2192,7 @@ window.payAllDuesForWorker = async function (workerId) {
     if (!worker || dueEntries.length === 0) return;
 
     const total = dueEntries.reduce((s, e) => s + (e.amount || 0), 0);
-    if (!confirm(`Pay ${worker.name} a total of $${total.toFixed(2)} across ${dueEntries.length} due entr${dueEntries.length === 1 ? 'y' : 'ies'}?`)) return;
+    if (!confirm(`Pay KSh{worker.name} a total of KShKSh{total.toFixed(2)} across KSh{dueEntries.length} due entrKSh{dueEntries.length === 1 ? 'y' : 'ies'}?`)) return;
 
     try {
         const batch = writeBatch(db);
@@ -2201,14 +2201,14 @@ window.payAllDuesForWorker = async function (workerId) {
         });
         batch.set(doc(getDailyTransactionsRef()), {
             type: 'CASUAL LABOR', subtype: 'Casual/Per-Job Bulk Payment', plate: 'N/A',
-            description: `Settled ${dueEntries.length} due payment(s) for ${worker.name}`,
+            description: `Settled KSh{dueEntries.length} due payment(s) for KSh{worker.name}`,
             income: 0, expense: total, profit: -total,
             timestamp: serverTimestamp(), isJob: false, date: getUTCDateString()
         });
         await batch.commit();
-        alert(`✅ Paid $${total.toFixed(2)} to ${worker.name}.`);
+        alert(`✅ Paid KShKSh{total.toFixed(2)} to KSh{worker.name}.`);
     } catch (err) {
-        alert(`Bulk payment failed: ${err.message}`);
+        alert(`Bulk payment failed: KSh{err.message}`);
         console.error('Pay All Dues Error:', err);
     }
 };
@@ -2221,7 +2221,7 @@ window.deleteCasualEarning = async function (earningId) {
     try {
         await deleteDoc(garageDoc(db, doc, 'casualEarnings', earningId));
     } catch (err) {
-        alert(`Failed to delete entry: ${err.message}`);
+        alert(`Failed to delete entry: KSh{err.message}`);
     }
 };
 
@@ -2248,18 +2248,18 @@ function renderCasualEarningsLedger() {
         const actionBtn = e.paid
             ? `<span class="text-xs text-gray-400">—</span>`
             : `<div class="flex gap-2">
-                 <button onclick="markCasualEarningPaid('${e.id}')" class="text-green-600 hover:text-green-800 text-xs font-bold">Pay</button>
-                 <button onclick="deleteCasualEarning('${e.id}')" class="text-red-400 hover:text-red-600 text-xs">Delete</button>
+                 <button onclick="markCasualEarningPaid('KSh{e.id}')" class="text-green-600 hover:text-green-800 text-xs font-bold">Pay</button>
+                 <button onclick="deleteCasualEarning('KSh{e.id}')" class="text-red-400 hover:text-red-600 text-xs">Delete</button>
                </div>`;
         return `
             <tr class="hover:bg-gray-50">
-                <td class="px-4 py-3 whitespace-nowrap text-xs text-gray-500">${e.date || 'N/A'}</td>
-                <td class="px-4 py-3 text-sm font-medium text-gray-900">${escapeHtmlPR(e.workerName)}</td>
-                <td class="px-4 py-3 text-sm text-gray-500">${escapeHtmlPR(e.description) || '—'}</td>
-                <td class="px-4 py-3 text-sm font-mono">${e.plate && e.plate !== 'N/A' ? escapeHtmlPR(e.plate) : '—'}</td>
-                <td class="px-4 py-3 text-sm font-semibold text-gray-800">$${(e.amount || 0).toFixed(2)}</td>
-                <td class="px-4 py-3 text-sm">${statusBadge}</td>
-                <td class="px-4 py-3 text-sm">${actionBtn}</td>
+                <td class="px-4 py-3 whitespace-nowrap text-xs text-gray-500">KSh{e.date || 'N/A'}</td>
+                <td class="px-4 py-3 text-sm font-medium text-gray-900">KSh{escapeHtmlPR(e.workerName)}</td>
+                <td class="px-4 py-3 text-sm text-gray-500">KSh{escapeHtmlPR(e.description) || '—'}</td>
+                <td class="px-4 py-3 text-sm font-mono">KSh{e.plate && e.plate !== 'N/A' ? escapeHtmlPR(e.plate) : '—'}</td>
+                <td class="px-4 py-3 text-sm font-semibold text-gray-800">KShKSh{(e.amount || 0).toFixed(2)}</td>
+                <td class="px-4 py-3 text-sm">KSh{statusBadge}</td>
+                <td class="px-4 py-3 text-sm">KSh{actionBtn}</td>
             </tr>`;
     }).join('');
 }
@@ -2306,9 +2306,9 @@ function renderPayHistory() {
     const elPayroll = document.getElementById('ph-total-payroll');
     const elCasual  = document.getElementById('ph-total-casual-paid');
     const elOutstanding = document.getElementById('ph-total-outstanding');
-    if (elPayroll) elPayroll.textContent = `$${totalPayroll.toFixed(2)}`;
-    if (elCasual)  elCasual.textContent  = `$${totalCasualPaid.toFixed(2)}`;
-    if (elOutstanding) elOutstanding.textContent = `$${totalOutstanding.toFixed(2)}`;
+    if (elPayroll) elPayroll.textContent = `KShKSh{totalPayroll.toFixed(2)}`;
+    if (elCasual)  elCasual.textContent  = `KShKSh{totalCasualPaid.toFixed(2)}`;
+    if (elOutstanding) elOutstanding.textContent = `KShKSh{totalOutstanding.toFixed(2)}`;
 
     if (rows.length === 0) {
         tbody.innerHTML = `<tr><td colspan="5" class="text-center py-8 text-gray-400">No payments recorded yet.</td></tr>`;
@@ -2317,11 +2317,11 @@ function renderPayHistory() {
 
     tbody.innerHTML = rows.map(r => `
         <tr class="hover:bg-gray-50">
-            <td class="px-4 py-3 whitespace-nowrap text-xs text-gray-500">${r.date}</td>
-            <td class="px-4 py-3 text-sm font-medium text-gray-900">${escapeHtmlPR(r.name)}</td>
-            <td class="px-4 py-3 text-sm"><span class="text-xs font-bold px-2 py-1 rounded-full ${r.typeColor}">${r.type}</span></td>
-            <td class="px-4 py-3 text-sm text-gray-500">${escapeHtmlPR(r.details) || '—'}</td>
-            <td class="px-4 py-3 text-sm font-semibold text-gray-800">$${r.amount.toFixed(2)}</td>
+            <td class="px-4 py-3 whitespace-nowrap text-xs text-gray-500">KSh{r.date}</td>
+            <td class="px-4 py-3 text-sm font-medium text-gray-900">KSh{escapeHtmlPR(r.name)}</td>
+            <td class="px-4 py-3 text-sm"><span class="text-xs font-bold px-2 py-1 rounded-full KSh{r.typeColor}">KSh{r.type}</span></td>
+            <td class="px-4 py-3 text-sm text-gray-500">KSh{escapeHtmlPR(r.details) || '—'}</td>
+            <td class="px-4 py-3 text-sm font-semibold text-gray-800">KShKSh{r.amount.toFixed(2)}</td>
         </tr>`).join('');
 }
 window.renderPayHistory = renderPayHistory;
