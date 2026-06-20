@@ -531,8 +531,8 @@
             <div class="mt-6">
                 <h3 class="text-2xl font-semibold text-teal-700 mb-4 border-b pb-2">👷 All Mechanics (<span id="mechanic-count">0</span>)</h3>
                 <input type="text" id="mechanic-search" placeholder="Search by name or specialization..." class="w-full p-3 border rounded-lg mb-4" oninput="filterMechanics()" />
+                <p id="no-mechanics-message" class="text-center text-gray-500 py-10">Loading mechanics...</p>
                 <div id="mechanics-list-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    <p id="no-mechanics-message" class="text-center text-gray-500 py-10 col-span-full">Loading mechanics...</p>
                 </div>
             </div>
         </section>
@@ -1437,7 +1437,12 @@ _clientsUnsubscribe = null;   // ← add this line
             const docRef = await addDoc(garageCol(db, collection, 'cars'), carData);
             // Upload staged photos to Firebase Storage
             if (_pendingPhotoFiles.length > 0) {
-                await uploadJobPhotos(docRef.id, _pendingPhotoFiles);
+                try {
+                    await uploadJobPhotos(docRef.id, _pendingPhotoFiles);
+                } catch (photoErr) {
+                    console.error("Error uploading job photos: ", photoErr);
+                    alert(`Vehicle entry was saved, but photo upload failed: ${photoErr.message}\nYou can add photos later from the job card.`);
+                }
             }
             _pendingPhotoFiles = [];
             alert("New Vehicle Entry successfully saved!");
@@ -1453,7 +1458,7 @@ _clientsUnsubscribe = null;   // ← add this line
             showSection('car-list'); // Go to the list view
         } catch (error) {
             console.error("Error adding document: ", error);
-            alert("Could not save vehicle entry.");
+            alert(`Could not save vehicle entry: ${error.message}`);
         }
     }
 
@@ -1726,7 +1731,9 @@ function listenForClients() {
     function renderMechanicList(mechanics) {
         const container = document.getElementById('mechanics-list-container');
         const noMsg = document.getElementById('no-mechanics-message');
-        const search = document.getElementById('mechanic-search').value.toLowerCase();
+        const searchEl = document.getElementById('mechanic-search');
+        if (!container || !noMsg || !searchEl) return; // section not in DOM right now; nothing to render into
+        const search = searchEl.value.toLowerCase();
         const filtered = mechanics.filter(m =>
             m.name.toLowerCase().includes(search) ||
             (m.specialization || '').toLowerCase().includes(search)
@@ -2897,23 +2904,42 @@ function lookupClientDetails(section) {
     // PHOTO UPLOAD (Staged for new jobs, direct for existing jobs)
     // ======================================================================
     function handlePhotoUpload(input) {
+        const MAX_BYTES = 2 * 1024 * 1024; // must match Storage rules: request.resource.size < 2MB
         const files = Array.from(input.files);
-        const total = _pendingPhotoFiles.length + files.length;
         const statusEl = document.getElementById('photo-upload-status');
+
+        const valid = [];
+        const rejected = [];
+        for (const file of files) {
+            if (!file.type.startsWith('image/')) {
+                rejected.push(`${file.name} (not an image)`);
+            } else if (file.size >= MAX_BYTES) {
+                rejected.push(`${file.name} (${(file.size / 1024 / 1024).toFixed(1)}MB, over 2MB limit)`);
+            } else {
+                valid.push(file);
+            }
+        }
+
+        const total = _pendingPhotoFiles.length + valid.length;
         if (total > 5) {
             if (statusEl) statusEl.textContent = `Max 5 photos allowed. Currently staged: ${_pendingPhotoFiles.length}`;
+            input.value = '';
             return;
         }
-        _pendingPhotoFiles.push(...files);
+        _pendingPhotoFiles.push(...valid);
         const container = document.getElementById('photo-preview-container');
-        files.forEach(file => {
+        valid.forEach(file => {
             const url = URL.createObjectURL(file);
             const img = document.createElement('img');
             img.src = url; img.className = 'photo-thumb'; img.title = file.name;
             img.onclick = () => openLightbox(url);
             container.appendChild(img);
         });
-        if (statusEl) statusEl.textContent = `${_pendingPhotoFiles.length} photo(s) staged for upload.`;
+        if (statusEl) {
+            let msg = `${_pendingPhotoFiles.length} photo(s) staged for upload.`;
+            if (rejected.length) msg += ` Skipped: ${rejected.join(', ')}`;
+            statusEl.textContent = msg;
+        }
         input.value = '';
     }
     window.handlePhotoUpload = handlePhotoUpload;
@@ -2921,18 +2947,29 @@ function lookupClientDetails(section) {
     async function uploadJobPhotos(jobId, files) {
         const gc = getSession().garageCode;
         const urls = [];
+        const failures = [];
         for (const file of files) {
-            const path = `garages/${gc}/jobs/${jobId}/${Date.now()}_${file.name}`;
-            const ref = storageRef(storage, path);
-            await uploadBytes(ref, file);
-            const url = await getDownloadURL(ref);
-            urls.push({ url, name: file.name, path });
+            try {
+                const path = `garages/${gc}/jobs/${jobId}/${Date.now()}_${file.name}`;
+                const ref = storageRef(storage, path);
+                await uploadBytes(ref, file, { contentType: file.type || 'image/jpeg' });
+                const url = await getDownloadURL(ref);
+                urls.push({ url, name: file.name, path });
+            } catch (err) {
+                console.error(`Failed to upload ${file.name}:`, err);
+                failures.push(file.name);
+            }
         }
         // Merge with any existing photos
-        const carRef = garageDoc(db, doc, 'cars', jobId);
-        const snap = await getDoc(carRef);
-        const existing = snap.exists() ? (snap.data().photos || []) : [];
-        await updateDoc(carRef, { photos: [...existing, ...urls] });
+        if (urls.length > 0) {
+            const carRef = garageDoc(db, doc, 'cars', jobId);
+            const snap = await getDoc(carRef);
+            const existing = snap.exists() ? (snap.data().photos || []) : [];
+            await updateDoc(carRef, { photos: [...existing, ...urls] });
+        }
+        if (failures.length > 0) {
+            throw new Error(`Failed to upload: ${failures.join(', ')} (file too large or invalid type)`);
+        }
         return urls;
     }
 
