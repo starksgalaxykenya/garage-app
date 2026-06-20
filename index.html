@@ -2904,7 +2904,7 @@ function lookupClientDetails(section) {
     // PHOTO UPLOAD (Staged for new jobs, direct for existing jobs)
     // ======================================================================
     function handlePhotoUpload(input) {
-        const MAX_BYTES = 2 * 1024 * 1024; // must match Storage rules: request.resource.size < 2MB
+        const MAX_BYTES = 15 * 1024 * 1024; // must match Storage rules: request.resource.size < 15MB
         const files = Array.from(input.files);
         const statusEl = document.getElementById('photo-upload-status');
 
@@ -2914,7 +2914,7 @@ function lookupClientDetails(section) {
             if (!file.type.startsWith('image/')) {
                 rejected.push(`${file.name} (not an image)`);
             } else if (file.size >= MAX_BYTES) {
-                rejected.push(`${file.name} (${(file.size / 1024 / 1024).toFixed(1)}MB, over 2MB limit)`);
+                rejected.push(`${file.name} (${(file.size / 1024 / 1024).toFixed(1)}MB, over 15MB limit)`);
             } else {
                 valid.push(file);
             }
