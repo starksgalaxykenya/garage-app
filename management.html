@@ -55,18 +55,18 @@
             </div>
             <!-- Keypad -->
             <div class="grid grid-cols-3 gap-2 mb-3">
-                <button onclick="mgmtPinKey('1')" class="mgmt-pin-key p-4 text-xl font-bold rounded-xl bg-gray-100 hover:bg-indigo-100 transition">1</button>
-                <button onclick="mgmtPinKey('2')" class="mgmt-pin-key p-4 text-xl font-bold rounded-xl bg-gray-100 hover:bg-indigo-100 transition">2</button>
-                <button onclick="mgmtPinKey('3')" class="mgmt-pin-key p-4 text-xl font-bold rounded-xl bg-gray-100 hover:bg-indigo-100 transition">3</button>
-                <button onclick="mgmtPinKey('4')" class="mgmt-pin-key p-4 text-xl font-bold rounded-xl bg-gray-100 hover:bg-indigo-100 transition">4</button>
-                <button onclick="mgmtPinKey('5')" class="mgmt-pin-key p-4 text-xl font-bold rounded-xl bg-gray-100 hover:bg-indigo-100 transition">5</button>
-                <button onclick="mgmtPinKey('6')" class="mgmt-pin-key p-4 text-xl font-bold rounded-xl bg-gray-100 hover:bg-indigo-100 transition">6</button>
-                <button onclick="mgmtPinKey('7')" class="mgmt-pin-key p-4 text-xl font-bold rounded-xl bg-gray-100 hover:bg-indigo-100 transition">7</button>
-                <button onclick="mgmtPinKey('8')" class="mgmt-pin-key p-4 text-xl font-bold rounded-xl bg-gray-100 hover:bg-indigo-100 transition">8</button>
-                <button onclick="mgmtPinKey('9')" class="mgmt-pin-key p-4 text-xl font-bold rounded-xl bg-gray-100 hover:bg-indigo-100 transition">9</button>
-                <button onclick="mgmtPinKey('back')" class="mgmt-pin-key p-4 text-xl font-bold rounded-xl bg-gray-50 hover:bg-red-100 transition">⌫</button>
-                <button onclick="mgmtPinKey('0')" class="mgmt-pin-key p-4 text-xl font-bold rounded-xl bg-gray-100 hover:bg-indigo-100 transition">0</button>
-                <button onclick="enterPinAndLogin()" class="mgmt-pin-key p-3 text-sm font-bold rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white transition">GO</button>
+                <button data-pin="1" class="mgmt-pin-key p-4 text-xl font-bold rounded-xl bg-gray-100 hover:bg-indigo-100 transition">1</button>
+                <button data-pin="2" class="mgmt-pin-key p-4 text-xl font-bold rounded-xl bg-gray-100 hover:bg-indigo-100 transition">2</button>
+                <button data-pin="3" class="mgmt-pin-key p-4 text-xl font-bold rounded-xl bg-gray-100 hover:bg-indigo-100 transition">3</button>
+                <button data-pin="4" class="mgmt-pin-key p-4 text-xl font-bold rounded-xl bg-gray-100 hover:bg-indigo-100 transition">4</button>
+                <button data-pin="5" class="mgmt-pin-key p-4 text-xl font-bold rounded-xl bg-gray-100 hover:bg-indigo-100 transition">5</button>
+                <button data-pin="6" class="mgmt-pin-key p-4 text-xl font-bold rounded-xl bg-gray-100 hover:bg-indigo-100 transition">6</button>
+                <button data-pin="7" class="mgmt-pin-key p-4 text-xl font-bold rounded-xl bg-gray-100 hover:bg-indigo-100 transition">7</button>
+                <button data-pin="8" class="mgmt-pin-key p-4 text-xl font-bold rounded-xl bg-gray-100 hover:bg-indigo-100 transition">8</button>
+                <button data-pin="9" class="mgmt-pin-key p-4 text-xl font-bold rounded-xl bg-gray-100 hover:bg-indigo-100 transition">9</button>
+                <button data-pin="back" class="mgmt-pin-key p-4 text-xl font-bold rounded-xl bg-gray-50 hover:bg-red-100 transition">⌫</button>
+                <button data-pin="0" class="mgmt-pin-key p-4 text-xl font-bold rounded-xl bg-gray-100 hover:bg-indigo-100 transition">0</button>
+                <button id="mgmt-pin-go-btn" class="mgmt-pin-key p-3 text-sm font-bold rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white transition">GO</button>
             </div>
             <p id="mgmt-pin-message" class="text-red-500 text-sm text-center min-h-[20px]"></p>
             <p id="management-auth-message" class="text-red-500 text-sm text-center"></p>
