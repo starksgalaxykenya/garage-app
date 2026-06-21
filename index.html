@@ -643,7 +643,8 @@
                     <!-- Add new item -->
                     <h4 class="font-bold text-gray-700 mb-3 border-b pb-1 mt-4">➕ Add New Action Item</h4>
                     <textarea id="ejc-new-action" rows="2" placeholder="Repair action to be performed..." class="w-full p-3 border rounded-lg mb-2 text-sm"></textarea>
-                    <input id="ejc-new-parts" type="text" placeholder="Parts required (optional)..." class="w-full p-3 border rounded-lg mb-3 text-sm" />
+                    <input id="ejc-new-parts" type="text" placeholder="Parts required (optional)..." class="w-full p-3 border rounded-lg mb-1 text-sm" />
+                    <p class="text-xs text-gray-400 mb-3">📦 Listed parts are auto-sent to the Garage Manager as a requisition for approval.</p>
                     <button onclick="ejcAddItem()" class="bg-pink-600 hover:bg-pink-700 text-white font-bold py-2 px-5 rounded-lg text-sm transition">Add to Repair Plan</button>
                 </div>
                 <div class="p-4 border-t flex justify-between items-center">
@@ -1417,6 +1418,35 @@ _clientsUnsubscribe = null;   // ← add this line
     // ----------------------------------------------------------------------
 
     // Function to save new car entry
+    // ──────────────────────────────────────────────────────────────────
+    // PARTS REQUISITIONS → sent to Garage Manager (management.html) for approval
+    // Every repair-plan item that lists parts gets pushed as a requisition.
+    // The manager then either fulfils it from inventory or places a
+    // one-time special order for parts not stocked in the garage store.
+    // ──────────────────────────────────────────────────────────────────
+    async function submitPartsRequisitions(carId, plate, vehicleLabel, mechanic, items) {
+        const newOnes = (items || []).filter(it => it.parts && it.parts.trim() && !it.requisitioned);
+        if (newOnes.length === 0) return;
+        try {
+            for (const it of newOnes) {
+                await addDoc(garageCol(db, collection, 'partsRequisitions'), {
+                    carId,
+                    plate: plate || 'N/A',
+                    vehicle: vehicleLabel || '',
+                    mechanic: mechanic || 'Unassigned',
+                    itemAction: it.action || '',
+                    partsText: it.parts,
+                    status: 'pending', // pending -> approved (from stock) | one-time-ordered | rejected
+                    createdAt: serverTimestamp(),
+                    createdBy: `${getSession().role}@${getSession().garageCode}`
+                });
+                it.requisitioned = true; // prevent duplicate requisitions on subsequent saves
+            }
+        } catch (err) {
+            console.error('Error creating parts requisition:', err);
+        }
+    }
+
     async function saveCarEntry(event) {
         event.preventDefault();
         if (!can('createEntries')) {
@@ -1496,6 +1526,13 @@ _clientsUnsubscribe = null;   // ← add this line
 
         try {
             const docRef = await addDoc(garageCol(db, collection, 'cars'), carData);
+
+            // Push any parts listed in the repair plan to the Manager as requisitions.
+            await submitPartsRequisitions(
+                docRef.id, carData.plate,
+                `${carData.make || ''} ${carData.model || ''} (${carData.year || 'N/A'})`,
+                carData.assignedMechanic, repairPlan
+            );
 
             // Create the client-portal lookup pointer (plate+PIN -> carId).
             await writePortalLookup(getSession().garageCode, carData.plate, carData.portalPin, docRef.id);
@@ -3284,6 +3321,12 @@ function lookupClientDetails(section) {
         const msgEl = document.getElementById('ejc-save-msg');
         msgEl.textContent = 'Saving...'; msgEl.className = 'text-blue-500 text-sm';
         try {
+            // Any newly added repair-plan items with parts get sent to the Manager as requisitions.
+            await submitPartsRequisitions(
+                data._docId, data.plate,
+                `${data.make || ''} ${data.model || ''} (${data.year || 'N/A'})`,
+                data.assignedMechanic, data.repairPlanItems
+            );
             await updateDoc(garageDoc(db, doc, 'cars', data._docId), {
                 repairPlanItems: data.repairPlanItems
             });
