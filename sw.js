@@ -5,7 +5,7 @@
 // To force all users to get a new version: bump CACHE_VERSION below.
 // =================================================================
 
-const CACHE_VERSION = 'gmp-v2'; // ← bump this (e.g. v3, v4) whenever you deploy changes
+const CACHE_VERSION = 'gmp-v3'; // ← bump this (e.g. v4, v5) whenever you deploy changes
 const APP_CACHE     = `${CACHE_VERSION}-app`;
 const CDN_CACHE      = `${CACHE_VERSION}-cdn`;
 
@@ -17,11 +17,19 @@ const APP_FILES = [
     './admin.html',
     './payment.html',
     './auth.js',
-    './error_codes_dictionary.js',
     './garage-branding.js',
     './management.js',
     './subscription.js',
+    './pwa-install.js',
     './manifest.json',
+    './icons/72x72.png',
+    './icons/96x96.png',
+    './icons/128x128.png',
+    './icons/144x144.png',
+    './icons/152x152.png',
+    './icons/192x192.png',
+    './icons/384x384.png',
+    './icons/512x512.png',
 ];
 
 // Optional offline fallback page — only used if you actually have this file.
@@ -148,7 +156,7 @@ async function networkFirst(request) {
         if (request.mode === 'navigate') {
             return (
                 (await cache.match('./')) ||
-                (await cache.match('./management.html')) ||
+                (await cache.match('./index.html')) ||
                 (await cache.match(OFFLINE_FALLBACK)) ||
                 Response.error()
             );
