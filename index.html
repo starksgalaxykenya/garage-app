@@ -789,8 +789,9 @@
         </main>
 
     <footer class="bg-gray-800 text-white text-center py-4 mt-8">
-        <p class="text-sm">© 2026 Garage Manager PRO | Powered by Fortify AI International</p>
+        <p class="text-sm">© <span id="footer-year">2026</span> Garage Manager PRO | Powered by Fortify AI International</p>
     </footer>
+    <script>document.getElementById('footer-year').textContent = new Date().getFullYear();</script>
 
 <script type="module">
     // ── Add these imports ──
@@ -840,11 +841,19 @@ import { getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObjec
      * time a car is created OR its portalPin is (re)generated.
      * Safe to call repeatedly — it's just a small single-field doc.
      */
+    /**
+     * Writes (or overwrites) the portalLookup pointer doc for a car so
+     * the Client Portal can resolve plate+PIN -> {garageCode, carId}.
+     * Lives at the database ROOT (not nested under the garage) so the
+     * portal page never needs to ask the client for a garage code —
+     * just their plate and PIN. Call this any time a car is created
+     * OR its portalPin is (re)generated. Safe to call repeatedly.
+     */
     async function writePortalLookup(garageCode, plate, pin, carId) {
         try {
             const lookupId = await computePortalLookupId(plate, pin);
-            const lookupRef = doc(db, 'garages', garageCode, 'portalLookup', lookupId);
-            await setDoc(lookupRef, { carId });
+            const lookupRef = doc(db, 'portalLookup', lookupId);
+            await setDoc(lookupRef, { garageCode, carId });
         } catch (err) {
             console.error('[Portal] Failed to write portal lookup pointer:', err);
         }
@@ -3358,7 +3367,7 @@ function lookupClientDetails(section) {
                 message += `\n📱 *Track this repair online*\n`;
                 message += `Plate: ${data.plate}\n`;
                 message += `Portal PIN: ${data.portalPin}\n`;
-                message += `Open: ${getPortalUrl()}\n`;
+                message += `Open: ${getPortalUrl(data.plate)}\n`;
             }
         }
         
@@ -3366,9 +3375,13 @@ function lookupClientDetails(section) {
         window.open(whatsappUrl, '_blank');
     }
 
-    /** Builds the absolute URL to the client portal, same origin as this app. */
-    function getPortalUrl() {
-        return new URL('./client-portal.html', window.location.href).toString();
+    /** Builds the absolute URL to the client portal, same origin as this
+     *  app. Optionally prefills the plate (never the PIN — that's the
+     *  actual secret and shouldn't end up in a shareable URL). */
+    function getPortalUrl(plate) {
+        const url = new URL('./client-portal.html', window.location.href);
+        if (plate) url.searchParams.set('plate', plate);
+        return url.toString();
     }
 
     /** Copies the portal PIN to clipboard with a small inline confirmation. */
@@ -3394,7 +3407,7 @@ function lookupClientDetails(section) {
         let message = `*${data.make || ''} ${data.model || ''} (${data.plate})* — track your repair progress online:\n\n`;
         message += `🔑 Plate: ${data.plate}\n`;
         message += `🔑 Portal PIN: ${data.portalPin}\n\n`;
-        message += `Open: ${getPortalUrl()}\n`;
+        message += `Open: ${getPortalUrl(data.plate)}\n`;
         message += `Enter your plate number and PIN to view live status, repair checklist, and mechanic notes.`;
 
         const whatsappUrl = clientPhone
