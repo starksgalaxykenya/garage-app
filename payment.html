@@ -1,14 +1,18 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <link rel="manifest" href="/manifest.json">
+    <link rel="manifest" href="./manifest.json">
 <meta name="theme-color" content="#1d4ed8">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Garage PRO">
+<link rel="apple-touch-icon" href="./icons/192x192.png">
+<link rel="icon" type="image/png" sizes="192x192" href="./icons/192x192.png">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Upgrade Your Plan — Garage Manager PRO</title>
     <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+    <script src="./pwa-install.js"></script>
     <style>
         :root {
             --navy: #0a0f1e;
@@ -446,7 +450,7 @@
     <script>
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('/sw.js')
+      navigator.serviceWorker.register('./sw.js')
         .then(reg => console.log('SW registered: ', reg))
         .catch(err => console.log('SW registration failed: ', err));
     });
