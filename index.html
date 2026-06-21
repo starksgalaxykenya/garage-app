@@ -180,6 +180,12 @@
                     <p id="pin-message" class="text-red-500 text-sm text-center min-h-[20px]"></p>
                     <button id="back-to-role-btn" class="w-full mt-2 text-gray-400 hover:text-gray-600 text-sm">← Change role</button>
                 </div>
+
+                <div class="text-center mt-6 pt-4 border-t border-gray-100">
+                    <a href="./client-portal.html" class="inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-blue-600 transition-colors">
+                        🚗 Tracking a repair? <span class="font-semibold underline">Open the Client Portal</span>
+                    </a>
+                </div>
             </div>
         </section>
         <section id="car-entry" class="space-y-8" style="display:none;">
@@ -801,10 +807,49 @@ import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/12.6.
 import { getAuth, signInWithEmailAndPassword, sendPasswordResetEmail, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-auth.js";
 import {
     getFirestore,
-    collection, addDoc, doc, updateDoc, deleteDoc, query, where, orderBy,
+    collection, addDoc, doc, setDoc, updateDoc, deleteDoc, query, where, orderBy,
     onSnapshot, getDoc, serverTimestamp, getDocs
 } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js";
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-storage.js";
+    // ── Client Portal PIN ──────────────────────────────────────────────
+    // Generates a random 6-digit code, independent of client identity,
+    // so vehicles registered under an insurer/fleet name can still be
+    // tracked by whoever holds the PIN (printed on the job card).
+    function generatePortalPin() {
+        return String(Math.floor(100000 + Math.random() * 900000));
+    }
+
+    /**
+     * Computes the portal lookup document ID: a SHA-256 hash of
+     * "PLATE:PIN" (plate uppercased, spaces/dashes stripped), hex-encoded
+     * and truncated to 32 chars. This ID is the *only* way to reach a
+     * car's data without staff auth (see firestore.rules) — it can't be
+     * reverse-engineered without already knowing both the plate and PIN.
+     */
+    async function computePortalLookupId(plate, pin) {
+        const normalizedPlate = (plate || '').toUpperCase().replace(/[\s-]/g, '');
+        const input = `${normalizedPlate}:${pin}`;
+        const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(input));
+        const hex = Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+        return hex.slice(0, 32);
+    }
+
+    /**
+     * Writes (or overwrites) the portalLookup pointer doc for a car so
+     * the Client Portal can resolve plate+PIN -> carId. Call this any
+     * time a car is created OR its portalPin is (re)generated.
+     * Safe to call repeatedly — it's just a small single-field doc.
+     */
+    async function writePortalLookup(garageCode, plate, pin, carId) {
+        try {
+            const lookupId = await computePortalLookupId(plate, pin);
+            const lookupRef = doc(db, 'garages', garageCode, 'portalLookup', lookupId);
+            await setDoc(lookupRef, { carId });
+        } catch (err) {
+            console.error('[Portal] Failed to write portal lookup pointer:', err);
+        }
+    }
+
     // Helper: hex → [R,G,B] array for jsPDF headStyles
     function hexToRgbArr(hex) {
         const r = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex || '#1d4ed8');
@@ -1435,10 +1480,17 @@ _clientsUnsubscribe = null;   // ← add this line
             jobType: 'StandardRepair',
             createdAt: serverTimestamp(),
             createdBy: `${getSession().role}@${getSession().garageCode}`,
+
+            // CLIENT PORTAL ACCESS
+            portalPin: generatePortalPin(),
         };
 
         try {
             const docRef = await addDoc(garageCol(db, collection, 'cars'), carData);
+
+            // Create the client-portal lookup pointer (plate+PIN -> carId).
+            await writePortalLookup(getSession().garageCode, carData.plate, carData.portalPin, docRef.id);
+
             // Upload staged photos to Firebase Storage
             if (_pendingPhotoFiles.length > 0) {
                 try {
@@ -2465,6 +2517,17 @@ function lookupClientDetails(section) {
 
             if (docSnap.exists()) {
                 const data = { ...docSnap.data(), _docId: carId };
+
+                // Backfill: jobs created before the client portal existed won't
+                // have a PIN yet. Generate and persist one now, transparently.
+                if (data.jobType !== 'GeneralService' && !data.portalPin) {
+                    data.portalPin = generatePortalPin();
+                    updateDoc(carRef, { portalPin: data.portalPin }).catch(e =>
+                        console.error('Failed to backfill portal PIN:', e)
+                    );
+                    writePortalLookup(getSession().garageCode, data.plate, data.portalPin, carId);
+                }
+
                 renderJobCardContent(data, data.status); // Pass the status for display
                 document.getElementById('jobCardModal').style.display = 'flex';
                 // Show save progress button for active standard repairs
@@ -2618,6 +2681,23 @@ function lookupClientDetails(section) {
 
                 <h3 class="text-xl font-bold text-yellow-700 mt-4 border-b-2 pb-1">Error Codes</h3>
                 <div class="mt-2 p-3 bg-yellow-50 rounded-lg whitespace-pre-wrap text-sm">${data.errorMeanings || 'No codes recorded.'}</div>
+
+                ${data.portalPin ? `
+                <h3 class="text-xl font-bold text-blue-700 mt-4 border-b-2 pb-1 print:hidden">📱 Client Portal Access</h3>
+                <div class="mt-2 p-4 bg-blue-50 border-2 border-blue-200 rounded-lg print:hidden">
+                    <p class="text-sm text-gray-600 mb-2">Give this PIN to whoever drops off the vehicle. They can use it anytime — with the plate number — to track repair progress online.</p>
+                    <div class="flex flex-wrap items-center gap-3">
+                        <span class="text-3xl font-mono font-extrabold text-blue-800 bg-white px-4 py-2 rounded-lg border border-blue-300 tracking-widest">${data.portalPin}</span>
+                        <button onclick="copyPortalPin('${data.portalPin}')" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg text-sm transition duration-150">📋 Copy PIN</button>
+                        <button onclick="sharePortalLinkWhatsApp(window.currentJobCardData)" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg text-sm transition duration-150">💬 Send via WhatsApp</button>
+                        ${data._docId ? `<button onclick="regeneratePortalPin('${data._docId}')" class="bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-2 px-4 rounded-lg text-sm transition duration-150">🔄 New PIN</button>` : ''}
+                    </div>
+                    <p class="text-xs text-gray-400 mt-2">Plate <span class="font-mono">${data.plate}</span> + this PIN at the Client Portal.</p>
+                </div>
+                <div class="mt-1 p-3 bg-blue-50 border-2 border-blue-200 rounded-lg hidden print:block">
+                    <p class="text-sm font-bold text-blue-800">📱 Track your repair online — Client Portal</p>
+                    <p class="text-sm text-gray-700">Plate: <span class="font-mono font-bold">${data.plate}</span> &nbsp;|&nbsp; Portal PIN: <span class="font-mono font-bold text-lg">${data.portalPin}</span></p>
+                </div>` : ''}
 
                 ${data.clientSignatureDataUrl ? `
                 <h3 class="text-xl font-bold text-teal-700 mt-4 border-b-2 pb-1">✍️ Client Signature (Intake Sign-Off)</h3>
@@ -3273,11 +3353,85 @@ function lookupClientDetails(section) {
             if (data.errorCodes && data.errorCodes !== 'N/A') {
                 message += `\n*Error Codes*:\n${data.errorCodes}\n`;
             }
+
+            if (data.portalPin) {
+                message += `\n📱 *Track this repair online*\n`;
+                message += `Plate: ${data.plate}\n`;
+                message += `Portal PIN: ${data.portalPin}\n`;
+                message += `Open: ${getPortalUrl()}\n`;
+            }
         }
         
         const whatsappUrl = `https://wa.me/${clientPhone}?text=${encodeURIComponent(message)}`;
         window.open(whatsappUrl, '_blank');
     }
+
+    /** Builds the absolute URL to the client portal, same origin as this app. */
+    function getPortalUrl() {
+        return new URL('./client-portal.html', window.location.href).toString();
+    }
+
+    /** Copies the portal PIN to clipboard with a small inline confirmation. */
+    function copyPortalPin(pin) {
+        navigator.clipboard?.writeText(pin).then(() => {
+            alert(`PIN ${pin} copied to clipboard.`);
+        }).catch(() => {
+            alert(`Portal PIN: ${pin}`);
+        });
+    }
+    window.copyPortalPin = copyPortalPin;
+
+    /**
+     * Sends (or re-sends) the portal link + PIN to the client via WhatsApp.
+     * Works for staff re-sending a PIN later without re-printing the job card.
+     */
+    function sharePortalLinkWhatsApp(data) {
+        if (!data || !data.portalPin) {
+            alert('No portal PIN found on this job yet.');
+            return;
+        }
+        const clientPhone = (data.clientPhone || '').replace(/[^0-9+]/g, '');
+        let message = `*${data.make || ''} ${data.model || ''} (${data.plate})* — track your repair progress online:\n\n`;
+        message += `🔑 Plate: ${data.plate}\n`;
+        message += `🔑 Portal PIN: ${data.portalPin}\n\n`;
+        message += `Open: ${getPortalUrl()}\n`;
+        message += `Enter your plate number and PIN to view live status, repair checklist, and mechanic notes.`;
+
+        const whatsappUrl = clientPhone
+            ? `https://wa.me/${clientPhone}?text=${encodeURIComponent(message)}`
+            : `https://wa.me/?text=${encodeURIComponent(message)}`;
+        window.open(whatsappUrl, '_blank');
+    }
+    window.sharePortalLinkWhatsApp = sharePortalLinkWhatsApp;
+
+    /**
+     * Generates a brand-new portal PIN for a job, invalidating the old
+     * one (the old lookup pointer is simply abandoned — it stops
+     * resolving to anything useful since the car doc's portalPin no
+     * longer matches it). Use when a client wants their old PIN
+     * disabled, e.g. they suspect it was shared with the wrong person.
+     */
+    async function regeneratePortalPin(carId) {
+        if (!confirm('Generate a new Portal PIN? The old PIN will stop working immediately.')) return;
+        try {
+            const carRef = garageDoc(db, doc, 'cars', carId);
+            const snap = await getDoc(carRef);
+            if (!snap.exists()) return;
+            const data = snap.data();
+            const newPin = generatePortalPin();
+            await updateDoc(carRef, { portalPin: newPin });
+            await writePortalLookup(getSession().garageCode, data.plate, newPin, carId);
+
+            // Refresh the open job card view with the new PIN
+            const refreshed = { ...data, portalPin: newPin, _docId: carId };
+            renderJobCardContent(refreshed, refreshed.status);
+            alert(`New Portal PIN generated: ${newPin}`);
+        } catch (err) {
+            console.error('[Portal] Failed to regenerate PIN:', err);
+            alert('Could not generate a new PIN. Please try again.');
+        }
+    }
+    window.regeneratePortalPin = regeneratePortalPin;
 
     // Function to generate the Analysis Report PDF
     async function generateAnalysisReportPDF() {
