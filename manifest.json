@@ -1,7 +1,7 @@
 {
   "id": "/index.html",
   "name": "Garage Manager PRO",
-  "short_name": "Garage PRO",
+  "short_name": "Garager PRO",
   "description": "Complete workshop management – jobs, inventory, invoices, reports",
   "start_url": "./index.html",
   "scope": "./",
