@@ -5,7 +5,7 @@
 // To force all users to get a new version: bump CACHE_VERSION below.
 // =================================================================
 
-const CACHE_VERSION = 'gmp-v3'; // ← bump this (e.g. v4, v5) whenever you deploy changes
+const CACHE_VERSION = 'gmp-v4'; // ← bump this (e.g. v5, v6) whenever you deploy changes
 const APP_CACHE     = `${CACHE_VERSION}-app`;
 const CDN_CACHE      = `${CACHE_VERSION}-cdn`;
 
@@ -16,6 +16,7 @@ const APP_FILES = [
     './management.html',
     './admin.html',
     './payment.html',
+    './client-portal.html',
     './auth.js',
     './garage-branding.js',
     './management.js',
