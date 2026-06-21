@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <link rel="manifest" href="./manifest.json">
+    <meta name="theme-color" content="#0a0f1e">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Garage PRO">
+    <link rel="apple-touch-icon" href="./icons/192x192.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="./icons/192x192.png">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Track My Vehicle — Garage Manager PRO</title>
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="./pwa-install.js"></script>
+    <style>
+        :root {
+            --navy: #0a0f1e;
+            --navy-soft: #121a2e;
+            --steel: #1d4ed8;
+            --steel-soft: #3b63e8;
+            --amber: #f59e0b;
+            --green: #16a34a;
+            --paper: #f7f5f0;
+            --paper-dim: #ece8df;
+            --ink: #1b2233;
+            --ink-soft: #5b6478;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: 'DM Sans', sans-serif;
+            background: var(--navy);
+            color: var(--ink);
+            min-height: 100vh;
+        }
+        .display {
+            font-family: 'Syne', sans-serif;
+            font-weight: 800;
+            letter-spacing: -0.01em;
+        }
+        .mono { font-family: 'DM Sans', monospace; letter-spacing: 0.04em; }
+
+        /* ── Background texture: faint diagnostic grid ── */
+        .bg-grid {
+            position: fixed; inset: 0; z-index: 0; pointer-events: none;
+            background-image:
+                linear-gradient(rgba(59,99,232,0.07) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(59,99,232,0.07) 1px, transparent 1px);
+            background-size: 36px 36px;
+            mask-image: radial-gradient(circle at 50% 0%, black 0%, transparent 70%);
+        }
+
+        .wrap { position: relative; z-index: 1; max-width: 640px; margin: 0 auto; padding: 24px 18px 60px; }
+
+        /* ── Header ── */
+        .top-brand { display:flex; align-items:center; justify-content:center; gap:10px; padding: 18px 0 28px; }
+        .top-brand .dot { width:10px; height:10px; border-radius:50%; background:var(--amber); box-shadow:0 0 12px var(--amber); }
+        .top-brand span { color:#cdd6f4; font-size:13px; letter-spacing:0.12em; text-transform:uppercase; font-weight:600; }
+
+        /* ── Lookup card ── */
+        .lookup-card {
+            background: var(--paper);
+            border-radius: 20px;
+            padding: 36px 28px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.35);
+        }
+        .lookup-card h1 {
+            font-size: 28px; margin: 0 0 6px; color: var(--ink);
+        }
+        .lookup-card p.sub { color: var(--ink-soft); margin: 0 0 28px; font-size: 14.5px; line-height:1.5; }
+
+        .field-label {
+            font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em;
+            color: var(--ink-soft); font-weight: 700; margin-bottom: 6px; display:block;
+        }
+        .field-input {
+            width: 100%; padding: 14px 16px; border-radius: 12px;
+            border: 2px solid #ddd7c9; background: #fff; font-size: 18px;
+            font-family: 'DM Sans', monospace; letter-spacing: 0.05em;
+            color: var(--ink); margin-bottom: 18px; transition: border-color .15s;
+        }
+        .field-input:focus { outline:none; border-color: var(--steel); }
+        .field-input.plate { text-transform: uppercase; }
+        .field-input.pin { text-align:center; letter-spacing: 0.3em; font-weight:700; }
+
+        .btn-primary {
+            width: 100%; padding: 16px; border-radius: 12px; border: none;
+            background: var(--steel); color: white; font-weight: 700; font-size: 16px;
+            cursor: pointer; transition: transform .12s, background .15s;
+            display:flex; align-items:center; justify-content:center; gap:8px;
+        }
+        .btn-primary:hover { background: var(--steel-soft); transform: translateY(-1px); }
+        .btn-primary:disabled { opacity: 0.6; cursor: default; transform:none; }
+
+        .lookup-error {
+            background: #fdecec; color: #b42318; border: 1px solid #f6c4c2;
+            border-radius: 10px; padding: 12px 14px; font-size: 14px; margin-bottom: 16px;
+            display: none;
+        }
+
+        .helper-link { text-align:center; margin-top:20px; font-size: 13px; color: var(--ink-soft); }
+        .helper-link a { color: var(--steel); text-decoration: none; font-weight: 600; }
+
+        /* ── Status view ── */
+        #status-view { display:none; }
+        .status-header {
+            background: var(--paper); border-radius: 20px; padding: 26px 24px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3); margin-bottom: 18px;
+        }
+        .plate-chip {
+            display:inline-block; background: var(--navy); color: #fff;
+            font-family: 'DM Sans', monospace; font-weight:700; letter-spacing:0.08em;
+            padding: 5px 12px; border-radius: 7px; font-size: 14px; margin-bottom: 10px;
+        }
+        .vehicle-name { font-size: 24px; margin: 0 0 4px; }
+        .vehicle-sub { color: var(--ink-soft); font-size: 14px; margin:0; }
+
+        .live-pill {
+            display:inline-flex; align-items:center; gap:6px; font-size:11px;
+            text-transform:uppercase; letter-spacing:0.08em; font-weight:700;
+            color: var(--green); margin-top: 10px;
+        }
+        .live-pill .blip { width:7px; height:7px; border-radius:50%; background:var(--green); animation: pulse 1.6s infinite; }
+        @keyframes pulse { 0%,100%{ opacity:1; } 50%{ opacity:0.3; } }
+
+        /* ── Stamp rail (signature element) ── */
+        .stamp-rail { display:flex; align-items:flex-start; margin: 26px 0 6px; }
+        .stamp-step { flex:1; display:flex; flex-direction:column; align-items:center; position:relative; }
+        .stamp {
+            width: 46px; height: 46px; border-radius: 50%;
+            border: 3px solid #d7d2c4; background:#fff;
+            display:flex; align-items:center; justify-content:center;
+            font-size:18px; transition: transform .4s cubic-bezier(.34,1.56,.64,1), border-color .3s, background .3s;
+            z-index: 2;
+        }
+        .stamp-step.done .stamp {
+            border-color: var(--green); background: var(--green); color:#fff;
+            transform: rotate(-8deg) scale(1.05);
+        }
+        .stamp-step.current .stamp {
+            border-color: var(--amber); background: var(--amber); color:#1b2233;
+            box-shadow: 0 0 0 6px rgba(245,158,11,0.18);
+        }
+        .stamp-connector {
+            position:absolute; top:23px; left:-50%; width:100%; height:3px;
+            background:#d7d2c4; z-index:1;
+        }
+        .stamp-step:first-child .stamp-connector { display:none; }
+        .stamp-step.done .stamp-connector,
+        .stamp-step.current .stamp-connector { background: var(--green); }
+        .stamp-label {
+            font-size: 10.5px; text-align:center; margin-top:8px; font-weight:700;
+            text-transform:uppercase; letter-spacing:0.02em; color: var(--ink-soft); line-height:1.3;
+        }
+        .stamp-step.current .stamp-label { color: var(--ink); }
+
+        /* ── Section cards ── */
+        .section-card {
+            background: var(--paper); border-radius: 18px; padding: 22px 22px 24px;
+            margin-bottom: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.22);
+        }
+        .section-title {
+            font-size: 13px; text-transform:uppercase; letter-spacing:0.08em; font-weight:800;
+            color: var(--ink-soft); margin: 0 0 14px; display:flex; align-items:center; gap:8px;
+        }
+
+        .repair-item {
+            display:flex; gap:12px; padding: 12px 0; border-bottom:1px solid var(--paper-dim);
+        }
+        .repair-item:last-child { border-bottom:none; }
+        .repair-check {
+            width: 22px; height:22px; border-radius:6px; flex-shrink:0; margin-top:1px;
+            display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700;
+        }
+        .repair-check.done { background: var(--green); color:#fff; }
+        .repair-check.pending { background:#fff; border:2px solid #d7d2c4; }
+        .repair-text { flex:1; }
+        .repair-text .action { font-weight:600; font-size:14.5px; line-height:1.4; }
+        .repair-text .action.done-text { color: var(--ink-soft); text-decoration: line-through; }
+        .repair-text .meta { font-size:12.5px; color: var(--ink-soft); margin-top:3px; }
+
+        .errcode-chip {
+            display:inline-flex; flex-direction:column; background:#fff7e6; border:1px solid #f3d9a4;
+            border-radius:10px; padding:8px 12px; margin: 0 8px 8px 0; min-width: 120px;
+        }
+        .errcode-chip .code { font-family:'DM Sans',monospace; font-weight:800; color:#92660b; font-size:14px; }
+        .errcode-chip .meaning { font-size:12px; color:#8a7140; margin-top:2px; line-height:1.3; }
+
+        .accordion-toggle {
+            width:100%; text-align:left; background:none; border:none; padding:0;
+            display:flex; align-items:center; justify-content:space-between; cursor:pointer;
+            font-family:inherit;
+        }
+        .accordion-chevron { transition: transform .2s; color: var(--ink-soft); }
+        .accordion-toggle.open .accordion-chevron { transform: rotate(180deg); }
+        .accordion-body { display:none; margin-top:14px; }
+        .accordion-body.open { display:block; }
+
+        .checklist-group-title { font-weight:700; font-size:13px; margin: 14px 0 6px; color: var(--ink); }
+        .checklist-row { display:flex; justify-content:space-between; align-items:center; padding:5px 0; font-size:13.5px; }
+        .checklist-row .ck-label { color: var(--ink-soft); }
+        .ck-badge { font-size:11px; font-weight:700; padding:2px 8px; border-radius:99px; }
+
+        .timeline-item { display:flex; gap:10px; padding:8px 0; font-size:13px; }
+        .timeline-item .t-date { color: var(--ink-soft); white-space:nowrap; font-family:'DM Sans',monospace; }
+        .timeline-item .t-badge { font-weight:700; padding:2px 8px; border-radius:99px; font-size:11.5px; white-space:nowrap; }
+        .timeline-item .t-note { color: var(--ink-soft); font-style: italic; }
+
+        .photo-grid { display:grid; grid-template-columns: repeat(3,1fr); gap:8px; }
+        .photo-grid img { width:100%; height:80px; object-fit:cover; border-radius:8px; cursor:pointer; }
+
+        .empty-note { color: var(--ink-soft); font-size: 13.5px; font-style: italic; }
+
+        .back-link {
+            display:block; text-align:center; margin-top: 22px; color:#7c89ab;
+            font-size:13px; text-decoration:none; cursor:pointer;
+        }
+        .back-link:hover { color:#fff; }
+
+        @media (max-width: 380px) {
+            .stamp { width:38px; height:38px; font-size:15px; }
+            .stamp-label { font-size:9.5px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-grid"></div>
+    <div class="wrap">
+        <div class="top-brand">
+            <div class="dot"></div>
+            <span>Garage Manager PRO · Client Portal</span>
+        </div>
+
+        <!-- ══════════ LOOKUP SCREEN ══════════ -->
+        <div id="lookup-view">
+            <div class="lookup-card">
+                <h1 class="display">Track your vehicle</h1>
+                <p class="sub">Enter the number plate and the 6-digit Portal PIN given to you at drop-off. No account needed.</p>
+
+                <div id="lookup-error" class="lookup-error"></div>
+
+                <label class="field-label" for="garage-code-field">Garage code</label>
+                <input id="garage-code-field" class="field-input plate" type="text" maxlength="9" placeholder="e.g. ABC-12345" autocomplete="off" />
+
+                <label class="field-label" for="plate-field">Number plate</label>
+                <input id="plate-field" class="field-input plate" type="text" placeholder="e.g. KDA 123A" autocomplete="off" />
+
+                <label class="field-label" for="pin-field">Portal PIN</label>
+                <input id="pin-field" class="field-input pin" type="text" inputmode="numeric" maxlength="6" placeholder="••••••" autocomplete="off" />
+
+                <button id="lookup-btn" class="btn-primary">🔍 Track Repair</button>
+            </div>
+            <p class="helper-link">Don't have a PIN? Ask the garage to resend it via WhatsApp.</p>
+        </div>
+
+        <!-- ══════════ STATUS SCREEN ══════════ -->
+        <div id="status-view">
+            <div class="status-header">
+                <span class="plate-chip" id="sv-plate"></span>
+                <h2 class="vehicle-name display" id="sv-vehicle"></h2>
+                <p class="vehicle-sub" id="sv-sub"></p>
+                <div class="live-pill"><span class="blip"></span> Live — updates automatically</div>
+
+                <div class="stamp-rail" id="stamp-rail"></div>
+            </div>
+
+            <!-- Mechanic & schedule summary -->
+            <div class="section-card">
+                <p class="section-title">🔧 Job Summary</p>
+                <div id="sv-summary"></div>
+            </div>
+
+            <!-- Error codes -->
+            <div class="section-card" id="errcodes-card" style="display:none;">
+                <p class="section-title">⚠️ Diagnostic Error Codes</p>
+                <div id="sv-errcodes"></div>
+            </div>
+
+            <!-- Repair plan -->
+            <div class="section-card">
+                <p class="section-title">🛠️ Repair Checklist</p>
+                <div id="sv-repairplan"></div>
+            </div>
+
+            <!-- Intake checklist (collapsible) -->
+            <div class="section-card" id="intake-card" style="display:none;">
+                <button class="accordion-toggle" id="intake-toggle">
+                    <p class="section-title" style="margin:0;">🔍 Intake Condition Checklist</p>
+                    <span class="accordion-chevron">▾</span>
+                </button>
+                <div class="accordion-body" id="intake-body"></div>
+            </div>
+
+            <!-- Status timeline -->
+            <div class="section-card" id="timeline-card" style="display:none;">
+                <p class="section-title">📋 Status History</p>
+                <div id="sv-timeline"></div>
+            </div>
+
+            <!-- Photos -->
+            <div class="section-card" id="photos-card" style="display:none;">
+                <p class="section-title">📸 Intake Photos</p>
+                <div class="photo-grid" id="sv-photos"></div>
+            </div>
+
+            <a class="back-link" id="back-btn">← Look up a different vehicle</a>
+        </div>
+
+        <a class="back-link" id="bottom-home-link" href="./index.html" style="margin-top:32px;">Garage staff? Sign in here →</a>
+    </div>
+
+    <script type="module">
+        import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
+        import { getFirestore, doc, getDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js";
+
+        // ── Firebase config (same project as the rest of the app) ──
+        const firebaseConfig = {
+            apiKey: "AIzaSyBCvFltNyGj3SYR-ADUocWD5EVjljoCEp8",
+            authDomain: "garage-manager-1ac7c.firebaseapp.com",
+            projectId: "garage-manager-1ac7c",
+            storageBucket: "garage-manager-1ac7c.firebasestorage.app",
+            messagingSenderId: "226684256206",
+            appId: "1:226684256206:web:13d600d6db4c603506759f"
+        };
+        const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        // ── Job status pipeline (mirrors index.html) ──
+        const JOB_STATUSES = [
+            { key: 'Active',               label: 'Active',               icon: '🔧' },
+            { key: 'Waiting for Parts',    label: 'Waiting for Parts',    icon: '📦' },
+            { key: 'Awaiting Approval',    label: 'Awaiting Approval',    icon: '⏳' },
+            { key: 'Ready for Collection', label: 'Ready for Collection', icon: '✅' },
+            { key: 'Completed',            label: 'Completed',           icon: '🏁' },
+        ];
+        const STATUS_BADGE_COLORS = {
+            'Active':               'background:#dbeafe;color:#1e40af;',
+            'Waiting for Parts':    'background:#fef3c7;color:#92400e;',
+            'Awaiting Approval':    'background:#ffedd5;color:#9a3412;',
+            'Ready for Collection': 'background:#ede9fe;color:#5b21b6;',
+            'Completed':            'background:#dcfce7;color:#166534;',
+        };
+        const CHECKLIST_GROUPS = {
+            exterior: [
+                { key: 'bonnet', label: 'Bonnet / Hood' }, { key: 'front_bumper', label: 'Front Bumper' },
+                { key: 'rear_bumper', label: 'Rear Bumper' }, { key: 'left_door_f', label: 'Left Front Door' },
+                { key: 'left_door_r', label: 'Left Rear Door' }, { key: 'right_door_f', label: 'Right Front Door' },
+                { key: 'right_door_r', label: 'Right Rear Door' }, { key: 'left_fender', label: 'Left Fender / Wing' },
+                { key: 'right_fender', label: 'Right Fender / Wing' }, { key: 'roof', label: 'Roof / Sunroof Panel' },
+                { key: 'boot_lid', label: 'Boot Lid / Tailgate' }, { key: 'paintwork', label: 'Overall Paintwork' },
+                { key: 'underbody', label: 'Underbody / Chassis' },
+            ],
+            glass: [
+                { key: 'windscreen', label: 'Windscreen (Front)' }, { key: 'rear_screen', label: 'Rear Windscreen' },
+                { key: 'left_window_f', label: 'Left Front Window' }, { key: 'left_window_r', label: 'Left Rear Window' },
+                { key: 'right_window_f', label: 'Right Front Window' }, { key: 'right_window_r', label: 'Right Rear Window' },
+                { key: 'left_mirror', label: 'Left Wing Mirror' }, { key: 'right_mirror', label: 'Right Wing Mirror' },
+                { key: 'rearview_mirror', label: 'Interior Rear-View Mirror' },
+            ],
+            interior: [
+                { key: 'dashboard', label: 'Dashboard / Instrument Panel' }, { key: 'steering_wheel', label: 'Steering Wheel' },
+                { key: 'seats', label: 'Seats & Upholstery' }, { key: 'seatbelts', label: 'Seatbelts (all)' },
+                { key: 'carpets', label: 'Carpets & Floor Mats' }, { key: 'radio', label: 'Radio / Infotainment System' },
+                { key: 'ac_unit', label: 'A/C Controls & Vents' }, { key: 'horn', label: 'Horn' },
+                { key: 'handbrake', label: 'Handbrake / Parking Brake' }, { key: 'gear_lever', label: 'Gear Lever / Knob' },
+                { key: 'glove_box', label: 'Glove Box' },
+            ],
+            wheels: [
+                { key: 'tyre_fl', label: 'Tyre – Front Left' }, { key: 'tyre_fr', label: 'Tyre – Front Right' },
+                { key: 'tyre_rl', label: 'Tyre – Rear Left' }, { key: 'tyre_rr', label: 'Tyre – Rear Right' },
+                { key: 'spare_wheel', label: 'Spare Wheel' }, { key: 'jack', label: 'Jack' },
+                { key: 'wheel_spanner', label: 'Wheel Spanner / Lug Wrench' }, { key: 'wheel_caps', label: 'Wheel / Hub Caps' },
+                { key: 'boot_contents', label: 'Boot / Trunk Contents' },
+            ],
+            electrical: [
+                { key: 'battery', label: 'Battery' }, { key: 'headlights', label: 'Headlights (Low/High Beam)' },
+                { key: 'tail_lights', label: 'Tail Lights' }, { key: 'brake_lights', label: 'Brake Lights' },
+                { key: 'indicators', label: 'Indicators / Turn Signals' }, { key: 'hazard_lights', label: 'Hazard Lights' },
+                { key: 'reverse_lights', label: 'Reverse Lights' }, { key: 'interior_lights', label: 'Interior / Dome Lights' },
+                { key: 'wipers_f', label: 'Front Wipers & Washer' }, { key: 'wipers_r', label: 'Rear Wiper & Washer' },
+            ],
+            engine: [
+                { key: 'engine_oil', label: 'Engine Oil Level (Visible)' }, { key: 'coolant', label: 'Coolant / Radiator Level' },
+                { key: 'brake_fluid', label: 'Brake Fluid Level' }, { key: 'power_steering', label: 'Power Steering Fluid' },
+                { key: 'washer_fluid', label: 'Windscreen Washer Fluid' }, { key: 'oil_leaks', label: 'Visible Oil / Fluid Leaks' },
+                { key: 'engine_bay', label: 'Engine Bay General Condition' },
+            ],
+        };
+        const CHECKLIST_GROUP_META = [
+            { key:'exterior', label:'🚗 Exterior & Body' }, { key:'glass', label:'🪟 Glass & Mirrors' },
+            { key:'interior', label:'🪑 Interior & Accessories' }, { key:'wheels', label:'🛞 Wheels, Tyres & Boot' },
+            { key:'electrical', label:'⚡ Electrical & Lights' }, { key:'engine', label:'🛢️ Engine Bay & Fluids' },
+        ];
+        const CK_STATUS_COLOR = {
+            'OK': 'background:#dcfce7;color:#166534;', 'Damaged': 'background:#fef9c3;color:#854d0e;',
+            'Broken': 'background:#fee2e2;color:#991b1b;', 'Missing': 'background:#fecaca;color:#7f1d1d;',
+            'Not Equipped': 'background:#f1f5f9;color:#475569;', 'Not Checked': 'background:#f8fafc;color:#94a3b8;',
+        };
+
+        // ── Elements ──
+        const lookupView   = document.getElementById('lookup-view');
+        const statusView   = document.getElementById('status-view');
+        const garageField  = document.getElementById('garage-code-field');
+        const plateField   = document.getElementById('plate-field');
+        const pinField     = document.getElementById('pin-field');
+        const lookupBtn     = document.getElementById('lookup-btn');
+        const lookupErrorEl = document.getElementById('lookup-error');
+        const backBtn       = document.getElementById('back-btn');
+
+        // ── Helpers ──
+        function showLookupError(msg) {
+            lookupErrorEl.textContent = msg;
+            lookupErrorEl.style.display = 'block';
+        }
+        function clearLookupError() {
+            lookupErrorEl.style.display = 'none';
+        }
+
+        async function computePortalLookupId(plate, pin) {
+            const normalizedPlate = (plate || '').toUpperCase().replace(/[\s-]/g, '');
+            const input = `${normalizedPlate}:${pin}`;
+            const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(input));
+            const hex = Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+            return hex.slice(0, 32);
+        }
+
+        function escapeHtml(str) {
+            return String(str ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+        }
+
+        // ── Render the stamp rail ──
+        function renderStampRail(currentStatus) {
+            const rail = document.getElementById('stamp-rail');
+            const idx = JOB_STATUSES.findIndex(s => s.key === currentStatus);
+            rail.innerHTML = JOB_STATUSES.map((s, i) => {
+                const cls = i < idx ? 'done' : i === idx ? 'current' : '';
+                return `
+                    <div class="stamp-step ${cls}">
+                        <div class="stamp-connector"></div>
+                        <div class="stamp">${i < idx ? '✓' : s.icon}</div>
+                        <div class="stamp-label">${s.label}</div>
+                    </div>`;
+            }).join('');
+        }
+
+        // ── Render job summary ──
+        function renderSummary(data) {
+            const rows = [
+                ['Assigned mechanic', data.assignedMechanic || 'Unassigned'],
+                ['Estimated delivery', data.deliveryDate || 'TBD'],
+            ];
+            let html = rows.map(([label, val]) => `
+                <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:14px;border-bottom:1px solid var(--paper-dim);">
+                    <span style="color:var(--ink-soft);">${label}</span>
+                    <span style="font-weight:600;">${escapeHtml(val)}</span>
+                </div>`).join('');
+
+            if (data.reportedProblems) {
+                html += `<div style="margin-top:14px;"><p style="font-size:12px;text-transform:uppercase;letter-spacing:0.06em;color:var(--ink-soft);font-weight:700;margin:0 0 4px;">Reported problem</p>
+                    <p style="font-size:14px;margin:0;white-space:pre-wrap;">${escapeHtml(data.reportedProblems)}</p></div>`;
+            }
+            if (data.diagnosticNotes) {
+                html += `<div style="margin-top:12px;"><p style="font-size:12px;text-transform:uppercase;letter-spacing:0.06em;color:var(--ink-soft);font-weight:700;margin:0 0 4px;">Mechanic's diagnostic notes</p>
+                    <p style="font-size:14px;margin:0;white-space:pre-wrap;">${escapeHtml(data.diagnosticNotes)}</p></div>`;
+            }
+            document.getElementById('sv-summary').innerHTML = html;
+        }
+
+        // ── Render error codes ──
+        function renderErrorCodes(data) {
+            const card = document.getElementById('errcodes-card');
+            if (!data.errorMeanings || !data.errorMeanings.trim()) { card.style.display = 'none'; return; }
+            card.style.display = 'block';
+            const lines = data.errorMeanings.split('\n').filter(Boolean);
+            document.getElementById('sv-errcodes').innerHTML = lines.map(line => {
+                const [code, ...rest] = line.split(':');
+                const meaning = rest.join(':').trim();
+                return `<div class="errcode-chip"><span class="code">${escapeHtml(code.trim())}</span><span class="meaning">${escapeHtml(meaning)}</span></div>`;
+            }).join('');
+        }
+
+        // ── Render repair plan checklist ──
+        function renderRepairPlan(data) {
+            const container = document.getElementById('sv-repairplan');
+            const items = (data.repairPlanItems || []).filter(i => !i.revoked);
+            if (items.length === 0) {
+                container.innerHTML = `<p class="empty-note">Repair plan will appear here once the mechanic completes the inspection.</p>`;
+                return;
+            }
+            container.innerHTML = items.map(item => {
+                const isDone = !!item.done;
+                return `
+                <div class="repair-item">
+                    <div class="repair-check ${isDone ? 'done' : 'pending'}">${isDone ? '✓' : ''}</div>
+                    <div class="repair-text">
+                        <div class="action ${isDone ? 'done-text' : ''}">${escapeHtml(item.action)}</div>
+                        ${item.parts ? `<div class="meta">Parts: ${escapeHtml(item.parts)}</div>` : ''}
+                        ${isDone && item.completedBy ? `<div class="meta">✓ Completed by ${escapeHtml(item.completedBy)}</div>` : ''}
+                        ${isDone && item.completionNotes ? `<div class="meta">${escapeHtml(item.completionNotes)}</div>` : ''}
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        // ── Render intake checklist ──
+        function renderIntakeChecklist(data) {
+            const card = document.getElementById('intake-card');
+            if (!data.intakeChecklist || Object.keys(data.intakeChecklist).length === 0) {
+                card.style.display = 'none'; return;
+            }
+            card.style.display = 'block';
+            let html = '';
+            CHECKLIST_GROUP_META.forEach(group => {
+                const items = CHECKLIST_GROUPS[group.key] || [];
+                const rowsHtml = items.map(item => {
+                    const entry = data.intakeChecklist[item.key];
+                    if (!entry || !entry.status) return '';
+                    const colorStyle = CK_STATUS_COLOR[entry.status] || '';
+                    return `<div class="checklist-row">
+                        <span class="ck-label">${item.label}</span>
+                        <span class="ck-badge" style="${colorStyle}">${escapeHtml(entry.status)}</span>
+                    </div>`;
+                }).join('');
+                if (rowsHtml) html += `<div class="checklist-group-title">${group.label}</div>${rowsHtml}`;
+            });
+            if (data.checklistFuelLevel || data.checklistOdometer) {
+                html += `<div class="checklist-group-title">⛽ Fuel & Mileage</div>
+                    <div class="checklist-row"><span class="ck-label">Fuel level</span><span>${escapeHtml(data.checklistFuelLevel || '—')}</span></div>
+                    <div class="checklist-row"><span class="ck-label">Odometer</span><span>${escapeHtml(data.checklistOdometer || '—')} km</span></div>`;
+            }
+            if (data.checklistGeneralNotes) {
+                html += `<div class="checklist-group-title">📝 General Notes</div>
+                    <p style="font-size:13.5px;color:var(--ink-soft);white-space:pre-wrap;margin:4px 0 0;">${escapeHtml(data.checklistGeneralNotes)}</p>`;
+            }
+            document.getElementById('intake-body').innerHTML = html || `<p class="empty-note">No checklist items recorded.</p>`;
+        }
+
+        // ── Render status timeline ──
+        function renderTimeline(data) {
+            const card = document.getElementById('timeline-card');
+            if (!data.statusHistory || data.statusHistory.length === 0) { card.style.display = 'none'; return; }
+            card.style.display = 'block';
+            document.getElementById('sv-timeline').innerHTML = data.statusHistory.map(h => {
+                const colorStyle = STATUS_BADGE_COLORS[h.status] || 'background:#f1f5f9;color:#475569;';
+                const dateStr = new Date(h.timestamp).toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'2-digit' });
+                return `<div class="timeline-item">
+                    <span class="t-date">${dateStr}</span>
+                    <span class="t-badge" style="${colorStyle}">${escapeHtml(h.status)}</span>
+                    ${h.note ? `<span class="t-note">${escapeHtml(h.note)}</span>` : ''}
+                </div>`;
+            }).join('');
+        }
+
+        // ── Render photos ──
+        function renderPhotos(data) {
+            const card = document.getElementById('photos-card');
+            if (!data.photos || data.photos.length === 0) { card.style.display = 'none'; return; }
+            card.style.display = 'block';
+            document.getElementById('sv-photos').innerHTML = data.photos.map(p =>
+                `<img src="${p.url}" alt="${escapeHtml(p.name || 'Vehicle photo')}" onclick="window.open('${p.url}','_blank')" />`
+            ).join('');
+        }
+
+        // ── Full render ──
+        function renderAll(data) {
+            document.getElementById('sv-plate').textContent = data.plate || '—';
+            document.getElementById('sv-vehicle').textContent = `${data.make || ''} ${data.model || ''}`.trim() || 'Vehicle';
+            document.getElementById('sv-sub').textContent = [data.year, data.color].filter(Boolean).join(' · ');
+            renderStampRail(data.status || 'Active');
+            renderSummary(data);
+            renderErrorCodes(data);
+            renderRepairPlan(data);
+            renderIntakeChecklist(data);
+            renderTimeline(data);
+            renderPhotos(data);
+        }
+
+        // ── Live updates via onSnapshot ──
+        // The car document is watched directly, so any change staff make
+        // (status update, repair item checked off, new photo, etc.) appears
+        // here within moments — no refresh needed.
+        let unsubscribeCarListener = null;
+        let activeGarageCode = null;
+        let activeCarId = null;
+
+        function startLiveUpdates() {
+            stopLiveUpdates();
+            const carRef = doc(db, 'garages', activeGarageCode, 'cars', activeCarId);
+            unsubscribeCarListener = onSnapshot(carRef, (snap) => {
+                if (snap.exists()) renderAll(snap.data());
+            }, (err) => {
+                console.warn('[Portal] Live listener error:', err);
+            });
+        }
+        function stopLiveUpdates() {
+            if (unsubscribeCarListener) { unsubscribeCarListener(); unsubscribeCarListener = null; }
+        }
+
+        // ── Lookup flow ──
+        async function performLookup() {
+            clearLookupError();
+            const garageCode = garageField.value.trim().toUpperCase();
+            const plate = plateField.value.trim();
+            const pin = pinField.value.trim();
+
+            if (!garageCode) return showLookupError('Please enter the garage code.');
+            if (!plate) return showLookupError('Please enter the vehicle\'s number plate.');
+            if (!/^\d{6}$/.test(pin)) return showLookupError('Portal PIN should be 6 digits.');
+
+            lookupBtn.disabled = true;
+            lookupBtn.textContent = 'Looking up…';
+
+            try {
+                const lookupId = await computePortalLookupId(plate, pin);
+                const lookupRef = doc(db, 'garages', garageCode, 'portalLookup', lookupId);
+                const lookupSnap = await getDoc(lookupRef);
+
+                if (!lookupSnap.exists()) {
+                    showLookupError('No vehicle found for that plate and PIN. Double-check both and try again.');
+                    return;
+                }
+
+                const { carId } = lookupSnap.data();
+                const carRef = doc(db, 'garages', garageCode, 'cars', carId);
+                const carSnap = await getDoc(carRef);
+
+                if (!carSnap.exists()) {
+                    showLookupError('This vehicle record could not be found. Please contact the garage.');
+                    return;
+                }
+
+                activeGarageCode = garageCode;
+                activeCarId = carId;
+
+                renderAll(carSnap.data());
+                lookupView.style.display = 'none';
+                statusView.style.display = 'block';
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+                startLiveUpdates();
+
+                // Remember for convenience on revisit (not sensitive on its own
+                // without the PIN, which we do NOT persist).
+                sessionStorage.setItem('portalGarageCode', garageCode);
+
+            } catch (err) {
+                console.error('[Portal] Lookup error:', err);
+                showLookupError('Could not connect. Please check your internet connection and try again.');
+            } finally {
+                lookupBtn.disabled = false;
+                lookupBtn.textContent = '🔍 Track Repair';
+            }
+        }
+
+        lookupBtn.addEventListener('click', performLookup);
+        [garageField, plateField, pinField].forEach(el => {
+            el.addEventListener('keydown', e => { if (e.key === 'Enter') performLookup(); });
+        });
+        pinField.addEventListener('input', () => { pinField.value = pinField.value.replace(/\D/g, ''); });
+
+        backBtn.addEventListener('click', () => {
+            stopLiveUpdates();
+            statusView.style.display = 'none';
+            lookupView.style.display = 'block';
+            plateField.value = '';
+            pinField.value = '';
+            clearLookupError();
+        });
+
+        document.getElementById('intake-toggle').addEventListener('click', () => {
+            document.getElementById('intake-toggle').classList.toggle('open');
+            document.getElementById('intake-body').classList.toggle('open');
+        });
+
+        // Pre-fill garage code from a prior visit, for convenience.
+        const savedGarageCode = sessionStorage.getItem('portalGarageCode');
+        if (savedGarageCode) garageField.value = savedGarageCode;
+
+        // Support deep links: client-portal.html?garage=ABC-12345&plate=KDA123A
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('garage')) garageField.value = urlParams.get('garage').toUpperCase();
+        if (urlParams.get('plate'))  plateField.value  = urlParams.get('plate');
+    </script>
+</body>
+</html>
