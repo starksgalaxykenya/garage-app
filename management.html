@@ -91,6 +91,10 @@
             <button id="tab-finance" class="tab-button active-tab">Finance & Reports</button>
             <button id="tab-payroll" class="tab-button">💰 Payroll & Labor</button>
             <button id="tab-inventory" class="tab-button">Parts Inventory</button>
+            <button id="tab-requests" class="tab-button flex items-center gap-1">
+                🔔 Pending Requests
+                <span id="requests-badge" class="hidden ml-1 bg-red-600 text-white text-xs font-bold rounded-full px-2 py-0.5">0</span>
+            </button>
             <button id="tab-suppliers" class="tab-button">Suppliers & Contacts</button>
             <button id="tab-invoices" class="tab-button">Invoices & Receipts</button>
             <button id="tab-quotes" class="tab-button">Repair Quotes</button>
@@ -473,14 +477,14 @@
                  <h2 class="text-3xl font-bold text-gray-800 border-b pb-2 mb-6">Parts Inventory Management</h2>
                  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                      <div class="lg:col-span-1 bg-white p-6 rounded-xl shadow-lg">
-                         <h3 class="text-xl font-semibold mb-4 text-indigo-700 border-b pb-2">Add New Part to Stock</h3>
+                         <h3 class="text-xl font-semibold mb-4 text-indigo-700 border-b pb-2">📥 Log New Part</h3>
+                         <p class="text-xs text-gray-500 mb-3">Enter the part and its <strong>selling price</strong> only. It will sit in <strong>🔔 Pending Requests</strong> until the Manager sets the buying price and approves it into stock.</p>
                          <form id="add-part-form" class="space-y-3">
                              <input id="part-name" type="text" placeholder="Part Name (e.g., Oil Filter)" required class="w-full p-2 border rounded-lg">
                              <input id="part-sku" type="text" placeholder="SKU/Reference (Optional)" class="w-full p-2 border rounded-lg">
                              <input id="part-quantity" type="number" placeholder="Initial Quantity" min="1" required class="w-full p-2 border rounded-lg">
-                             <input id="part-supplier-price" type="number" placeholder="Supplier Price (Cost)" step="0.01" min="0" required class="w-full p-2 border rounded-lg">
                              <input id="part-selling-price" type="number" placeholder="Selling Price (RRP)" step="0.01" min="0" required class="w-full p-2 border rounded-lg">
-                             <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 rounded-lg">Add Part</button>
+                             <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 rounded-lg">Submit for Approval</button>
                          </form>
                      </div>
 
@@ -571,7 +575,65 @@
                  </div>
             </div>
 
-            <div id="content-suppliers" class="tab-content hidden">
+            <!-- ====== PENDING REQUESTS TAB (Parts Requisitions + Inventory Approvals) ====== -->
+            <div id="content-requests" class="tab-content hidden">
+                <h2 class="text-3xl font-bold text-gray-800 border-b pb-2 mb-6">🔔 Pending Requests</h2>
+
+                <div class="bg-white p-6 rounded-xl shadow-lg mb-6">
+                    <h3 class="text-xl font-semibold mb-1 text-indigo-700 border-b pb-2">🧾 Parts Requisitions (from Jobs)</h3>
+                    <p class="text-xs text-gray-500 mb-4">Parts mechanics/admins have listed against a car's repair plan. Approve from stock, or place a one-time special order for parts not held in the garage store.</p>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200 text-sm">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Vehicle / Plate</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Job / Action</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Parts Requested</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Mechanic</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="requisitions-table-body" class="bg-white divide-y divide-gray-200"></tbody>
+                        </table>
+                    </div>
+                    <p id="requisitions-empty-msg" class="text-center text-gray-400 py-4 hidden">No parts requisitions yet.</p>
+                </div>
+
+                <div class="bg-white p-6 rounded-xl shadow-lg">
+                    <h3 class="text-xl font-semibold mb-1 text-indigo-700 border-b pb-2">📥 Pending Inventory Approvals</h3>
+                    <p class="text-xs text-gray-500 mb-4">New parts logged with only a selling price. Set the buying/supplier price to approve into stock — the buying price stays hidden from the inventory view.</p>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200 text-sm">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Part (SKU)</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Qty</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Selling Price</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Logged By</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="pending-inventory-table-body" class="bg-white divide-y divide-gray-200"></tbody>
+                        </table>
+                    </div>
+                    <p id="pending-inventory-empty-msg" class="text-center text-gray-400 py-4 hidden">No pending inventory approvals.</p>
+                </div>
+            </div>
+            <!-- ====== END PENDING REQUESTS TAB ====== -->
+
+            <!-- ── Generic Action Modal (Approve / One-Time Order / Reject / Set Buying Price) ── -->
+            <div id="reqActionModal" class="fixed inset-0 bg-black/60 z-50 hidden items-center justify-center p-4">
+                <div class="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
+                    <h3 id="reqActionTitle" class="text-xl font-bold mb-4 text-indigo-700"></h3>
+                    <div id="reqActionBody" class="space-y-3"></div>
+                    <p id="reqActionMsg" class="text-sm mt-2"></p>
+                    <div class="flex justify-end gap-2 mt-4">
+                        <button id="reqActionCancel" class="px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-50">Cancel</button>
+                        <button id="reqActionConfirm" class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold">Confirm</button>
+                    </div>
+                </div>
+            </div>
                  <h2 class="text-3xl font-bold text-gray-800 border-b pb-2 mb-6">Supplier Management & Ordering</h2>
                  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                      <div class="lg:col-span-1 space-y-6">
