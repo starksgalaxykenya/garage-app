@@ -98,6 +98,8 @@ function getPartsInventoryRef()    { return garageCol(db, collection, 'partsInve
 function getInvoicesRef()          { return garageCol(db, collection, 'invoices'); }
 function getQuotesRef()            { return garageCol(db, collection, 'quotes'); }
 function getInventoryLedgerRef()   { return garageCol(db, collection, 'inventoryLedger'); }
+function getPartsRequisitionsRef() { return garageCol(db, collection, 'partsRequisitions'); }
+function getPendingInventoryRef()  { return garageCol(db, collection, 'pendingInventory'); }
 function getEmployeesRef()         { return garageCol(db, collection, 'employees'); }
 function getPayrollRunsRef()       { return garageCol(db, collection, 'payrollRuns'); }
 function getCasualWorkersRef()     { return garageCol(db, collection, 'casualWorkers'); }
@@ -334,7 +336,7 @@ async function saveRolePermissions() {
     }
 }
 
-const ALL_TABS = ['tab-finance', 'tab-payroll', 'tab-inventory', 'tab-suppliers', 'tab-invoices', 'tab-quotes', 'tab-branding'];
+const ALL_TABS = ['tab-finance', 'tab-payroll', 'tab-inventory', 'tab-requests', 'tab-suppliers', 'tab-invoices', 'tab-quotes', 'tab-branding'];
 
 function applyRolePermissions(role) {
     // Manager always gets full access — never restrict
@@ -433,6 +435,8 @@ function grantManagementAccess(role) {
     listenForSuppliers();
     listenForPartsInventory();
     listenForInventoryLedger();
+    listenForPartsRequisitions();
+    listenForPendingInventory();
     listenForInvoices();
     listenForQuotes();
     if (can('viewFinancials')) {
@@ -840,20 +844,18 @@ addPartForm.addEventListener('submit', async (e) => {
         name:          document.getElementById('part-name').value,
         sku:           document.getElementById('part-sku').value || '',
         quantity:      parseInt(document.getElementById('part-quantity').value),
-        supplierPrice: parseFloat(document.getElementById('part-supplier-price').value),
         sellingPrice:  parseFloat(document.getElementById('part-selling-price').value),
+        status:        'pending',
+        loggedBy:      `${getSession().role}@${getSession().garageCode}`,
         createdAt:     serverTimestamp()
     };
-    if (part.sellingPrice < part.supplierPrice) {
-        if (!confirm(`Warning: Selling Price (KSh${part.sellingPrice.toFixed(2)}) is less than Supplier Price (KSh${part.supplierPrice.toFixed(2)}). Continue?`)) return;
-    }
     try {
-        await addDoc(getPartsInventoryRef(), part);
+        await addDoc(getPendingInventoryRef(), part);
         addPartForm.reset();
-        alert('Part added successfully!');
+        alert('Part submitted! It will appear under 🔔 Pending Requests until the Manager sets the buying price and approves it.');
     } catch (error) {
-        alert('Failed to save part.');
-        console.error('Part Save Error: ', error);
+        alert('Failed to submit part.');
+        console.error('Part Submit Error: ', error);
     }
 });
 
@@ -886,8 +888,13 @@ function calculatePartSaleProfit() {
     const sellingPrice  = parseFloat(partOption.dataset.sellingPrice);
     const totalProfit   = (sellingPrice - supplierPrice) * quantitySold;
 
-    partSaleProfitDisplay.textContent = `KSh${totalProfit.toFixed(2)}`;
-    partSaleProfitDisplay.className   = totalProfit >= 0 ? 'font-bold text-xl text-green-600' : 'font-bold text-xl text-red-600';
+    if (can('viewFinancials')) {
+        partSaleProfitDisplay.textContent = `KSh${totalProfit.toFixed(2)}`;
+        partSaleProfitDisplay.className   = totalProfit >= 0 ? 'font-bold text-xl text-green-600' : 'font-bold text-xl text-red-600';
+    } else {
+        partSaleProfitDisplay.textContent = '🔒 Hidden';
+        partSaleProfitDisplay.className   = 'font-bold text-xl text-gray-400';
+    }
     commitPartSaleBtn.disabled = false;
 }
 
@@ -982,13 +989,16 @@ function listenForPartsInventory() {
 
             const profitPerUnit = (data.sellingPrice ?? 0) - (data.supplierPrice ?? 0);
             const quantityClass = data.quantity < 5 ? 'text-red-600 font-bold' : 'text-gray-900';
+            const costCell = can('viewFinancials')
+                ? `KSh${(data.supplierPrice ?? 0).toFixed(2)}`
+                : `<span class="text-gray-400">🔒 Hidden</span>`;
 
             const tr = document.createElement('tr');
             tr.className = 'hover:bg-gray-50';
             tr.innerHTML = `
                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${data.name} (${data.sku || 'N/A'})</td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm ${quantityClass}">${data.quantity}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-red-600">KSh${(data.supplierPrice ?? 0).toFixed(2)}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-red-600">${costCell}</td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-green-600">KSh${(data.sellingPrice ?? 0).toFixed(2)}</td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <button onclick="deletePart('${docSnap.id}')" class="text-red-600 hover:text-red-900">Delete</button>
@@ -999,7 +1009,9 @@ function listenForPartsInventory() {
             if (data.quantity > 0) {
                 const option = document.createElement('option');
                 option.value = docSnap.id;
-                option.textContent = `${data.name} (Stock: ${data.quantity}, Profit/Unit: KSh${profitPerUnit.toFixed(2)})`;
+                option.textContent = can('viewFinancials')
+                    ? `${data.name} (Stock: ${data.quantity}, Profit/Unit: KSh${profitPerUnit.toFixed(2)})`
+                    : `${data.name} (Stock: ${data.quantity})`;
                 option.dataset.supplierPrice = data.supplierPrice;
                 option.dataset.sellingPrice  = data.sellingPrice;
                 option.dataset.stock         = data.quantity;
@@ -1074,6 +1086,335 @@ window.filterLedger = function () {
         (e.vehiclePlate || '').toLowerCase().includes(q) ||
         (e.purpose      || '').toLowerCase().includes(q)
     ));
+};
+
+// =================================================================
+// 5c. PENDING REQUESTS — Parts Requisitions + Pending Inventory Approvals
+// =================================================================
+
+let _allRequisitions    = [];
+let _allPendingInventory = [];
+
+function updateRequestsBadge() {
+    const badge = document.getElementById('requests-badge');
+    if (!badge) return;
+    const pendingReqs = _allRequisitions.filter(r => r.status === 'pending').length;
+    const total = pendingReqs + _allPendingInventory.length;
+    if (total > 0) {
+        badge.textContent = String(total);
+        badge.classList.remove('hidden');
+    } else {
+        badge.classList.add('hidden');
+    }
+}
+
+function listenForPartsRequisitions() {
+    const q = query(getPartsRequisitionsRef(), orderBy('createdAt', 'desc'));
+    onSnapshot(q, snapshot => {
+        _allRequisitions = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        renderRequisitions();
+        updateRequestsBadge();
+    }, err => console.error('Requisitions listener error:', err));
+}
+
+const REQ_STATUS_BADGE = {
+    'pending':        'bg-yellow-100 text-yellow-800',
+    'approved':       'bg-green-100 text-green-800',
+    'one-time-ordered': 'bg-purple-100 text-purple-800',
+    'rejected':       'bg-red-100 text-red-800'
+};
+
+function renderRequisitions() {
+    const tbody = document.getElementById('requisitions-table-body');
+    const emptyMsg = document.getElementById('requisitions-empty-msg');
+    if (!tbody) return;
+
+    if (_allRequisitions.length === 0) {
+        tbody.innerHTML = '';
+        if (emptyMsg) emptyMsg.classList.remove('hidden');
+        return;
+    }
+    if (emptyMsg) emptyMsg.classList.add('hidden');
+
+    tbody.innerHTML = _allRequisitions.map(r => {
+        const badgeCls = REQ_STATUS_BADGE[r.status] || 'bg-gray-100 text-gray-700';
+        const statusLabel = (r.status || 'pending').replace(/-/g, ' ');
+        let actions = `<span class="text-xs text-gray-400">No action needed</span>`;
+        if (r.status === 'pending' && can('viewFinancials')) {
+            actions = `
+                <div class="flex flex-col gap-1">
+                    <button onclick="openApproveFromStock('${r.id}')" class="text-xs bg-green-600 hover:bg-green-700 text-white font-bold px-2 py-1 rounded">✅ Approve from Stock</button>
+                    <button onclick="openOneTimeOrder('${r.id}')" class="text-xs bg-purple-600 hover:bg-purple-700 text-white font-bold px-2 py-1 rounded">🛒 One-Time Order</button>
+                    <button onclick="rejectRequisition('${r.id}')" class="text-xs bg-red-100 hover:bg-red-200 text-red-700 font-bold px-2 py-1 rounded">✖ Reject</button>
+                </div>`;
+        } else if (r.status !== 'pending') {
+            actions = `<span class="text-xs text-gray-500">${r.fulfillmentNote || ''}</span>`;
+        }
+        return `
+            <tr class="hover:bg-gray-50 align-top">
+                <td class="px-4 py-3 text-sm font-medium">${r.vehicle || ''}<br><span class="text-xs text-gray-500">${r.plate || 'N/A'}</span></td>
+                <td class="px-4 py-3 text-sm">${r.itemAction || '—'}</td>
+                <td class="px-4 py-3 text-sm font-semibold text-indigo-700">${r.partsText || ''}</td>
+                <td class="px-4 py-3 text-sm">${r.mechanic || 'Unassigned'}</td>
+                <td class="px-4 py-3 text-sm"><span class="px-2 py-1 rounded-full text-xs font-bold capitalize ${badgeCls}">${statusLabel}</span></td>
+                <td class="px-4 py-3 text-sm">${actions}</td>
+            </tr>`;
+    }).join('');
+}
+
+function listenForPendingInventory() {
+    const q = query(getPendingInventoryRef(), orderBy('createdAt', 'desc'));
+    onSnapshot(q, snapshot => {
+        _allPendingInventory = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        renderPendingInventory();
+        updateRequestsBadge();
+    }, err => console.error('Pending inventory listener error:', err));
+}
+
+function renderPendingInventory() {
+    const tbody = document.getElementById('pending-inventory-table-body');
+    const emptyMsg = document.getElementById('pending-inventory-empty-msg');
+    if (!tbody) return;
+
+    if (_allPendingInventory.length === 0) {
+        tbody.innerHTML = '';
+        if (emptyMsg) emptyMsg.classList.remove('hidden');
+        return;
+    }
+    if (emptyMsg) emptyMsg.classList.add('hidden');
+
+    tbody.innerHTML = _allPendingInventory.map(p => {
+        const actions = can('viewFinancials')
+            ? `<div class="flex gap-2">
+                 <button onclick="openApproveInventory('${p.id}')" class="text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-2 py-1 rounded">💰 Set Buying Price &amp; Approve</button>
+                 <button onclick="rejectPendingInventory('${p.id}')" class="text-xs bg-red-100 hover:bg-red-200 text-red-700 font-bold px-2 py-1 rounded">✖ Reject</button>
+               </div>`
+            : `<span class="text-xs text-gray-400">Awaiting manager</span>`;
+        return `
+            <tr class="hover:bg-gray-50">
+                <td class="px-4 py-3 text-sm font-medium">${p.name} (${p.sku || 'N/A'})</td>
+                <td class="px-4 py-3 text-sm">${p.quantity}</td>
+                <td class="px-4 py-3 text-sm text-green-600">KSh${(p.sellingPrice ?? 0).toFixed(2)}</td>
+                <td class="px-4 py-3 text-sm">${p.loggedBy || '—'}</td>
+                <td class="px-4 py-3 text-sm">${actions}</td>
+            </tr>`;
+    }).join('');
+}
+
+// ── Generic modal plumbing ──────────────────────────────────────────
+const reqModal        = document.getElementById('reqActionModal');
+const reqModalTitle   = document.getElementById('reqActionTitle');
+const reqModalBody    = document.getElementById('reqActionBody');
+const reqModalMsg     = document.getElementById('reqActionMsg');
+const reqModalConfirm = document.getElementById('reqActionConfirm');
+const reqModalCancel  = document.getElementById('reqActionCancel');
+
+function openReqModal(title, bodyHtml, onConfirm) {
+    if (!reqModal) return;
+    reqModalTitle.textContent = title;
+    reqModalBody.innerHTML = bodyHtml;
+    reqModalMsg.textContent = '';
+    reqModal.classList.remove('hidden');
+    reqModal.classList.add('flex');
+    reqModalConfirm.onclick = async () => {
+        reqModalConfirm.disabled = true;
+        try {
+            await onConfirm();
+            closeReqModal();
+        } catch (err) {
+            reqModalMsg.textContent = `❌ ${err.message}`;
+            reqModalMsg.className = 'text-red-600 text-sm mt-2';
+        } finally {
+            reqModalConfirm.disabled = false;
+        }
+    };
+}
+function closeReqModal() {
+    reqModal.classList.add('hidden');
+    reqModal.classList.remove('flex');
+}
+reqModalCancel?.addEventListener('click', closeReqModal);
+
+// ── Action 1: Approve requisition straight from existing inventory ──
+window.openApproveFromStock = (reqId) => {
+    const req = _allRequisitions.find(r => r.id === reqId);
+    if (!req) return;
+    const options = allPartsInventory.filter(p => p.quantity > 0)
+        .map(p => `<option value="${p.id}">${p.name} (Stock: ${p.quantity}) — KSh${(p.sellingPrice ?? 0).toFixed(2)}</option>`).join('');
+    if (!options) {
+        alert('No parts currently in stock. Use "One-Time Order" instead.');
+        return;
+    }
+    openReqModal(`Approve from Stock — ${req.partsText}`, `
+        <p class="text-sm text-gray-600">For <strong>${req.vehicle || ''} (${req.plate})</strong>, job: ${req.itemAction || ''}</p>
+        <label class="block text-sm font-medium text-gray-700">Matching Inventory Part</label>
+        <select id="reqApprovePartSelect" class="w-full p-2 border rounded-lg">${options}</select>
+        <label class="block text-sm font-medium text-gray-700">Quantity to Issue</label>
+        <input id="reqApproveQty" type="number" min="1" value="1" class="w-full p-2 border rounded-lg">
+    `, async () => {
+        const partId = document.getElementById('reqApprovePartSelect').value;
+        const qty = parseInt(document.getElementById('reqApproveQty').value) || 0;
+        const part = allPartsInventory.find(p => p.id === partId);
+        if (!part) throw new Error('Part not found.');
+        if (qty <= 0 || qty > part.quantity) throw new Error(`Only ${part.quantity} unit(s) in stock.`);
+
+        const partRef = garageDoc(db, doc, 'partsInventory', partId);
+        const reqRef  = garageDoc(db, doc, 'partsRequisitions', reqId);
+        const transRef  = doc(getDailyTransactionsRef());
+        const ledgerRef = doc(getInventoryLedgerRef());
+        const totalIncome  = (part.sellingPrice ?? 0) * qty;
+        const totalExpense = (part.supplierPrice ?? 0) * qty;
+        const totalProfit  = totalIncome - totalExpense;
+
+        await runTransaction(db, async (t) => {
+            const snap = await t.get(partRef);
+            if (!snap.exists()) throw new Error('Part no longer exists.');
+            const liveStock = snap.data().quantity ?? 0;
+            if (qty > liveStock) throw new Error(`Only ${liveStock} unit(s) left in stock.`);
+            t.update(partRef, { quantity: liveStock - qty });
+            t.update(reqRef, {
+                status: 'approved',
+                fulfillmentNote: `${qty} x ${part.name} issued from stock`,
+                fulfilledAt: serverTimestamp(),
+                fulfilledBy: `${getSession().role}@${getSession().garageCode}`
+            });
+            t.set(transRef, {
+                type: 'PART SALE', subtype: part.name, plate: req.plate,
+                description: `${qty} x ${part.name} → Requisition for ${req.vehicle} (Plate: ${req.plate})`,
+                income: totalIncome, expense: totalExpense, profit: totalProfit,
+                timestamp: serverTimestamp(), isJob: true, date: getUTCDateString()
+            });
+            t.set(ledgerRef, {
+                partId, partName: part.name, quantitySold: qty,
+                issuedTo: req.mechanic || 'Job Requisition', vehiclePlate: req.plate,
+                purpose: `Requisition: ${req.itemAction || req.partsText}`,
+                sellingPrice: part.sellingPrice, supplierPrice: part.supplierPrice,
+                totalIncome, totalExpense, totalProfit,
+                issuedBy: sessionStorage.getItem('userRole') || 'unknown',
+                timestamp: serverTimestamp(), date: getUTCDateString(),
+                requisitionId: reqId
+            });
+        });
+    });
+};
+
+// ── Action 2: One-time special order for parts not held in stock ───
+window.openOneTimeOrder = (reqId) => {
+    const req = _allRequisitions.find(r => r.id === reqId);
+    if (!req) return;
+    openReqModal(`One-Time Order — ${req.partsText}`, `
+        <p class="text-sm text-gray-600">For <strong>${req.vehicle || ''} (${req.plate})</strong>, job: ${req.itemAction || ''}</p>
+        <label class="block text-sm font-medium text-gray-700">Part Description</label>
+        <input id="otoName" type="text" value="${req.partsText || ''}" class="w-full p-2 border rounded-lg">
+        <label class="block text-sm font-medium text-gray-700">Quantity</label>
+        <input id="otoQty" type="number" min="1" value="1" class="w-full p-2 border rounded-lg">
+        <label class="block text-sm font-medium text-gray-700">Buying / Supplier Price (per unit)</label>
+        <input id="otoCost" type="number" min="0" step="0.01" class="w-full p-2 border rounded-lg">
+        <label class="block text-sm font-medium text-gray-700">Selling Price (per unit, charged to client)</label>
+        <input id="otoPrice" type="number" min="0" step="0.01" class="w-full p-2 border rounded-lg">
+        <p class="text-xs text-gray-500">This part is a one-off special order — it is recorded in Finance &amp; the Ledger but is <strong>not</strong> added to permanent inventory.</p>
+    `, async () => {
+        const name  = document.getElementById('otoName').value.trim();
+        const qty   = parseInt(document.getElementById('otoQty').value) || 0;
+        const cost  = parseFloat(document.getElementById('otoCost').value);
+        const price = parseFloat(document.getElementById('otoPrice').value);
+        if (!name || qty <= 0 || isNaN(cost) || isNaN(price)) throw new Error('Please fill in all fields.');
+
+        const reqRef    = garageDoc(db, doc, 'partsRequisitions', reqId);
+        const transRef  = doc(getDailyTransactionsRef());
+        const ledgerRef = doc(getInventoryLedgerRef());
+        const totalIncome  = price * qty;
+        const totalExpense = cost * qty;
+        const totalProfit  = totalIncome - totalExpense;
+
+        const batch = writeBatch(db);
+        batch.update(reqRef, {
+            status: 'one-time-ordered',
+            fulfillmentNote: `${qty} x ${name} — special order`,
+            fulfilledAt: serverTimestamp(),
+            fulfilledBy: `${getSession().role}@${getSession().garageCode}`
+        });
+        batch.set(transRef, {
+            type: 'ONE-TIME PART ORDER', subtype: name, plate: req.plate,
+            description: `${qty} x ${name} (special order) → ${req.vehicle} (Plate: ${req.plate})`,
+            income: totalIncome, expense: totalExpense, profit: totalProfit,
+            timestamp: serverTimestamp(), isJob: true, date: getUTCDateString()
+        });
+        batch.set(ledgerRef, {
+            partId: null, partName: name, quantitySold: qty,
+            issuedTo: req.mechanic || 'Job Requisition', vehiclePlate: req.plate,
+            purpose: `One-Time Order: ${req.itemAction || ''}`,
+            sellingPrice: price, supplierPrice: cost,
+            totalIncome, totalExpense, totalProfit,
+            issuedBy: sessionStorage.getItem('userRole') || 'unknown',
+            timestamp: serverTimestamp(), date: getUTCDateString(),
+            requisitionId: reqId, oneTime: true
+        });
+        await batch.commit();
+    });
+};
+
+window.rejectRequisition = async (reqId) => {
+    if (!confirm('Reject this parts requisition?')) return;
+    try {
+        await updateDoc(garageDoc(db, doc, 'partsRequisitions', reqId), {
+            status: 'rejected',
+            fulfillmentNote: 'Rejected by manager',
+            fulfilledAt: serverTimestamp(),
+            fulfilledBy: `${getSession().role}@${getSession().garageCode}`
+        });
+    } catch (err) {
+        alert(`Failed to reject: ${err.message}`);
+    }
+};
+
+// ── Action 3: Approve a pending inventory item by setting buying price ──
+window.openApproveInventory = (pendingId) => {
+    const p = _allPendingInventory.find(x => x.id === pendingId);
+    if (!p) return;
+    openReqModal(`Approve Into Stock — ${p.name}`, `
+        <p class="text-sm text-gray-600">Qty: <strong>${p.quantity}</strong> &nbsp;|&nbsp; Selling Price: <strong>KSh${(p.sellingPrice ?? 0).toFixed(2)}</strong></p>
+        <label class="block text-sm font-medium text-gray-700">Buying / Supplier Price (per unit)</label>
+        <input id="invApproveCost" type="number" min="0" step="0.01" class="w-full p-2 border rounded-lg">
+        <p class="text-xs text-gray-500">This price stays hidden from the Inventory view — only used for profit calculations.</p>
+    `, async () => {
+        const cost = parseFloat(document.getElementById('invApproveCost').value);
+        if (isNaN(cost) || cost < 0) throw new Error('Enter a valid buying price.');
+        if (cost > p.sellingPrice) {
+            if (!confirm(`Warning: Buying price (KSh${cost.toFixed(2)}) exceeds selling price (KSh${p.sellingPrice.toFixed(2)}). Continue?`)) {
+                throw new Error('Cancelled.');
+            }
+        }
+        const batch = writeBatch(db);
+        const newPartRef = doc(getPartsInventoryRef());
+        batch.set(newPartRef, {
+            name: p.name, sku: p.sku || '', quantity: p.quantity,
+            supplierPrice: cost, sellingPrice: p.sellingPrice,
+            createdAt: serverTimestamp(),
+            approvedBy: `${getSession().role}@${getSession().garageCode}`
+        });
+        batch.delete(garageDoc(db, doc, 'pendingInventory', pendingId));
+        const ledgerRef = doc(getInventoryLedgerRef());
+        batch.set(ledgerRef, {
+            partId: newPartRef.id, partName: p.name, quantitySold: 0,
+            issuedTo: 'Stock Intake', vehiclePlate: 'N/A',
+            purpose: `New stock approved (logged by ${p.loggedBy || 'staff'})`,
+            sellingPrice: p.sellingPrice, supplierPrice: cost,
+            totalIncome: 0, totalExpense: cost * p.quantity, totalProfit: -(cost * p.quantity),
+            issuedBy: sessionStorage.getItem('userRole') || 'unknown',
+            timestamp: serverTimestamp(), date: getUTCDateString(), stockIntake: true
+        });
+        await batch.commit();
+    });
+};
+
+window.rejectPendingInventory = async (pendingId) => {
+    if (!confirm('Reject this pending part? It will not be added to inventory.')) return;
+    try {
+        await deleteDoc(garageDoc(db, doc, 'pendingInventory', pendingId));
+    } catch (err) {
+        alert(`Failed to reject: ${err.message}`);
+    }
 };
 
 // =================================================================
