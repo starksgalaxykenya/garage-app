@@ -490,6 +490,10 @@ bootManagement();
 
 logoutBtn.addEventListener('click', () => { clearSession(); location.reload(); });
 
+document.getElementById('backToAppBtn')?.addEventListener('click', () => {
+    window.location.href = 'index.html';
+});
+
 // =================================================================
 // 3. TAB SWITCHING LOGIC
 // =================================================================
