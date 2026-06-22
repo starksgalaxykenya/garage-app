@@ -422,6 +422,15 @@ function grantManagementAccess(role) {
     const pinSection = document.getElementById('pin-management-section');
     if (pinSection) pinSection.style.display = can('managePins') ? '' : 'none';
 
+    // Financial reports (net profit chart & history) are manager-only
+    if (viewReportsBtn) viewReportsBtn.style.display = can('viewFinancials') ? '' : 'none';
+
+    // Initial state of the live job-profit calculator respects the permission
+    if (jobProfitDisplay) {
+        jobProfitDisplay.textContent = can('viewFinancials') ? 'Profit: KSh0.00' : '🔒 Profit hidden';
+        jobProfitDisplay.className = 'text-center font-bold text-lg text-gray-500';
+    }
+
     // The Payroll tab visibility is now controlled by the permission system
     // so we remove the old hardcoded line:
     // const payrollTabBtn = document.getElementById('tab-payroll');
@@ -520,10 +529,15 @@ tabNav.addEventListener('click', (event) => {
         const income  = parseFloat(jobIncomeInput.value) || 0;
         const expense = parseFloat(jobExpenseInput.value) || 0;
         const profit  = income - expense;
-        jobProfitDisplay.textContent = `Profit: KSh${profit.toFixed(2)}`;
-        jobProfitDisplay.className = profit >= 0
-            ? 'font-bold text-lg text-green-600'
-            : 'font-bold text-lg text-red-600';
+        if (can('viewFinancials')) {
+            jobProfitDisplay.textContent = `Profit: KSh${profit.toFixed(2)}`;
+            jobProfitDisplay.className = profit >= 0
+                ? 'font-bold text-lg text-green-600'
+                : 'font-bold text-lg text-red-600';
+        } else {
+            jobProfitDisplay.textContent = '🔒 Profit hidden';
+            jobProfitDisplay.className = 'font-bold text-lg text-gray-400';
+        }
     });
 });
 
@@ -549,7 +563,8 @@ jobForm.addEventListener('submit', async (e) => {
     try {
         await addDoc(getDailyTransactionsRef(), transaction);
         jobForm.reset();
-        jobProfitDisplay.textContent = 'Profit: KSh0.00';
+        jobProfitDisplay.textContent = can('viewFinancials') ? 'Profit: KSh0.00' : '🔒 Profit hidden';
+        jobProfitDisplay.className = 'font-bold text-lg text-gray-500';
     } catch (error) {
         alert('Failed to record job transaction.');
         console.error('Job Transaction Error: ', error);
@@ -627,13 +642,16 @@ function listenForDailyTransactions() {
             const tr = document.createElement('tr');
             tr.className = 'hover:bg-gray-50';
             const profitClass = profit >= 0 ? 'text-green-600 font-medium' : 'text-red-600 font-medium';
+            const profitCell = can('viewFinancials')
+                ? `<td class="px-3 py-2 whitespace-nowrap text-sm ${profitClass}">KSh${safeToFixed(profit)}</td>`
+                : `<td class="px-3 py-2 whitespace-nowrap text-sm text-gray-400">🔒 Hidden</td>`;
             tr.innerHTML = `
                 <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500">${displayTime}</td>
                 <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900">${escapeHtml(data.subtype || 'Other')}</td>
                 <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500">${escapeHtml(data.plate || 'N/A')}</td>
                 <td class="px-3 py-2 whitespace-nowrap text-sm text-green-600">KSh${safeToFixed(safeIncome)}</td>
                 <td class="px-3 py-2 whitespace-nowrap text-sm text-red-600">KSh${safeToFixed(safeExpense)}</td>
-                <td class="px-3 py-2 whitespace-nowrap text-sm ${profitClass}">KSh${safeToFixed(profit)}</td>
+                ${profitCell}
                 <td class="px-3 py-2 whitespace-nowrap text-sm">
                     <button onclick="deleteTransaction('${docSnap.id}')" class="text-red-500 hover:text-red-700">Delete</button>
                 </td>
@@ -644,8 +662,13 @@ function listenForDailyTransactions() {
         const netProfit = totalIncome - totalExpense;
         summaryIncome.textContent  = `KSh${safeToFixed(totalIncome)}`;
         summaryExpense.textContent = `KSh${safeToFixed(totalExpense)}`;
-        summaryProfit.textContent  = `KSh${safeToFixed(netProfit)}`;
-        summaryProfit.className    = netProfit >= 0 ? 'font-bold text-indigo-600' : 'font-bold text-red-600';
+        if (can('viewFinancials')) {
+            summaryProfit.textContent = `KSh${safeToFixed(netProfit)}`;
+            summaryProfit.className   = netProfit >= 0 ? 'font-bold text-indigo-600' : 'font-bold text-red-600';
+        } else {
+            summaryProfit.textContent = '🔒 Hidden';
+            summaryProfit.className   = 'font-bold text-gray-400';
+        }
         endDayBtn.disabled         = currentDailyTransactions.length === 0;
     }, error => console.error("Error listening to daily transactions: ", error));
 }
@@ -708,7 +731,9 @@ endDayBtn.addEventListener('click', async () => {
             });
         });
 
-        alert(`Day closed! Net profit: KSh${(parseFloat(summaryProfit.textContent.replace('KSh','')) || 0).toFixed(2)}`);
+        alert(can('viewFinancials')
+            ? `Day closed! Net profit: KSh${(parseFloat(summaryProfit.textContent.replace('KSh','')) || 0).toFixed(2)}`
+            : 'Day closed! P&L report saved.');
     } catch (err) {
         alert(`Could not save report: ${err.message}`);
         console.error('End Day Error:', err);
@@ -720,6 +745,10 @@ endDayBtn.addEventListener('click', async () => {
 
 
 viewReportsBtn.addEventListener('click', () => {
+    if (!can('viewFinancials')) {
+        alert('🔒 Financial reports are visible to managers only.');
+        return;
+    }
     reportViewSection.classList.remove('hidden');
     pastReportsList.innerHTML = '<p class="text-gray-500">Loading reports...</p>';
 
@@ -924,7 +953,10 @@ sellPartForm.addEventListener('submit', async (e) => {
     const totalExpense  = supplierPrice * quantitySold;
     const totalProfit   = totalIncome - totalExpense;
 
-    if (!confirm(`Confirm:\n  ${quantitySold} x ${partName}\n  Issued to: ${issuedTo}\n  Vehicle: ${carPlate}\n  Revenue: KSh${totalIncome.toFixed(2)}   Profit: KSh${totalProfit.toFixed(2)}`)) return;
+    const confirmMsg = can('viewFinancials')
+        ? `Confirm:\n  ${quantitySold} x ${partName}\n  Issued to: ${issuedTo}\n  Vehicle: ${carPlate}\n  Revenue: KSh${totalIncome.toFixed(2)}   Profit: KSh${totalProfit.toFixed(2)}`
+        : `Confirm:\n  ${quantitySold} x ${partName}\n  Issued to: ${issuedTo}\n  Vehicle: ${carPlate}\n  Revenue: KSh${totalIncome.toFixed(2)}`;
+    if (!confirm(confirmMsg)) return;
 
     commitPartSaleBtn.disabled = true;
     try {
@@ -969,9 +1001,11 @@ sellPartForm.addEventListener('submit', async (e) => {
             });
         });
 
-        alert(`Sale committed! ${quantitySold} x ${partName} issued to ${issuedTo}.\nProfit: KSh${totalProfit.toFixed(2)} recorded in Finance.`);
+        alert(can('viewFinancials')
+            ? `Sale committed! ${quantitySold} x ${partName} issued to ${issuedTo}.\nProfit: KSh${totalProfit.toFixed(2)} recorded in Finance.`
+            : `Sale committed! ${quantitySold} x ${partName} issued to ${issuedTo}.`);
         sellPartForm.reset();
-        partSaleProfitDisplay.textContent = 'KSh0.00';
+        partSaleProfitDisplay.textContent = can('viewFinancials') ? 'KSh0.00' : '🔒 Hidden';
     } catch (error) {
         alert(`Sale failed: ${error.message}`);
         console.error('Part Sale Error: ', error);
