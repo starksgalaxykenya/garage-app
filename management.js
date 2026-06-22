@@ -425,6 +425,10 @@ function grantManagementAccess(role) {
     // Financial reports (net profit chart & history) are manager-only
     if (viewReportsBtn) viewReportsBtn.style.display = can('viewFinancials') ? '' : 'none';
 
+    // Invoices table "Profit" column is manager-only
+    const invoicesProfitHeader = document.getElementById('invoices-profit-col-header');
+    if (invoicesProfitHeader) invoicesProfitHeader.classList.toggle('hidden', !can('viewFinancials'));
+
     // Initial state of the live job-profit calculator respects the permission
     if (jobProfitDisplay) {
         jobProfitDisplay.textContent = can('viewFinancials') ? 'Profit: KSh0.00' : '🔒 Profit hidden';
@@ -1058,7 +1062,16 @@ function listenForPartsInventory() {
         });
 
         attachPartSaleListeners();
+        refreshInvoiceStockDropdowns();
     }, error => console.error("Error listening to parts inventory: ", error));
+}
+
+// Keep any "Part from my stock" invoice line dropdowns in sync with live inventory
+function refreshInvoiceStockDropdowns() {
+    document.querySelectorAll('#invoice-items-container .invoice-item-row[data-type="stock"] .invoice-item-stock-select').forEach(select => {
+        const currentVal = select.value;
+        select.innerHTML = buildStockPartOptionsHtml(currentVal);
+    });
 }
 
 window.deletePart = (id) => {
@@ -1554,22 +1567,134 @@ window.deleteSupplier = deleteSupplier;
 // 7. RECEIPT & INVOICE LOGIC
 // =================================================================
 
+const INVOICE_ITEM_TYPE_LABELS = {
+    labor:   '🔧 Labor (100% profit)',
+    stock:   '📦 Part from my stock',
+    outside: '🌍 Outside / Pass-through (e.g. paint, sourced part)'
+};
+
+function buildStockPartOptionsHtml(selectedId = '') {
+    let opts = '<option value="">-- Select stocked part --</option>';
+    allPartsInventory.filter(p => p.quantity > 0).forEach(p => {
+        const sel = p.id === selectedId ? 'selected' : '';
+        opts += `<option value="${p.id}" data-cost="${p.supplierPrice ?? 0}" data-price="${p.sellingPrice ?? 0}" data-stock="${p.quantity}" data-name="${escapeHtml(p.name).replace(/"/g, '&quot;')}" ${sel}>${escapeHtml(p.name)} (Stock: ${p.quantity})</option>`;
+    });
+    return opts;
+}
+
 function addInvoiceItemRow() {
     const container = document.getElementById('invoice-items-container');
     const row = document.createElement('div');
-    row.className = 'flex space-x-2 item-row invoice-item-row mb-2';
+    row.className = 'invoice-item-row border border-gray-200 rounded-lg p-3 bg-gray-50 space-y-2';
+    row.dataset.type = 'labor';
     row.innerHTML = `
-        <input type="text" placeholder="Description" class="invoice-item-desc form-input flex-grow">
-        <input type="number" placeholder="Qty" value="1" min="1" class="invoice-item-qty form-input w-24" oninput="calculateTotal('invoice')">
-        <input type="number" placeholder="Unit Price (KSh)" value="0.00" min="0" step="0.01" class="invoice-item-unit-price form-input w-36" oninput="calculateTotal('invoice')">
-        <input type="text" placeholder="Total Amount (KSh)" value="0.00" class="invoice-item-amount form-input w-40 bg-gray-100" readonly>
-        <button type="button" onclick="this.parentNode.remove(); calculateTotal('invoice');" class="delete-item-btn p-2 text-red-500 hover:text-red-700">X</button>
+        <div class="flex gap-2 items-center">
+            <select class="invoice-item-type text-xs font-semibold p-1.5 border rounded-lg bg-white flex-grow">
+                <option value="labor">${INVOICE_ITEM_TYPE_LABELS.labor}</option>
+                <option value="stock">${INVOICE_ITEM_TYPE_LABELS.stock}</option>
+                <option value="outside">${INVOICE_ITEM_TYPE_LABELS.outside}</option>
+            </select>
+            <button type="button" onclick="this.closest('.invoice-item-row').remove(); calculateInvoiceTotals();" class="delete-item-btn p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded">✕</button>
+        </div>
+        <div class="invoice-item-fields"></div>
     `;
     container.appendChild(row);
-    calculateTotal('invoice');
+    renderInvoiceItemFields(row, 'labor');
+    row.querySelector('.invoice-item-type').addEventListener('change', (e) => {
+        renderInvoiceItemFields(row, e.target.value);
+    });
+    calculateInvoiceTotals();
 }
 
+function renderInvoiceItemFields(row, type) {
+    row.dataset.type = type;
+    const fieldsDiv = row.querySelector('.invoice-item-fields');
+
+    if (type === 'stock') {
+        fieldsDiv.innerHTML = `
+            <select class="invoice-item-stock-select w-full p-2 border rounded-lg text-sm">${buildStockPartOptionsHtml()}</select>
+            <div class="flex gap-2">
+                <input type="number" placeholder="Qty" value="1" min="1" class="invoice-item-qty p-2 border rounded-lg w-20 text-sm">
+                <input type="number" placeholder="Sell Price (KSh)" value="0.00" min="0" step="0.01" class="invoice-item-unit-price p-2 border rounded-lg flex-grow text-sm">
+                <input type="text" placeholder="Line Total" value="0.00" class="invoice-item-amount p-2 border rounded-lg w-32 bg-gray-100 text-sm font-semibold" readonly>
+            </div>
+            <p class="text-xs text-gray-400">Cost auto-filled from inventory · stock will be deducted on commit.</p>
+        `;
+        const select = fieldsDiv.querySelector('.invoice-item-stock-select');
+        const priceInput = fieldsDiv.querySelector('.invoice-item-unit-price');
+        select.addEventListener('change', () => {
+            const opt = select.options[select.selectedIndex];
+            priceInput.value = opt.dataset.price ? parseFloat(opt.dataset.price).toFixed(2) : '0.00';
+            calculateInvoiceTotals();
+        });
+    } else if (type === 'outside') {
+        fieldsDiv.innerHTML = `
+            <input type="text" placeholder="Description (e.g. Car Paint - 1L White)" class="invoice-item-desc w-full p-2 border rounded-lg text-sm">
+            <div class="flex gap-2">
+                <input type="number" placeholder="Qty" value="1" min="1" class="invoice-item-qty p-2 border rounded-lg w-16 text-sm">
+                <input type="number" placeholder="Charged to client" value="0.00" min="0" step="0.01" class="invoice-item-unit-price p-2 border rounded-lg flex-grow text-sm">
+                <input type="number" placeholder="What it cost you" value="0.00" min="0" step="0.01" class="invoice-item-unit-cost p-2 border rounded-lg flex-grow text-sm border-orange-300">
+            </div>
+            <p class="text-xs text-gray-400">"What it cost you" is the amount that isn't your profit — never printed on the invoice.</p>
+        `;
+    } else {
+        fieldsDiv.innerHTML = `
+            <input type="text" placeholder="Description (e.g. Labor - Full Service)" class="invoice-item-desc w-full p-2 border rounded-lg text-sm">
+            <div class="flex gap-2">
+                <input type="number" placeholder="Qty" value="1" min="1" class="invoice-item-qty p-2 border rounded-lg w-20 text-sm">
+                <input type="number" placeholder="Unit Price (KSh)" value="0.00" min="0" step="0.01" class="invoice-item-unit-price p-2 border rounded-lg flex-grow text-sm">
+                <input type="text" placeholder="Line Total" value="0.00" class="invoice-item-amount p-2 border rounded-lg w-32 bg-gray-100 text-sm font-semibold" readonly>
+            </div>
+        `;
+    }
+
+    fieldsDiv.querySelectorAll('input').forEach(input => {
+        input.addEventListener('input', calculateInvoiceTotals);
+    });
+    calculateInvoiceTotals();
+}
+
+function calculateInvoiceTotals() {
+    let total = 0, totalCost = 0;
+
+    document.querySelectorAll('#invoice-items-container .invoice-item-row').forEach(row => {
+        const type = row.dataset.type;
+        const qty  = parseFloat(row.querySelector('.invoice-item-qty')?.value) || 0;
+        const unitPrice = parseFloat(row.querySelector('.invoice-item-unit-price')?.value) || 0;
+        const lineTotal = qty * unitPrice;
+        total += lineTotal;
+
+        if (type === 'stock') {
+            const select = row.querySelector('.invoice-item-stock-select');
+            const opt = select?.options[select.selectedIndex];
+            const cost = opt?.dataset.cost ? parseFloat(opt.dataset.cost) : 0;
+            totalCost += cost * qty;
+        } else if (type === 'outside') {
+            const unitCost = parseFloat(row.querySelector('.invoice-item-unit-cost')?.value) || 0;
+            totalCost += unitCost * qty;
+        }
+
+        const amountField = row.querySelector('.invoice-item-amount');
+        if (amountField) amountField.value = lineTotal.toFixed(2);
+    });
+
+    document.getElementById('invoice-total-display').textContent = `KSh${total.toFixed(2)}`;
+
+    const summaryBox = document.getElementById('invoice-profit-summary');
+    if (summaryBox) {
+        if (total > 0 || totalCost > 0) {
+            summaryBox.classList.remove('hidden');
+            document.getElementById('invoice-summary-cost').textContent   = `KSh${totalCost.toFixed(2)}`;
+            document.getElementById('invoice-summary-profit').textContent = `KSh${(total - totalCost).toFixed(2)}`;
+        } else {
+            summaryBox.classList.add('hidden');
+        }
+    }
+    return total;
+}
+// Legacy name kept for the Quotes tab, which still uses the simple (no cost-basis) row layout
 function calculateTotal(type) {
+    if (type === 'invoice') return calculateInvoiceTotals();
     const container = document.getElementById(`${type}-items-container`);
     const itemRows  = container.querySelectorAll(`.${type}-item-row`);
     let total = 0;
@@ -1587,22 +1712,48 @@ function calculateTotal(type) {
 
 invoiceCreationForm.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const totalAmount = calculateTotal('invoice');
+    const totalAmount = calculateInvoiceTotals();
     const items = [];
+    const stockDeductions = []; // { partId, partName, qty, costPerUnit, sellPerUnit }
+    let totalCost = 0;
 
-    document.querySelectorAll('#invoice-items-container .invoice-item-row').forEach(row => {
-        const quantity  = parseFloat(row.querySelector('.invoice-item-qty').value) || 0;
-        const unitPrice = parseFloat(row.querySelector('.invoice-item-unit-price').value) || 0;
-        const lineTotal = quantity * unitPrice;
-        if (lineTotal > 0) {
-            items.push({ description: row.querySelector('.invoice-item-desc').value, quantity, unitPrice, amount: lineTotal });
+    const rows = document.querySelectorAll('#invoice-items-container .invoice-item-row');
+    for (const row of rows) {
+        const type = row.dataset.type;
+        const qty  = parseFloat(row.querySelector('.invoice-item-qty')?.value) || 0;
+        const unitPrice = parseFloat(row.querySelector('.invoice-item-unit-price')?.value) || 0;
+        const lineTotal = qty * unitPrice;
+        if (lineTotal <= 0) continue;
+
+        if (type === 'stock') {
+            const select = row.querySelector('.invoice-item-stock-select');
+            const opt = select?.options[select.selectedIndex];
+            if (!opt || !opt.value) { alert('Please select a stocked part for every "Part from my stock" line, or remove the line.'); return; }
+            const partId   = opt.value;
+            const partName = opt.dataset.name;
+            const stock    = parseInt(opt.dataset.stock) || 0;
+            const cost     = parseFloat(opt.dataset.cost) || 0;
+            if (qty > stock) { alert(`Cannot use ${qty} x ${partName} — only ${stock} in stock.`); return; }
+            items.push({ description: partName, quantity: qty, unitPrice, amount: lineTotal, costBasis: 'stock' });
+            stockDeductions.push({ partId, partName, qty, costPerUnit: cost, sellPerUnit: unitPrice });
+            totalCost += cost * qty;
+        } else if (type === 'outside') {
+            const desc = row.querySelector('.invoice-item-desc')?.value || 'Item';
+            const unitCost = parseFloat(row.querySelector('.invoice-item-unit-cost')?.value) || 0;
+            items.push({ description: desc, quantity: qty, unitPrice, amount: lineTotal, costBasis: 'outside', unitCost });
+            totalCost += unitCost * qty;
+        } else {
+            const desc = row.querySelector('.invoice-item-desc')?.value || 'Labor';
+            items.push({ description: desc, quantity: qty, unitPrice, amount: lineTotal, costBasis: 'labor' });
         }
-    });
+    }
 
     if (items.length === 0) {
         alert("Please add at least one item to the invoice with a total amount greater than zero.");
         return;
     }
+
+    const totalProfit = totalAmount - totalCost;
 
     const invoice = {
         invoiceNo:   `INV-${Date.now().toString().slice(-6)}`,
@@ -1610,23 +1761,58 @@ invoiceCreationForm.addEventListener('submit', async (e) => {
         clientPhone: document.getElementById('invoice-client-phone').value,
         carPlate:    document.getElementById('invoice-car-plate').value,
         items, total: totalAmount,
+        totalCost, totalProfit,
         date: getUTCDateString(), timestamp: serverTimestamp()
     };
 
     try {
-        await addDoc(getInvoicesRef(), invoice);
-        await addDoc(getDailyTransactionsRef(), {
-            type: 'JOB', subtype: 'Invoice/Receipt', plate: invoice.carPlate,
-            description: `Invoice #${invoice.invoiceNo} paid by ${invoice.clientName}`,
-            income: totalAmount, expense: 0, profit: totalAmount,
-            timestamp: serverTimestamp(), isJob: true, date: getUTCDateString()
+        const invoiceRef = doc(getInvoicesRef());
+        const transRef   = doc(getDailyTransactionsRef());
+
+        await runTransaction(db, async (transaction) => {
+            // Re-check live stock for every "from stock" line before committing anything
+            const partSnaps = [];
+            for (const sd of stockDeductions) {
+                const partRef = garageDoc(db, doc, 'partsInventory', sd.partId);
+                const snap = await transaction.get(partRef);
+                if (!snap.exists()) throw new Error(`Part "${sd.partName}" no longer exists.`);
+                const liveStock = snap.data().quantity ?? 0;
+                if (sd.qty > liveStock) throw new Error(`Only ${liveStock} unit(s) of "${sd.partName}" left in stock.`);
+                partSnaps.push({ ref: partRef, liveStock, sd });
+            }
+
+            transaction.set(invoiceRef, invoice);
+            transaction.set(transRef, {
+                type: 'JOB', subtype: 'Invoice/Receipt', plate: invoice.carPlate,
+                description: `Invoice #${invoice.invoiceNo} paid by ${invoice.clientName}`,
+                income: totalAmount, expense: totalCost, profit: totalProfit,
+                timestamp: serverTimestamp(), isJob: true, date: getUTCDateString()
+            });
+
+            partSnaps.forEach(({ ref, liveStock, sd }) => {
+                transaction.update(ref, { quantity: liveStock - sd.qty });
+                const ledgerRef = doc(getInventoryLedgerRef());
+                transaction.set(ledgerRef, {
+                    partId: sd.partId, partName: sd.partName, quantitySold: sd.qty,
+                    issuedTo: invoice.clientName, vehiclePlate: invoice.carPlate || 'N/A',
+                    purpose: `Invoice #${invoice.invoiceNo}`,
+                    sellingPrice: sd.sellPerUnit, supplierPrice: sd.costPerUnit,
+                    totalIncome: sd.sellPerUnit * sd.qty, totalExpense: sd.costPerUnit * sd.qty,
+                    totalProfit: (sd.sellPerUnit - sd.costPerUnit) * sd.qty,
+                    issuedBy: sessionStorage.getItem('userRole') || 'unknown',
+                    timestamp: serverTimestamp(), date: getUTCDateString(),
+                });
+            });
         });
+
         invoiceCreationForm.reset();
         document.getElementById('invoice-items-container').innerHTML = '';
         addInvoiceItemRow();
-        alert('Invoice committed and amount reflected in Finance!');
+        alert(can('viewFinancials')
+            ? `Invoice committed! Income: KSh${totalAmount.toFixed(2)} · Cost: KSh${totalCost.toFixed(2)} · Profit: KSh${totalProfit.toFixed(2)} recorded in Finance.`
+            : 'Invoice committed and reflected in Finance!');
     } catch (error) {
-        alert('Failed to generate or commit invoice.');
+        alert(`Failed to generate or commit invoice: ${error.message}`);
         console.error('Invoice Creation Error: ', error);
     }
 });
@@ -1639,11 +1825,15 @@ function listenForInvoices() {
             const data = docSnap.data();
             const tr = document.createElement('tr');
             tr.className = 'hover:bg-gray-50';
+            const profitCell = can('viewFinancials')
+                ? `<td class="px-3 py-2 whitespace-nowrap text-sm font-semibold ${(data.totalProfit ?? data.total ?? 0) >= 0 ? 'text-indigo-600' : 'text-red-600'}">KSh${(data.totalProfit ?? data.total ?? 0).toFixed(2)}</td>`
+                : '';
             tr.innerHTML = `
                 <td class="px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-900">${data.invoiceNo}</td>
                 <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500">${data.date}</td>
                 <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500">${data.clientName} / ${data.carPlate}</td>
                 <td class="px-3 py-2 whitespace-nowrap text-sm text-green-600 font-bold">KSh${(data.total ?? 0).toFixed(2)}</td>
+                ${profitCell}
                 <td class="px-3 py-2 whitespace-nowrap text-sm">
                     <button onclick="generateInvoicePDF('${docSnap.id}', '${data.clientPhone}')" class="text-blue-500 hover:text-blue-700 mr-2">PDF/Share</button>
                     <button onclick="deleteInvoice('${docSnap.id}')" class="text-red-500 hover:text-red-700">Delete</button>
@@ -1666,6 +1856,11 @@ async function generateInvoicePDF(invoiceId, clientPhone) {
         if (!docSnap.exists()) { alert("Invoice not found."); return; }
         const invoice  = docSnap.data();
         const branding = await getBranding();
+
+        // Managers may opt in to printing the profit margin on the PDF — off by default,
+        // and never offered to non-managers (they can't see profit anyway).
+        const includeProfitOnPdf = can('viewFinancials')
+            && confirm('Include your profit margin on this PDF? (Choose "Cancel" to keep the printed invoice client-facing only.)');
 
         const pdfDoc = new window.jspdf.jsPDF();
         let y = drawPdfHeader(pdfDoc, branding, "INVOICE / RECEIPT");
@@ -1691,6 +1886,20 @@ async function generateInvoicePDF(invoiceId, clientPhone) {
             headStyles: { fillColor: hexToRgbArr(branding.primaryColor) },
             footStyles: { fillColor: [230, 230, 255], textColor: [0, 0, 0], fontSize: 12, fontStyle: 'bold' }
         });
+
+        if (includeProfitOnPdf) {
+            const afterTableY = pdfDoc.autoTable.previous.finalY + 8;
+            pdfDoc.autoTable({
+                startY: afterTableY,
+                head: [['Internal — Profit Summary (manager copy only)', 'KSh']],
+                body: [
+                    ['Total Cost (parts/outside)', (invoice.totalCost ?? 0).toFixed(2)],
+                    ['Estimated Profit', (invoice.totalProfit ?? invoice.total ?? 0).toFixed(2)],
+                ],
+                theme: 'plain', styles: { fontSize: 9, textColor: [150, 80, 0] },
+                headStyles: { fillColor: [255, 243, 224], textColor: [150, 80, 0], fontStyle: 'bold' }
+            });
+        }
 
         drawPdfFooter(pdfDoc, branding);
 
