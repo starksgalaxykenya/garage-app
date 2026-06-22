@@ -21,13 +21,13 @@
     
     <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.js"></script>
 
-    <style>
+    <style type="text/tailwindcss">
         /* Custom styles for tab navigation */
-        .active-tab {
-            @apply bg-indigo-700 text-white;
-        }
         .tab-button {
-            @apply p-3 text-sm font-medium transition duration-150 hover:bg-indigo-200 text-indigo-800 rounded-lg;
+            @apply px-4 py-2.5 text-sm font-semibold transition duration-150 bg-gray-100 hover:bg-indigo-100 text-indigo-800 rounded-lg border border-gray-200 shadow-sm whitespace-nowrap;
+        }
+        .active-tab {
+            @apply bg-indigo-700 text-white border-indigo-700 shadow-md;
         }
     </style>
 </head>
@@ -90,7 +90,7 @@
             </div>
         </header>
 
-        <nav id="tab-nav" class="flex flex-wrap space-x-2 p-3 bg-white rounded-xl shadow-md mt-4">
+        <nav id="tab-nav" class="flex flex-wrap gap-2 p-3 bg-white rounded-xl shadow-md mt-4">
             <button id="tab-finance" class="tab-button active-tab">Finance & Reports</button>
             <button id="tab-payroll" class="tab-button">💰 Payroll & Labor</button>
             <button id="tab-inventory" class="tab-button">Parts Inventory</button>
@@ -637,6 +637,9 @@
                     </div>
                 </div>
             </div>
+
+            <!-- ====== SUPPLIER MANAGEMENT & ORDERING TAB ====== -->
+            <div id="content-suppliers" class="tab-content hidden">
                  <h2 class="text-3xl font-bold text-gray-800 border-b pb-2 mb-6">Supplier Management & Ordering</h2>
                  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                      <div class="lg:col-span-1 space-y-6">
