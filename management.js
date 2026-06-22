@@ -96,6 +96,7 @@ function getPastReportsRef()       { return garageCol(db, collection, 'financial
 function getSuppliersRef()         { return garageCol(db, collection, 'suppliers'); }
 function getPartsInventoryRef()    { return garageCol(db, collection, 'partsInventory'); }
 function getInvoicesRef()          { return garageCol(db, collection, 'invoices'); }
+function getReceiptsRef()          { return garageCol(db, collection, 'receipts'); }
 function getQuotesRef()            { return garageCol(db, collection, 'quotes'); }
 function getInventoryLedgerRef()   { return garageCol(db, collection, 'inventoryLedger'); }
 function getPartsRequisitionsRef() { return garageCol(db, collection, 'partsRequisitions'); }
@@ -1762,12 +1763,12 @@ invoiceCreationForm.addEventListener('submit', async (e) => {
         carPlate:    document.getElementById('invoice-car-plate').value,
         items, total: totalAmount,
         totalCost, totalProfit,
+        status: 'unpaid', receiptId: null,
         date: getUTCDateString(), timestamp: serverTimestamp()
     };
 
     try {
         const invoiceRef = doc(getInvoicesRef());
-        const transRef   = doc(getDailyTransactionsRef());
 
         await runTransaction(db, async (transaction) => {
             // Re-check live stock for every "from stock" line before committing anything
@@ -1782,20 +1783,17 @@ invoiceCreationForm.addEventListener('submit', async (e) => {
             }
 
             transaction.set(invoiceRef, invoice);
-            transaction.set(transRef, {
-                type: 'JOB', subtype: 'Invoice/Receipt', plate: invoice.carPlate,
-                description: `Invoice #${invoice.invoiceNo} paid by ${invoice.clientName}`,
-                income: totalAmount, expense: totalCost, profit: totalProfit,
-                timestamp: serverTimestamp(), isJob: true, date: getUTCDateString()
-            });
 
+            // Parts physically leave the shelf once the job is done, regardless of whether
+            // the client has paid yet — so stock is deducted now, but Finance (income/expense/
+            // profit) only gets recorded once the invoice is receipted via "Receipt Invoice".
             partSnaps.forEach(({ ref, liveStock, sd }) => {
                 transaction.update(ref, { quantity: liveStock - sd.qty });
                 const ledgerRef = doc(getInventoryLedgerRef());
                 transaction.set(ledgerRef, {
                     partId: sd.partId, partName: sd.partName, quantitySold: sd.qty,
                     issuedTo: invoice.clientName, vehiclePlate: invoice.carPlate || 'N/A',
-                    purpose: `Invoice #${invoice.invoiceNo}`,
+                    purpose: `Invoice #${invoice.invoiceNo} (unpaid)`,
                     sellingPrice: sd.sellPerUnit, supplierPrice: sd.costPerUnit,
                     totalIncome: sd.sellPerUnit * sd.qty, totalExpense: sd.costPerUnit * sd.qty,
                     totalProfit: (sd.sellPerUnit - sd.costPerUnit) * sd.qty,
@@ -1808,9 +1806,7 @@ invoiceCreationForm.addEventListener('submit', async (e) => {
         invoiceCreationForm.reset();
         document.getElementById('invoice-items-container').innerHTML = '';
         addInvoiceItemRow();
-        alert(can('viewFinancials')
-            ? `Invoice committed! Income: KSh${totalAmount.toFixed(2)} · Cost: KSh${totalCost.toFixed(2)} · Profit: KSh${totalProfit.toFixed(2)} recorded in Finance.`
-            : 'Invoice committed and reflected in Finance!');
+        alert(`Invoice #${invoice.invoiceNo} generated — KSh${totalAmount.toFixed(2)}.\nIt won't appear in Finance until you click "Receipt Invoice" once the client pays.`);
     } catch (error) {
         alert(`Failed to generate or commit invoice: ${error.message}`);
         console.error('Invoice Creation Error: ', error);
@@ -1825,16 +1821,25 @@ function listenForInvoices() {
             const data = docSnap.data();
             const tr = document.createElement('tr');
             tr.className = 'hover:bg-gray-50';
+            const isPaid = data.status === 'paid';
             const profitCell = can('viewFinancials')
                 ? `<td class="px-3 py-2 whitespace-nowrap text-sm font-semibold ${(data.totalProfit ?? data.total ?? 0) >= 0 ? 'text-indigo-600' : 'text-red-600'}">KSh${(data.totalProfit ?? data.total ?? 0).toFixed(2)}</td>`
                 : '';
+            const statusBadge = isPaid
+                ? `<span class="px-2 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700">✅ Paid</span>`
+                : `<span class="px-2 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-700">⏳ Unpaid</span>`;
+            const receiptAction = isPaid
+                ? `<button onclick="generateReceiptPDF('${data.receiptId}')" class="text-green-600 hover:text-green-800 mr-2">Receipt PDF</button>`
+                : `<button onclick="openReceiptModal('${docSnap.id}')" class="text-white bg-green-600 hover:bg-green-700 font-bold px-2 py-1 rounded mr-2">🧾 Receipt Invoice</button>`;
             tr.innerHTML = `
                 <td class="px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-900">${data.invoiceNo}</td>
                 <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500">${data.date}</td>
                 <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500">${data.clientName} / ${data.carPlate}</td>
                 <td class="px-3 py-2 whitespace-nowrap text-sm text-green-600 font-bold">KSh${(data.total ?? 0).toFixed(2)}</td>
                 ${profitCell}
+                <td class="px-3 py-2 whitespace-nowrap text-sm">${statusBadge}</td>
                 <td class="px-3 py-2 whitespace-nowrap text-sm">
+                    ${receiptAction}
                     <button onclick="generateInvoicePDF('${docSnap.id}', '${data.clientPhone}')" class="text-blue-500 hover:text-blue-700 mr-2">PDF/Share</button>
                     <button onclick="deleteInvoice('${docSnap.id}')" class="text-red-500 hover:text-red-700">Delete</button>
                 </td>
@@ -1922,6 +1927,147 @@ function deleteInvoice(id) {
 }
 window.generateInvoicePDF = generateInvoicePDF;
 window.deleteInvoice      = deleteInvoice;
+
+// =================================================================
+// 7b. RECEIPT LOGIC — an invoice only hits Finance once receipted
+// =================================================================
+
+const receiptModal        = document.getElementById('receiptModal');
+const receiptModalBody    = document.getElementById('receiptModalBody');
+const receiptModalMsg     = document.getElementById('receiptModalMsg');
+const receiptModalConfirm = document.getElementById('receiptModalConfirm');
+const receiptModalCancel  = document.getElementById('receiptModalCancel');
+let _activeReceiptInvoiceId = null;
+
+function openReceiptModal(invoiceId) {
+    _activeReceiptInvoiceId = invoiceId;
+    receiptModalMsg.textContent = '';
+    document.getElementById('receipt-payment-method').value = 'Cash';
+
+    getDoc(garageDoc(db, doc, 'invoices', invoiceId)).then(snap => {
+        if (!snap.exists()) { alert('Invoice not found.'); return; }
+        const inv = snap.data();
+        receiptModalBody.innerHTML = `
+            <div class="flex justify-between"><span class="text-gray-500">Invoice No.</span><span class="font-semibold">${inv.invoiceNo}</span></div>
+            <div class="flex justify-between"><span class="text-gray-500">Client</span><span class="font-semibold">${inv.clientName}</span></div>
+            <div class="flex justify-between"><span class="text-gray-500">Vehicle</span><span class="font-semibold">${inv.carPlate || 'N/A'}</span></div>
+            <div class="flex justify-between text-base pt-2 border-t"><span class="font-bold text-indigo-700">Amount Due</span><span class="font-bold text-green-600">KSh${(inv.total ?? 0).toFixed(2)}</span></div>
+        `;
+        receiptModal.classList.remove('hidden');
+        receiptModal.classList.add('flex');
+    }).catch(err => {
+        console.error('Error loading invoice for receipt:', err);
+        alert('Could not load invoice.');
+    });
+}
+window.openReceiptModal = openReceiptModal;
+
+function closeReceiptModal() {
+    receiptModal.classList.add('hidden');
+    receiptModal.classList.remove('flex');
+    _activeReceiptInvoiceId = null;
+}
+receiptModalCancel?.addEventListener('click', closeReceiptModal);
+
+receiptModalConfirm?.addEventListener('click', async () => {
+    const invoiceId = _activeReceiptInvoiceId;
+    if (!invoiceId) return;
+    const paymentMethod = document.getElementById('receipt-payment-method').value;
+
+    receiptModalConfirm.disabled = true;
+    receiptModalMsg.textContent = '⏳ Committing receipt…';
+    receiptModalMsg.className = 'text-sm mt-2 text-gray-500';
+
+    try {
+        const invoiceRef = garageDoc(db, doc, 'invoices', invoiceId);
+        const receiptRef = doc(getReceiptsRef());
+        const transRef    = doc(getDailyTransactionsRef());
+
+        await runTransaction(db, async (transaction) => {
+            const invSnap = await transaction.get(invoiceRef);
+            if (!invSnap.exists()) throw new Error('Invoice no longer exists.');
+            const inv = invSnap.data();
+            if (inv.status === 'paid') throw new Error('This invoice has already been receipted.');
+
+            const receipt = {
+                receiptNo: `RCT-${Date.now().toString().slice(-6)}`,
+                invoiceId, invoiceNo: inv.invoiceNo,
+                clientName: inv.clientName, clientPhone: inv.clientPhone || '',
+                carPlate: inv.carPlate || 'N/A',
+                items: inv.items || [],
+                total: inv.total ?? 0, totalCost: inv.totalCost ?? 0, totalProfit: inv.totalProfit ?? (inv.total ?? 0),
+                paymentMethod,
+                receivedBy: getSession().role,
+                date: getUTCDateString(), timestamp: serverTimestamp()
+            };
+
+            transaction.set(receiptRef, receipt);
+            transaction.update(invoiceRef, { status: 'paid', receiptId: receiptRef.id, paymentMethod, paidAt: serverTimestamp() });
+            transaction.set(transRef, {
+                type: 'JOB', subtype: 'Invoice/Receipt', plate: inv.carPlate || 'N/A',
+                description: `Receipt #${receipt.receiptNo} for Invoice #${inv.invoiceNo} — ${inv.clientName} (${paymentMethod})`,
+                income: inv.total ?? 0, expense: inv.totalCost ?? 0, profit: inv.totalProfit ?? (inv.total ?? 0),
+                timestamp: serverTimestamp(), isJob: true, date: getUTCDateString()
+            });
+        });
+
+        closeReceiptModal();
+        alert('✅ Payment receipted! Amount now reflected in Finance.');
+    } catch (error) {
+        receiptModalMsg.textContent = `❌ ${error.message}`;
+        receiptModalMsg.className = 'text-red-600 text-sm mt-2';
+    } finally {
+        receiptModalConfirm.disabled = false;
+    }
+});
+
+async function generateReceiptPDF(receiptId) {
+    if (!receiptId) { alert('No receipt found for this invoice yet.'); return; }
+    const { garageCode } = getSession();
+    if (!garageCode) { alert("Garage session expired. Please log out and log in again."); return; }
+    try {
+        const docSnap = await getDoc(garageDoc(db, doc, 'receipts', receiptId));
+        if (!docSnap.exists()) { alert("Receipt not found."); return; }
+        const receipt  = docSnap.data();
+        const branding = await getBranding();
+
+        const pdfDoc = new window.jspdf.jsPDF();
+        let y = drawPdfHeader(pdfDoc, branding, "PAYMENT RECEIPT");
+
+        pdfDoc.setFontSize(10); pdfDoc.setTextColor(60, 60, 60);
+        pdfDoc.text(`Receipt No: ${receipt.receiptNo}`, 14, y);
+        pdfDoc.text(`Date: ${receipt.date}`, 110, y); y += 6;
+        pdfDoc.text(`Invoice No: ${receipt.invoiceNo}`, 14, y);
+        pdfDoc.text(`Payment Method: ${receipt.paymentMethod || 'N/A'}`, 110, y); y += 6;
+        pdfDoc.text(`Client: ${receipt.clientName}`, 14, y);
+        pdfDoc.text(`Vehicle Plate: ${receipt.carPlate}`, 110, y); y += 8;
+
+        pdfDoc.autoTable({
+            startY: y,
+            head: [['Description', 'Qty', 'Unit Price (KSh)', 'Line Total (KSh)']],
+            body: (receipt.items || []).map(item => [
+                item.description,
+                (item.quantity ?? 0).toString(),
+                `KSh${(item.unitPrice ?? 0).toFixed(2)}`,
+                `KSh${(item.amount   ?? 0).toFixed(2)}`
+            ]),
+            foot: [['', '', 'AMOUNT RECEIVED', `KSh${(receipt.total ?? 0).toFixed(2)}`]],
+            theme: 'grid', styles: { fontSize: 10 },
+            headStyles: { fillColor: hexToRgbArr(branding.primaryColor) },
+            footStyles: { fillColor: [220, 252, 231], textColor: [0, 0, 0], fontSize: 12, fontStyle: 'bold' }
+        });
+
+        pdfDoc.setFontSize(10); pdfDoc.setTextColor(80, 80, 80);
+        pdfDoc.text('PAID IN FULL', 14, pdfDoc.autoTable.previous.finalY + 10);
+
+        drawPdfFooter(pdfDoc, branding);
+        pdfDoc.save(`Receipt_${receipt.receiptNo}.pdf`);
+    } catch (error) {
+        console.error("Receipt PDF Error: ", error);
+        alert("Failed to generate receipt PDF.");
+    }
+}
+window.generateReceiptPDF = generateReceiptPDF;
 
 // =================================================================
 // 8. REPAIR QUOTES LOGIC
