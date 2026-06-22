@@ -1868,7 +1868,7 @@ async function generateInvoicePDF(invoiceId, clientPhone) {
             && confirm('Include your profit margin on this PDF? (Choose "Cancel" to keep the printed invoice client-facing only.)');
 
         const pdfDoc = new window.jspdf.jsPDF();
-        let y = drawPdfHeader(pdfDoc, branding, "INVOICE / RECEIPT");
+        let y = drawPdfHeader(pdfDoc, branding, "INVOICE");
 
         pdfDoc.setFontSize(10); pdfDoc.setTextColor(60, 60, 60);
         pdfDoc.text(`Invoice No: ${invoice.invoiceNo}`, 14, y);
