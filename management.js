@@ -5,8 +5,20 @@
 // =================================================================
 
 // ========== UTILITY FUNCTIONS ==========
+// NOTE: kept the original function name (getUTCDateString) so every call site
+// across the file keeps working untouched, but it now returns the LOCAL
+// calendar date (YYYY-MM-DD) instead of the UTC date.
+//
+// Why this matters: the old version used date.toISOString(), which is always
+// UTC. For any garage east of UTC (e.g. Kenya, UTC+3), every transaction
+// logged after 21:00 local time was silently stamped with TOMORROW's date —
+// so it vanished from "Today's Transactions" the instant it was saved. This
+// was the main cause of transactions appearing to "disappear".
 function getUTCDateString(date = new Date()) {
-    return date.toISOString().split('T')[0];
+    const year  = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day   = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
 }
 
 function cleanPhoneNumber(phone) {
@@ -610,17 +622,47 @@ function safeToFixed(value, decimals = 2) {
     return num.toFixed(decimals);
 }
 
+let unsubscribeDailyTransactions = null;
+let dailyRolloverTimer = null;
+
 function listenForDailyTransactions() {
+    // Tear down any previous listener (used when the day rolls over)
+    if (unsubscribeDailyTransactions) {
+        unsubscribeDailyTransactions();
+        unsubscribeDailyTransactions = null;
+    }
+    if (dailyRolloverTimer) {
+        clearTimeout(dailyRolloverTimer);
+        dailyRolloverTimer = null;
+    }
+
     const today = getUTCDateString();
+    // NOTE: we deliberately do NOT add where('archived','!=',true) here.
+    // Firestore's "!=" operator excludes any document that doesn't have the
+    // field at all — and every existing/new transaction doc has no
+    // `archived` field unless End Day has touched it. That would have
+    // silently hidden ALL transactions, old and new, which is exactly the
+    // kind of "transactions disappear" bug we're trying to fix. Instead we
+    // filter archived items out client-side just below.
     const q = query(getDailyTransactionsRef(), where('date', '==', today), orderBy('timestamp', 'asc'));
 
-    onSnapshot(q, snapshot => {
+    // Schedule an automatic re-subscribe right after local midnight, so a
+    // console left open overnight switches over to the new day's
+    // transactions on its own instead of silently freezing on yesterday.
+    const now = new Date();
+    const nextMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 5);
+    dailyRolloverTimer = setTimeout(() => {
+        listenForDailyTransactions();
+    }, nextMidnight.getTime() - now.getTime());
+
+    unsubscribeDailyTransactions = onSnapshot(q, snapshot => {
         currentDailyTransactions = [];
         let totalIncome = 0, totalExpense = 0;
         dailyTransactionsBody.innerHTML = '';
 
         snapshot.forEach(docSnap => {
             const data = docSnap.data();
+            if (data.archived === true) return; // skip transactions already closed out by End Day
 
             const income  = parseFloat(data.income);
             const expense = parseFloat(data.expense);
@@ -695,7 +737,15 @@ async function deleteTransaction(id) {
 }
 window.deleteTransaction = deleteTransaction;
 
-// End Day — uses a transaction to prevent duplicate reports if two sessions click simultaneously
+// End Day — saves a full P&L report (with every line item) and then
+// ARCHIVES today's transactions so they stop showing under "Today" and
+// stop accumulating forever in the live collection.
+//
+// Archiving = setting archived:true + archivedDate on each transaction
+// doc (NOT deleting them) so the underlying data is never lost — it just
+// moves out of the live "today" query. This also means the Daily Report
+// PDF can show real line items, and a History view can pull them back up
+// for any past day.
 endDayBtn.addEventListener('click', async () => {
     if (currentDailyTransactions.length === 0) return;
     if (!confirm('Close today and save the P&L report? This cannot be undone.')) return;
@@ -710,19 +760,34 @@ endDayBtn.addEventListener('click', async () => {
     const { garageCode } = getSession();
 
     try {
+        // Snapshot the transaction list and totals up front (used both for
+        // the report content and the archive batch below).
+        const transactionsSnapshot = currentDailyTransactions.map(t => ({
+            id:          t.id,
+            description: t.description || t.subtype || 'Transaction',
+            subtype:     t.subtype || 'Other',
+            plate:       t.plate || 'N/A',
+            income:      t.income  || 0,
+            expense:     t.expense || 0,
+            profit:      t.profit  || 0,
+            // Firestore Timestamp objects can't always survive transaction.set
+            // cleanly inside arrays on every SDK version, so store a plain
+            // ISO string snapshot of the time alongside the raw timestamp.
+            timestamp:   t.timestamp || null,
+            timeLabel:   (t.timestamp && typeof t.timestamp.toDate === 'function')
+                            ? t.timestamp.toDate().toISOString()
+                            : null
+        }));
+        let totalIncome = 0, totalExpense = 0;
+        transactionsSnapshot.forEach(t => { totalIncome += t.income; totalExpense += t.expense; });
+        const netProfit = totalIncome - totalExpense;
+        const idsToArchive = currentDailyTransactions.map(t => t.id);
+
         await runTransaction(db, async (transaction) => {
             const existing = await transaction.get(reportRef);
             if (existing.exists()) {
                 throw new Error('A report for today already exists. Reload to see it.');
             }
-
-            // Tally from the live cache (already authoritative — onSnapshot keeps it current)
-            let totalIncome = 0, totalExpense = 0;
-            currentDailyTransactions.forEach(t => {
-                totalIncome  += t.income  || 0;
-                totalExpense += t.expense || 0;
-            });
-            const netProfit = totalIncome - totalExpense;
 
             transaction.set(reportRef, {
                 date:         today,
@@ -730,14 +795,31 @@ endDayBtn.addEventListener('click', async () => {
                 totalIncome,
                 totalExpense,
                 netProfit,
-                transactionCount: currentDailyTransactions.length,
+                transactionCount: transactionsSnapshot.length,
+                transactions: transactionsSnapshot,
                 savedAt:      serverTimestamp(),
                 savedBy:      getSession().role,
             });
         });
 
+        // Archive the day's transactions in batches (Firestore batches cap
+        // at 500 writes) so they drop out of "Today" but stay in the
+        // database for history/audit purposes.
+        const BATCH_LIMIT = 450;
+        for (let i = 0; i < idsToArchive.length; i += BATCH_LIMIT) {
+            const chunk = idsToArchive.slice(i, i + BATCH_LIMIT);
+            const batch = writeBatch(db);
+            chunk.forEach(id => {
+                batch.update(garageDoc(db, doc, 'dailyTransactions', id), {
+                    archived:     true,
+                    archivedDate: today
+                });
+            });
+            await batch.commit();
+        }
+
         alert(can('viewFinancials')
-            ? `Day closed! Net profit: KSh${(parseFloat(summaryProfit.textContent.replace('KSh','')) || 0).toFixed(2)}`
+            ? `Day closed! Net profit: KSh${netProfit.toFixed(2)}`
             : 'Day closed! P&L report saved.');
     } catch (err) {
         alert(`Could not save report: ${err.message}`);
@@ -749,6 +831,10 @@ endDayBtn.addEventListener('click', async () => {
 });
 
 
+// Cache of all loaded reports, keyed by date, so the day-detail viewer can
+// look up line items without an extra Firestore round-trip.
+let cachedReportsByDate = {};
+
 viewReportsBtn.addEventListener('click', () => {
     if (!can('viewFinancials')) {
         alert('🔒 Financial reports are visible to managers only.');
@@ -756,32 +842,53 @@ viewReportsBtn.addEventListener('click', () => {
     }
     reportViewSection.classList.remove('hidden');
     pastReportsList.innerHTML = '<p class="text-gray-500">Loading reports...</p>';
+    document.getElementById('day-detail-section').classList.add('hidden');
 
     const q = query(getPastReportsRef(), orderBy('date', 'desc'));
     getDocs(q).then(snapshot => {
         if (snapshot.empty) {
-            pastReportsList.innerHTML = '<p class="text-gray-500">No past reports saved.</p>';
+            pastReportsList.innerHTML = '<p class="text-gray-500">No past reports saved yet. Use "End Day & Save P&L Report" to create your first one.</p>';
+            document.getElementById('monthly-breakdown-body').innerHTML = '';
+            renderConsolidatedSummary({}, 0);
+            renderFinancialChart({});
             return;
         }
 
-        const monthTotals = {};
+        const monthTotals = {};       // monthKey -> { income, expense, profit, days }
+        let allTimeProfit  = 0;
+        cachedReportsByDate = {};
         pastReportsList.innerHTML = '';
 
+        // Newest first for the list, but we still need chronological data
+        // for the month breakdown table, so collect first then render.
+        const reports = [];
         snapshot.forEach(docSnap => {
             const data = docSnap.data();
+            reports.push({ id: docSnap.id, ...data });
+            cachedReportsByDate[data.date] = { id: docSnap.id, ...data };
+        });
+
+        reports.forEach(data => {
             const monthKey = data.date.substring(0, 7);
-            monthTotals[monthKey] = (monthTotals[monthKey] || 0) + data.netProfit;
+            if (!monthTotals[monthKey]) monthTotals[monthKey] = { income: 0, expense: 0, profit: 0, days: 0 };
+            monthTotals[monthKey].income  += data.totalIncome  || 0;
+            monthTotals[monthKey].expense += data.totalExpense || 0;
+            monthTotals[monthKey].profit  += data.netProfit    || 0;
+            monthTotals[monthKey].days    += 1;
+            allTimeProfit += data.netProfit || 0;
 
             const listItem = document.createElement('div');
             listItem.className = 'flex justify-between items-center p-2 bg-gray-50 rounded-lg shadow-sm';
             listItem.innerHTML = `
-                <span class="font-medium">${data.date}</span>
+                <span class="font-medium cursor-pointer hover:text-indigo-700 hover:underline" onclick="showDayDetail('${data.date}')">${data.date}</span>
                 <span class="${data.netProfit >= 0 ? 'text-green-600' : 'text-red-600'} font-bold">KSh${(data.netProfit ?? 0).toFixed(2)}</span>
-                <button onclick="generateDailyReportPDF('${docSnap.id}')" class="text-blue-500 hover:text-blue-700 text-sm">Print/View</button>
+                <button onclick="generateDailyReportPDF('${data.id}')" class="text-blue-500 hover:text-blue-700 text-sm">Print/View</button>
             `;
             pastReportsList.appendChild(listItem);
         });
 
+        renderMonthlyBreakdownTable(monthTotals);
+        renderConsolidatedSummary(monthTotals, allTimeProfit);
         renderFinancialChart(monthTotals);
     }).catch(error => {
         console.error("Error fetching reports: ", error);
@@ -789,11 +896,88 @@ viewReportsBtn.addEventListener('click', () => {
     });
 });
 
-function renderFinancialChart(monthTotals) {
+function renderMonthlyBreakdownTable(monthTotals) {
+    const tbody = document.getElementById('monthly-breakdown-body');
+    const sortedMonths = Object.keys(monthTotals).sort().reverse();
+    if (sortedMonths.length === 0) { tbody.innerHTML = ''; return; }
+
+    tbody.innerHTML = sortedMonths.map(month => {
+        const m = monthTotals[month];
+        const profitClass = m.profit >= 0 ? 'text-green-600' : 'text-red-600';
+        return `
+            <tr class="hover:bg-gray-50">
+                <td class="px-3 py-2 text-sm font-medium text-gray-700">${month}</td>
+                <td class="px-3 py-2 text-sm text-green-600">KSh${m.income.toFixed(2)}</td>
+                <td class="px-3 py-2 text-sm text-red-600">KSh${m.expense.toFixed(2)}</td>
+                <td class="px-3 py-2 text-sm font-semibold ${profitClass}">KSh${m.profit.toFixed(2)}</td>
+                <td class="px-3 py-2 text-sm text-gray-500">${m.days}</td>
+            </tr>`;
+    }).join('');
+}
+
+function renderConsolidatedSummary(monthTotals, allTimeProfit) {
+    const thisMonthKey = getUTCDateString().substring(0, 7);
+    const thisMonth = monthTotals[thisMonthKey] || { income: 0, expense: 0, profit: 0 };
+
+    document.getElementById('cons-month-income').textContent  = `KSh${thisMonth.income.toFixed(2)}`;
+    document.getElementById('cons-month-expense').textContent = `KSh${thisMonth.expense.toFixed(2)}`;
+
+    const monthProfitEl = document.getElementById('cons-month-profit');
+    monthProfitEl.textContent = `KSh${thisMonth.profit.toFixed(2)}`;
+    monthProfitEl.className = `text-lg font-bold ${thisMonth.profit >= 0 ? 'text-indigo-600' : 'text-red-600'}`;
+
+    const allTimeEl = document.getElementById('cons-alltime-profit');
+    allTimeEl.textContent = `KSh${allTimeProfit.toFixed(2)}`;
+    allTimeEl.className = `text-lg font-bold ${allTimeProfit >= 0 ? 'text-indigo-700' : 'text-red-700'}`;
+}
+
+function showDayDetail(date) {
+    const report = cachedReportsByDate[date];
+    const section = document.getElementById('day-detail-section');
+    const body    = document.getElementById('day-detail-body');
+    document.getElementById('day-detail-date').textContent = date;
+    section.classList.remove('hidden');
+
+    const items = (report && report.transactions) || [];
+    if (items.length === 0) {
+        body.innerHTML = `<tr><td colspan="6" class="px-3 py-3 text-sm text-gray-400 text-center">No itemized transactions saved for this day (older report, or day had no detail recorded).</td></tr>`;
+        return;
+    }
+
+    body.innerHTML = items.map(t => {
+        const timeLabel = (t.timestamp && typeof t.timestamp.toDate === 'function')
+            ? t.timestamp.toDate().toLocaleTimeString()
+            : (t.timeLabel ? new Date(t.timeLabel).toLocaleTimeString() : '—');
+        const profitClass = (t.profit || 0) >= 0 ? 'text-green-600' : 'text-red-600';
+        return `
+            <tr class="hover:bg-gray-50">
+                <td class="px-3 py-2 text-sm text-gray-500">${timeLabel}</td>
+                <td class="px-3 py-2 text-sm text-gray-900">${escapeHtml(t.description || t.subtype || '')}</td>
+                <td class="px-3 py-2 text-sm text-gray-500">${escapeHtml(t.plate || 'N/A')}</td>
+                <td class="px-3 py-2 text-sm text-green-600">KSh${(t.income || 0).toFixed(2)}</td>
+                <td class="px-3 py-2 text-sm text-red-600">KSh${(t.expense || 0).toFixed(2)}</td>
+                <td class="px-3 py-2 text-sm font-medium ${profitClass}">KSh${(t.profit || 0).toFixed(2)}</td>
+            </tr>`;
+    }).join('');
+
+    section.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+window.showDayDetail = showDayDetail;
+
+document.getElementById('day-detail-close-btn')?.addEventListener('click', () => {
+    document.getElementById('day-detail-section').classList.add('hidden');
+});
+
+function renderFinancialChart(monthTotalsRaw) {
     if (plChartInstance) plChartInstance.destroy();
 
-    const sortedMonths = Object.keys(monthTotals).sort();
-    const profits = sortedMonths.map(month => monthTotals[month]);
+    // Accept either the old shape (plain number per month) or the new
+    // shape ({income, expense, profit, days}) for backward compatibility.
+    const sortedMonths = Object.keys(monthTotalsRaw).sort();
+    const profits = sortedMonths.map(month => {
+        const v = monthTotalsRaw[month];
+        return typeof v === 'number' ? v : v.profit;
+    });
 
     const ctx = document.getElementById('pl-chart').getContext('2d');
     plChartInstance = new Chart(ctx, {
@@ -848,7 +1032,8 @@ async function generateDailyReportPDF(reportId) {
 
         const transactionBody = (report.transactions || []).map(t => [
             (t.timestamp && typeof t.timestamp.toDate === 'function')
-                ? t.timestamp.toDate().toLocaleTimeString() : 'N/A',
+                ? t.timestamp.toDate().toLocaleTimeString()
+                : (t.timeLabel ? new Date(t.timeLabel).toLocaleTimeString() : 'N/A'),
             t.description,
             (t.income  ?? 0).toFixed(2),
             (t.expense ?? 0).toFixed(2),
@@ -858,7 +1043,7 @@ async function generateDailyReportPDF(reportId) {
         pdfDoc.autoTable({
             startY: pdfDoc.autoTable.previous.finalY + 15,
             head: [['Time', 'Description', 'Income (KSh)', 'Expense (KSh)', 'Profit (KSh)']],
-            body: transactionBody,
+            body: transactionBody.length ? transactionBody : [['—', 'No itemized transactions saved for this report', '-', '-', '-']],
             theme: 'striped', styles: { fontSize: 8 },
             headStyles: { fillColor: hexToRgbArr(branding.primaryColor) }
         });
