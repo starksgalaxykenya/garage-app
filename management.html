@@ -175,16 +175,76 @@
                 
                 <div id="report-view-section" class="mt-6 bg-white p-6 rounded-xl shadow-lg hidden">
                     <h3 class="text-2xl font-semibold mb-4 text-indigo-700 border-b pb-2">Financial Reports & Trends</h3>
+
+                    <!-- Consolidated / all-time + this-month summary -->
+                    <div id="consolidated-summary" class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+                        <div class="bg-indigo-50 rounded-lg p-3 text-center">
+                            <p class="text-xs text-gray-500">This Month Income</p>
+                            <p id="cons-month-income" class="text-lg font-bold text-green-600">KSh0.00</p>
+                        </div>
+                        <div class="bg-indigo-50 rounded-lg p-3 text-center">
+                            <p class="text-xs text-gray-500">This Month Expense</p>
+                            <p id="cons-month-expense" class="text-lg font-bold text-red-600">KSh0.00</p>
+                        </div>
+                        <div class="bg-indigo-50 rounded-lg p-3 text-center">
+                            <p class="text-xs text-gray-500">This Month Net Profit</p>
+                            <p id="cons-month-profit" class="text-lg font-bold text-indigo-600">KSh0.00</p>
+                        </div>
+                        <div class="bg-indigo-100 rounded-lg p-3 text-center">
+                            <p class="text-xs text-gray-500">All-Time Net Profit</p>
+                            <p id="cons-alltime-profit" class="text-lg font-bold text-indigo-700">KSh0.00</p>
+                        </div>
+                    </div>
+
                     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                         <div class="lg:col-span-2">
                             <h4 class="font-medium mb-2">Monthly Net Profit Trend</h4>
                             <canvas id="pl-chart" class="w-full h-80"></canvas>
+
+                            <h4 class="font-medium mb-2 mt-6">Monthly Breakdown</h4>
+                            <div class="overflow-x-auto">
+                                <table class="min-w-full divide-y divide-gray-200 text-sm">
+                                    <thead class="bg-gray-50">
+                                        <tr>
+                                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Month</th>
+                                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Income</th>
+                                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Expense</th>
+                                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Net Profit</th>
+                                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Days</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="monthly-breakdown-body" class="bg-white divide-y divide-gray-200"></tbody>
+                                </table>
+                            </div>
                         </div>
                         <div class="lg:col-span-1">
                             <h4 class="font-medium mb-2">Past Daily Reports</h4>
                             <div id="past-reports-list" class="space-y-2 max-h-96 overflow-y-auto">
                                 <p class="text-gray-500">Click 'View Reports' to load...</p>
                             </div>
+                        </div>
+                    </div>
+
+                    <!-- Day detail viewer (line items for a selected past day) -->
+                    <div id="day-detail-section" class="mt-6 border-t pt-4 hidden">
+                        <div class="flex justify-between items-center mb-3">
+                            <h4 class="text-lg font-semibold text-indigo-700">Day Detail: <span id="day-detail-date"></span></h4>
+                            <button id="day-detail-close-btn" class="text-gray-400 hover:text-gray-600 text-sm">✕ Close</button>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full divide-y divide-gray-200 text-sm">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Time</th>
+                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Description</th>
+                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Plate</th>
+                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Income</th>
+                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Expense</th>
+                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Profit</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="day-detail-body" class="bg-white divide-y divide-gray-200"></tbody>
+                            </table>
                         </div>
                     </div>
                 </div>
