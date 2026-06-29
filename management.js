@@ -465,6 +465,9 @@ function grantManagementAccess(role) {
     listenForPendingInventory();
     listenForInvoices();
     listenForQuotes();
+    listenForActiveJobCars();
+    listenForInvoiceNotifications();
+    applyDefaultVatToInvoiceForm();
     if (can('viewFinancials')) {
         listenForEmployees();
         listenForCasualWorkers();
@@ -1753,11 +1756,270 @@ window.deleteSupplier = deleteSupplier;
 // 7. RECEIPT & INVOICE LOGIC
 // =================================================================
 
-const INVOICE_ITEM_TYPE_LABELS = {
+// ── Booked Cars (from the Garage App) + Completion Notifications ──
+// The Garage App (index.html) and Garage Management Console (this file)
+// share the same Firestore 'cars' collection — garageCol() namespaces it to
+// the current garage automatically, so no extra wiring is needed there.
+function getCarsRef()          { return garageCol(db, collection, 'cars'); }
+function getNotificationsRef() { return garageCol(db, collection, 'notifications'); }
+
+const JOB_STATUSES_MGMT = ['Active', 'Waiting for Parts', 'Awaiting Approval', 'Ready for Collection'];
+
+let allActiveJobCars = [];
+let allCompletedJobCars = [];
+let allInvoiceNotifications = [];
+let _activeJobsFilter = 'active'; // 'active' | 'completed'
+
+function listenForActiveJobCars() {
+    const q = query(getCarsRef(), where('status', 'in', JOB_STATUSES_MGMT), orderBy('createdAt', 'desc'));
+    onSnapshot(q, snapshot => {
+        allActiveJobCars = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        if (_activeJobsFilter === 'active') renderActiveJobsTable();
+    }, err => console.error('Active job cars listener error:', err));
+
+    const qCompleted = query(getCarsRef(), where('status', '==', 'Completed'), orderBy('createdAt', 'desc'));
+    onSnapshot(qCompleted, snapshot => {
+        allCompletedJobCars = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        if (_activeJobsFilter === 'completed') renderActiveJobsTable();
+    }, err => console.error('Completed job cars listener error:', err));
+}
+
+// Has any invoice already been generated against this car?
+function carHasInvoice(carId) {
+    return allInvoices.some(inv => inv.sourceCarId === carId);
+}
+
+function renderActiveJobsTable() {
+    const tbody = document.getElementById('active-jobs-table-body');
+    const emptyMsg = document.getElementById('active-jobs-empty-msg');
+    if (!tbody) return;
+
+    const list = _activeJobsFilter === 'active' ? allActiveJobCars : allCompletedJobCars;
+
+    if (list.length === 0) {
+        tbody.innerHTML = '';
+        if (emptyMsg) emptyMsg.classList.remove('hidden');
+        return;
+    }
+    if (emptyMsg) emptyMsg.classList.add('hidden');
+
+    tbody.innerHTML = list.map(car => {
+        const planItems = (car.repairPlanItems || []).filter(i => !i.revoked);
+        const planSummary = planItems.length > 0
+            ? `${planItems.length} item${planItems.length === 1 ? '' : 's'} (${planItems.filter(i => i.done).length} done)`
+            : '<span class="text-gray-400">None logged</span>';
+
+        const invoiced = carHasInvoice(car.id);
+        const invoiceBadge = invoiced
+            ? `<span class="px-2 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700">✅ Invoiced</span>`
+            : `<span class="px-2 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-700">⏳ Not yet</span>`;
+
+        const statusBadgeCls = car.status === 'Completed' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700';
+
+        return `
+            <tr class="hover:bg-gray-50 align-top">
+                <td class="px-4 py-3 text-sm font-medium">${escapeHtml(car.plate || 'N/A')}<br><span class="text-xs text-gray-500">${escapeHtml(car.make || '')} ${escapeHtml(car.model || '')} (${escapeHtml(String(car.year || 'N/A'))})</span></td>
+                <td class="px-4 py-3 text-sm">${escapeHtml(car.clientName || 'N/A')}<br><span class="text-xs text-gray-500">${escapeHtml(car.clientPhone || '')}</span></td>
+                <td class="px-4 py-3 text-sm"><span class="px-2 py-1 rounded-full text-xs font-bold ${statusBadgeCls}">${escapeHtml(car.status || '—')}</span></td>
+                <td class="px-4 py-3 text-sm">${planSummary}</td>
+                <td class="px-4 py-3 text-sm">${invoiceBadge}</td>
+                <td class="px-4 py-3 text-sm">
+                    <button onclick="startInvoiceFromCar('${car.id}')" class="text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-2 py-1 rounded">🧾 ${invoiced ? 'New Invoice' : 'Create Invoice'}</button>
+                </td>
+            </tr>`;
+    }).join('');
+}
+
+document.getElementById('active-jobs-filter-active')?.addEventListener('click', () => {
+    _activeJobsFilter = 'active';
+    document.getElementById('active-jobs-filter-active').className = 'text-xs font-bold px-3 py-1.5 rounded-full bg-indigo-600 text-white';
+    document.getElementById('active-jobs-filter-completed').className = 'text-xs font-bold px-3 py-1.5 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200';
+    renderActiveJobsTable();
+});
+document.getElementById('active-jobs-filter-completed')?.addEventListener('click', () => {
+    _activeJobsFilter = 'completed';
+    document.getElementById('active-jobs-filter-completed').className = 'text-xs font-bold px-3 py-1.5 rounded-full bg-indigo-600 text-white';
+    document.getElementById('active-jobs-filter-active').className = 'text-xs font-bold px-3 py-1.5 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200';
+    renderActiveJobsTable();
+});
+
+// ── Pull a car's details + repair plan into the invoice form ──
+window.startInvoiceFromCar = (carId) => {
+    const car = allActiveJobCars.find(c => c.id === carId) || allCompletedJobCars.find(c => c.id === carId);
+    if (!car) { alert('Could not find that job — it may have been removed.'); return; }
+    prefillInvoiceFromCar(car);
+    // Jump to the invoice tab/form so the manager lands on it immediately
+    document.getElementById('tab-invoices')?.click();
+    document.getElementById('invoice-creation-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+};
+
+function prefillInvoiceFromCar(car) {
+    document.getElementById('invoice-client-name').value  = car.clientName || '';
+    document.getElementById('invoice-client-phone').value = car.clientPhone || '';
+    document.getElementById('invoice-car-plate').value    = car.plate || '';
+    document.getElementById('invoice-source-car-id').value = car.id;
+
+    const banner = document.getElementById('invoice-source-car-banner');
+    if (banner) {
+        banner.textContent = `🔗 Linked to job: ${car.plate || 'N/A'} — ${car.make || ''} ${car.model || ''}`.trim();
+        banner.classList.remove('hidden');
+    }
+    document.getElementById('invoice-clear-source-btn')?.classList.remove('hidden');
+
+    // Rebuild the items list from the car's repair plan, one row per action item.
+    // Prices are left at 0 — the main app never captures pricing, so the manager
+    // fills them in here, which is the whole point of approving parts/labor centrally.
+    const container = document.getElementById('invoice-items-container');
+    container.innerHTML = '';
+    const planItems = (car.repairPlanItems || []).filter(i => !i.revoked && i.action);
+
+    if (planItems.length === 0) {
+        addInvoiceItemRow();
+        return;
+    }
+    planItems.forEach(item => {
+        if (item.parts && item.parts.trim()) {
+            addInvoiceItemRow({ type: 'stock', category: 'parts', description: item.parts.trim() });
+        }
+        addInvoiceItemRow({ type: 'labor', category: 'labor', description: item.action.trim() });
+    });
+}
+
+function clearInvoiceSourceCar() {
+    document.getElementById('invoice-source-car-id').value = '';
+    document.getElementById('invoice-source-car-banner')?.classList.add('hidden');
+    document.getElementById('invoice-clear-source-btn')?.classList.add('hidden');
+}
+document.getElementById('invoice-clear-source-btn')?.addEventListener('click', clearInvoiceSourceCar);
+window.clearInvoiceSourceCar = clearInvoiceSourceCar;
+
+function resetInvoiceDiscountVatFields() {
+    const discountEnabled = document.getElementById('invoice-discount-enabled');
+    if (discountEnabled) discountEnabled.checked = false;
+    document.getElementById('invoice-discount-fields')?.classList.add('hidden');
+    const discountValue = document.getElementById('invoice-discount-value');
+    if (discountValue) discountValue.value = '0';
+
+    // VAT resets back to the garage's default rather than off-and-zero
+    applyDefaultVatToInvoiceForm();
+}
+
+// ── Completion notifications ("🔔 Jobs awaiting invoicing") ──
+function listenForInvoiceNotifications() {
+    const q = query(getNotificationsRef(), where('type', '==', 'invoice_needed'), orderBy('createdAt', 'desc'));
+    onSnapshot(q, snapshot => {
+        allInvoiceNotifications = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        renderInvoiceNotifications();
+    }, err => console.error('Invoice notifications listener error:', err));
+}
+
+function renderInvoiceNotifications() {
+    const banner = document.getElementById('invoice-notifications-banner');
+    const list = document.getElementById('invoice-notifications-list');
+    const countBadge = document.getElementById('invoice-notif-count');
+    const tabBadge = document.getElementById('invoices-tab-badge');
+    if (!banner || !list) return;
+
+    const unresolved = allInvoiceNotifications.filter(n => !n.invoiced);
+
+    if (tabBadge) {
+        if (unresolved.length > 0) {
+            tabBadge.textContent = String(unresolved.length);
+            tabBadge.classList.remove('hidden');
+        } else {
+            tabBadge.classList.add('hidden');
+        }
+    }
+
+    if (unresolved.length === 0) {
+        banner.classList.add('hidden');
+        list.innerHTML = '';
+        return;
+    }
+    banner.classList.remove('hidden');
+    if (countBadge) countBadge.textContent = String(unresolved.length);
+
+    list.innerHTML = unresolved.map(n => `
+        <div class="flex items-center justify-between bg-white border border-amber-200 rounded-lg p-3">
+            <div class="text-sm">
+                <span class="font-semibold">${escapeHtml(n.plate || 'N/A')}</span>
+                <span class="text-gray-500"> — ${escapeHtml(n.vehicle || '')} · ${escapeHtml(n.clientName || 'N/A')}</span>
+            </div>
+            <div class="flex gap-2">
+                <button onclick="startInvoiceFromNotification('${n.id}')" class="text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-3 py-1.5 rounded">🧾 Create Invoice</button>
+                <button onclick="dismissInvoiceNotification('${n.id}')" class="text-xs text-gray-400 hover:text-gray-600 px-2">Dismiss</button>
+            </div>
+        </div>
+    `).join('');
+}
+
+window.startInvoiceFromNotification = (notifId) => {
+    const n = allInvoiceNotifications.find(x => x.id === notifId);
+    if (!n) return;
+    const car = allCompletedJobCars.find(c => c.id === n.carId) || allActiveJobCars.find(c => c.id === n.carId);
+    if (car) {
+        prefillInvoiceFromCar(car);
+    } else {
+        // Fall back to the notification's own snapshot of the job if the car
+        // listener hasn't caught up yet (e.g. just-completed job).
+        document.getElementById('invoice-client-name').value  = n.clientName || '';
+        document.getElementById('invoice-client-phone').value = n.clientPhone || '';
+        document.getElementById('invoice-car-plate').value    = n.plate || '';
+        document.getElementById('invoice-source-car-id').value = n.carId || '';
+        document.getElementById('invoice-source-car-banner')?.classList.remove('hidden');
+        document.getElementById('invoice-source-car-banner').textContent = `🔗 Linked to job: ${n.plate || 'N/A'}`;
+        document.getElementById('invoice-clear-source-btn')?.classList.remove('hidden');
+    }
+    document.getElementById('tab-invoices')?.click();
+    document.getElementById('invoice-creation-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+};
+
+window.dismissInvoiceNotification = async (notifId) => {
+    try {
+        await updateDoc(garageDoc(db, doc, 'notifications', notifId), {
+            invoiced: true, dismissedBy: `${getSession().role}@${getSession().garageCode}`, dismissedAt: serverTimestamp()
+        });
+    } catch (err) {
+        console.error('Failed to dismiss notification:', err);
+    }
+};
+
+// Called once an invoice tied to a car successfully commits — clears the
+// "needs invoicing" badge for that job and resolves any matching notification.
+async function markCarAsInvoiced(carId, invoiceId, invoiceNo) {
+    try {
+        const matching = allInvoiceNotifications.filter(n => n.carId === carId && !n.invoiced);
+        for (const n of matching) {
+            await updateDoc(garageDoc(db, doc, 'notifications', n.id), {
+                invoiced: true, invoiceId, invoiceNo,
+                resolvedBy: `${getSession().role}@${getSession().garageCode}`, resolvedAt: serverTimestamp()
+            });
+        }
+    } catch (err) {
+        console.error('Failed to resolve invoicing notification:', err);
+    }
+}
+
+
     labor:   '🔧 Labor (100% profit)',
     stock:   '📦 Part from my stock',
     outside: '🌍 Outside / Pass-through (e.g. paint, sourced part)'
 };
+
+// Invoice category — separate from cost-basis type. Used purely to group lines
+// on the COLLATED invoice ("Parts: KSh X total", "Consumables: KSh Y total", etc).
+// Defaults to a sensible value based on cost-basis type, but the manager can
+// re-tag any line (e.g. a "stock" item that's really a consumable like brake fluid).
+const INVOICE_CATEGORY_LABELS = {
+    labor:       '🔧 Labor',
+    parts:       '🔩 Parts',
+    consumables: '🧴 Consumables'
+};
+function defaultCategoryForType(type) {
+    if (type === 'labor') return 'labor';
+    if (type === 'stock') return 'parts';
+    return 'consumables'; // 'outside' lines are usually consumables/pass-through
+}
 
 function buildStockPartOptionsHtml(selectedId = '') {
     let opts = '<option value="">-- Select stocked part --</option>';
@@ -1768,11 +2030,20 @@ function buildStockPartOptionsHtml(selectedId = '') {
     return opts;
 }
 
-function addInvoiceItemRow() {
+function invoiceCategorySelectHtml(selectedCategory) {
+    return `<select class="invoice-item-category text-xs p-1.5 border rounded-lg bg-white">
+        ${Object.entries(INVOICE_CATEGORY_LABELS).map(([val, label]) =>
+            `<option value="${val}" ${val === selectedCategory ? 'selected' : ''}>${label}</option>`).join('')}
+    </select>`;
+}
+
+function addInvoiceItemRow(prefill = null) {
     const container = document.getElementById('invoice-items-container');
     const row = document.createElement('div');
     row.className = 'invoice-item-row border border-gray-200 rounded-lg p-3 bg-gray-50 space-y-2';
-    row.dataset.type = 'labor';
+    const initialType = prefill?.type || 'labor';
+    row.dataset.type = initialType;
+    row.dataset.category = prefill?.category || defaultCategoryForType(initialType);
     row.innerHTML = `
         <div class="flex gap-2 items-center">
             <select class="invoice-item-type text-xs font-semibold p-1.5 border rounded-lg bg-white flex-grow">
@@ -1780,21 +2051,29 @@ function addInvoiceItemRow() {
                 <option value="stock">${INVOICE_ITEM_TYPE_LABELS.stock}</option>
                 <option value="outside">${INVOICE_ITEM_TYPE_LABELS.outside}</option>
             </select>
+            ${invoiceCategorySelectHtml(row.dataset.category)}
             <button type="button" onclick="this.closest('.invoice-item-row').remove(); calculateInvoiceTotals();" class="delete-item-btn p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded">✕</button>
         </div>
         <div class="invoice-item-fields"></div>
     `;
     container.appendChild(row);
-    renderInvoiceItemFields(row, 'labor');
+    row.querySelector('.invoice-item-type').value = initialType;
+    renderInvoiceItemFields(row, initialType, prefill);
     row.querySelector('.invoice-item-type').addEventListener('change', (e) => {
+        row.dataset.category = defaultCategoryForType(e.target.value);
+        row.querySelector('.invoice-item-category').value = row.dataset.category;
         renderInvoiceItemFields(row, e.target.value);
+    });
+    row.querySelector('.invoice-item-category').addEventListener('change', (e) => {
+        row.dataset.category = e.target.value;
     });
     calculateInvoiceTotals();
 }
 
-function renderInvoiceItemFields(row, type) {
+function renderInvoiceItemFields(row, type, prefill = null) {
     row.dataset.type = type;
     const fieldsDiv = row.querySelector('.invoice-item-fields');
+    const prefillDesc = prefill?.description ? escapeHtml(prefill.description).replace(/"/g, '&quot;') : '';
 
     if (type === 'stock') {
         fieldsDiv.innerHTML = `
@@ -1804,7 +2083,7 @@ function renderInvoiceItemFields(row, type) {
                 <input type="number" placeholder="Sell Price (KSh)" value="0.00" min="0" step="0.01" class="invoice-item-unit-price p-2 border rounded-lg flex-grow text-sm">
                 <input type="text" placeholder="Line Total" value="0.00" class="invoice-item-amount p-2 border rounded-lg w-32 bg-gray-100 text-sm font-semibold" readonly>
             </div>
-            <p class="text-xs text-gray-400">Cost auto-filled from inventory · stock will be deducted on commit.</p>
+            <p class="text-xs text-gray-400">Cost auto-filled from inventory · stock will be deducted on commit.${prefillDesc ? ` Suggested part: <strong>${prefillDesc}</strong>` : ''}</p>
         `;
         const select = fieldsDiv.querySelector('.invoice-item-stock-select');
         const priceInput = fieldsDiv.querySelector('.invoice-item-unit-price');
@@ -1815,7 +2094,7 @@ function renderInvoiceItemFields(row, type) {
         });
     } else if (type === 'outside') {
         fieldsDiv.innerHTML = `
-            <input type="text" placeholder="Description (e.g. Car Paint - 1L White)" class="invoice-item-desc w-full p-2 border rounded-lg text-sm">
+            <input type="text" placeholder="Description (e.g. Car Paint - 1L White)" value="${prefillDesc}" class="invoice-item-desc w-full p-2 border rounded-lg text-sm">
             <div class="flex gap-2">
                 <input type="number" placeholder="Qty" value="1" min="1" class="invoice-item-qty p-2 border rounded-lg w-16 text-sm">
                 <input type="number" placeholder="Charged to client" value="0.00" min="0" step="0.01" class="invoice-item-unit-price p-2 border rounded-lg flex-grow text-sm">
@@ -1825,7 +2104,7 @@ function renderInvoiceItemFields(row, type) {
         `;
     } else {
         fieldsDiv.innerHTML = `
-            <input type="text" placeholder="Description (e.g. Labor - Full Service)" class="invoice-item-desc w-full p-2 border rounded-lg text-sm">
+            <input type="text" placeholder="Description (e.g. Labor - Full Service)" value="${prefillDesc}" class="invoice-item-desc w-full p-2 border rounded-lg text-sm">
             <div class="flex gap-2">
                 <input type="number" placeholder="Qty" value="1" min="1" class="invoice-item-qty p-2 border rounded-lg w-20 text-sm">
                 <input type="number" placeholder="Unit Price (KSh)" value="0.00" min="0" step="0.01" class="invoice-item-unit-price p-2 border rounded-lg flex-grow text-sm">
@@ -1840,6 +2119,8 @@ function renderInvoiceItemFields(row, type) {
     calculateInvoiceTotals();
 }
 
+// Computes subtotal (sum of line items) and per-category subtotals (for collated PDF).
+// Discount/VAT are layered on top of this — see computeInvoiceBreakdown().
 function calculateInvoiceTotals() {
     let total = 0, totalCost = 0;
 
@@ -1864,8 +2145,6 @@ function calculateInvoiceTotals() {
         if (amountField) amountField.value = lineTotal.toFixed(2);
     });
 
-    document.getElementById('invoice-total-display').textContent = `KSh${total.toFixed(2)}`;
-
     const summaryBox = document.getElementById('invoice-profit-summary');
     if (summaryBox) {
         if (total > 0 || totalCost > 0) {
@@ -1876,8 +2155,84 @@ function calculateInvoiceTotals() {
             summaryBox.classList.add('hidden');
         }
     }
+
+    renderInvoiceBreakdown(total);
     return total;
 }
+
+// ── Discount + VAT breakdown ────────────────────────────────────────
+// Given a subtotal, applies the discount and VAT (reading current form state)
+// in whichever order the manager chose, and returns every figure needed for
+// both the on-screen breakdown and the saved invoice document.
+function computeInvoiceBreakdown(subtotal) {
+    const discountEnabled = document.getElementById('invoice-discount-enabled')?.checked || false;
+    const discountType    = document.getElementById('invoice-discount-type')?.value || 'percent';
+    const discountValueRaw = parseFloat(document.getElementById('invoice-discount-value')?.value) || 0;
+
+    const vatEnabled = document.getElementById('invoice-vat-enabled')?.checked || false;
+    const vatRate     = parseFloat(document.getElementById('invoice-vat-rate')?.value) || 0;
+    const vatOrder    = document.getElementById('invoice-vat-order')?.value || 'after-discount';
+
+    let discountAmount = 0;
+    if (discountEnabled && discountValueRaw > 0) {
+        discountAmount = discountType === 'percent'
+            ? subtotal * (discountValueRaw / 100)
+            : discountValueRaw;
+        discountAmount = Math.min(discountAmount, subtotal); // never discount below zero
+    }
+
+    let vatAmount = 0;
+    let vatBase = subtotal;
+    if (vatEnabled && vatRate > 0) {
+        vatBase = vatOrder === 'before-discount' ? subtotal : (subtotal - discountAmount);
+        vatAmount = vatBase * (vatRate / 100);
+    }
+
+    const grandTotal = subtotal - discountAmount + vatAmount;
+
+    return {
+        subtotal,
+        discountEnabled, discountType, discountValue: discountValueRaw, discountAmount,
+        vatEnabled, vatRate, vatOrder, vatAmount, vatBase,
+        grandTotal
+    };
+}
+
+function renderInvoiceBreakdown(subtotal) {
+    const b = computeInvoiceBreakdown(subtotal);
+
+    document.getElementById('invoice-breakdown-subtotal').textContent = `KSh${b.subtotal.toFixed(2)}`;
+
+    const discountRow = document.getElementById('invoice-breakdown-discount-row');
+    if (discountRow) {
+        discountRow.classList.toggle('hidden', !(b.discountEnabled && b.discountAmount > 0));
+        document.getElementById('invoice-breakdown-discount').textContent = `-KSh${b.discountAmount.toFixed(2)}`;
+    }
+
+    const vatRow = document.getElementById('invoice-breakdown-vat-row');
+    if (vatRow) {
+        vatRow.classList.toggle('hidden', !(b.vatEnabled && b.vatRate > 0));
+        document.getElementById('invoice-breakdown-vat-label').textContent = `VAT (${b.vatRate}%)`;
+        document.getElementById('invoice-breakdown-vat').textContent = `KSh${b.vatAmount.toFixed(2)}`;
+    }
+
+    document.getElementById('invoice-total-display').textContent = `KSh${b.grandTotal.toFixed(2)}`;
+    return b;
+}
+
+// Toggle discount/VAT input visibility + recalc on every relevant change
+['invoice-discount-enabled', 'invoice-discount-type', 'invoice-discount-value',
+ 'invoice-vat-enabled', 'invoice-vat-rate', 'invoice-vat-order'].forEach(id => {
+    document.getElementById(id)?.addEventListener('input', calculateInvoiceTotals);
+    document.getElementById(id)?.addEventListener('change', calculateInvoiceTotals);
+});
+document.getElementById('invoice-discount-enabled')?.addEventListener('change', (e) => {
+    document.getElementById('invoice-discount-fields')?.classList.toggle('hidden', !e.target.checked);
+});
+document.getElementById('invoice-vat-enabled')?.addEventListener('change', (e) => {
+    document.getElementById('invoice-vat-fields')?.classList.toggle('hidden', !e.target.checked);
+});
+
 // Legacy name kept for the Quotes tab, which still uses the simple (no cost-basis) row layout
 function calculateTotal(type) {
     if (type === 'invoice') return calculateInvoiceTotals();
@@ -1898,14 +2253,15 @@ function calculateTotal(type) {
 
 invoiceCreationForm.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const totalAmount = calculateInvoiceTotals();
+    const subtotal = calculateInvoiceTotals();
     const items = [];
     const stockDeductions = []; // { partId, partName, qty, costPerUnit, sellPerUnit }
     let totalCost = 0;
 
     const rows = document.querySelectorAll('#invoice-items-container .invoice-item-row');
     for (const row of rows) {
-        const type = row.dataset.type;
+        const type     = row.dataset.type;
+        const category = row.dataset.category || defaultCategoryForType(type);
         const qty  = parseFloat(row.querySelector('.invoice-item-qty')?.value) || 0;
         const unitPrice = parseFloat(row.querySelector('.invoice-item-unit-price')?.value) || 0;
         const lineTotal = qty * unitPrice;
@@ -1920,17 +2276,17 @@ invoiceCreationForm.addEventListener('submit', async (e) => {
             const stock    = parseInt(opt.dataset.stock) || 0;
             const cost     = parseFloat(opt.dataset.cost) || 0;
             if (qty > stock) { alert(`Cannot use ${qty} x ${partName} — only ${stock} in stock.`); return; }
-            items.push({ description: partName, quantity: qty, unitPrice, amount: lineTotal, costBasis: 'stock' });
+            items.push({ description: partName, quantity: qty, unitPrice, amount: lineTotal, costBasis: 'stock', category });
             stockDeductions.push({ partId, partName, qty, costPerUnit: cost, sellPerUnit: unitPrice });
             totalCost += cost * qty;
         } else if (type === 'outside') {
             const desc = row.querySelector('.invoice-item-desc')?.value || 'Item';
             const unitCost = parseFloat(row.querySelector('.invoice-item-unit-cost')?.value) || 0;
-            items.push({ description: desc, quantity: qty, unitPrice, amount: lineTotal, costBasis: 'outside', unitCost });
+            items.push({ description: desc, quantity: qty, unitPrice, amount: lineTotal, costBasis: 'outside', unitCost, category });
             totalCost += unitCost * qty;
         } else {
             const desc = row.querySelector('.invoice-item-desc')?.value || 'Labor';
-            items.push({ description: desc, quantity: qty, unitPrice, amount: lineTotal, costBasis: 'labor' });
+            items.push({ description: desc, quantity: qty, unitPrice, amount: lineTotal, costBasis: 'labor', category });
         }
     }
 
@@ -1939,14 +2295,29 @@ invoiceCreationForm.addEventListener('submit', async (e) => {
         return;
     }
 
-    const totalProfit = totalAmount - totalCost;
+    const breakdown = computeInvoiceBreakdown(subtotal);
+    const totalProfit = breakdown.grandTotal - totalCost; // discount reduces profit; VAT is pass-through to the taxman, not profit
+    const invoiceMode = document.querySelector('input[name="invoice-mode"]:checked')?.value || 'detailed';
+    const sourceCarId = document.getElementById('invoice-source-car-id')?.value || null;
 
     const invoice = {
         invoiceNo:   `INV-${Date.now().toString().slice(-6)}`,
         clientName:  document.getElementById('invoice-client-name').value,
         clientPhone: document.getElementById('invoice-client-phone').value,
         carPlate:    document.getElementById('invoice-car-plate').value,
-        items, total: totalAmount,
+        sourceCarId,
+        mode: invoiceMode, // 'detailed' | 'collated'
+        items,
+        subtotal,
+        discountEnabled: breakdown.discountEnabled,
+        discountType: breakdown.discountType,
+        discountValue: breakdown.discountValue,
+        discountAmount: breakdown.discountAmount,
+        vatEnabled: breakdown.vatEnabled,
+        vatRate: breakdown.vatRate,
+        vatOrder: breakdown.vatOrder,
+        vatAmount: breakdown.vatAmount,
+        total: breakdown.grandTotal,
         totalCost, totalProfit,
         status: 'unpaid', receiptId: null,
         date: getUTCDateString(), timestamp: serverTimestamp()
@@ -1988,19 +2359,30 @@ invoiceCreationForm.addEventListener('submit', async (e) => {
             });
         });
 
+        // If this invoice was generated from a booked car (Active Jobs panel or a
+        // completion notification), mark that link as invoiced so the badges/banner clear.
+        if (sourceCarId) {
+            await markCarAsInvoiced(sourceCarId, invoiceRef.id, invoice.invoiceNo);
+        }
+
         invoiceCreationForm.reset();
         document.getElementById('invoice-items-container').innerHTML = '';
         addInvoiceItemRow();
-        alert(`Invoice #${invoice.invoiceNo} generated — KSh${totalAmount.toFixed(2)}.\nIt won't appear in Finance until you click "Receipt Invoice" once the client pays.`);
+        resetInvoiceDiscountVatFields();
+        clearInvoiceSourceCar();
+        alert(`Invoice #${invoice.invoiceNo} generated — KSh${breakdown.grandTotal.toFixed(2)}.\nIt won't appear in Finance until you click "Receipt Invoice" once the client pays.`);
     } catch (error) {
         alert(`Failed to generate or commit invoice: ${error.message}`);
         console.error('Invoice Creation Error: ', error);
     }
 });
 
+let allInvoices = [];
+
 function listenForInvoices() {
     const q = query(getInvoicesRef(), orderBy('timestamp', 'desc'));
     onSnapshot(q, snapshot => {
+        allInvoices = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
         invoicesTableBody.innerHTML = '';
         snapshot.forEach(docSnap => {
             const data = docSnap.data();
@@ -2013,11 +2395,14 @@ function listenForInvoices() {
             const statusBadge = isPaid
                 ? `<span class="px-2 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700">✅ Paid</span>`
                 : `<span class="px-2 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-700">⏳ Unpaid</span>`;
+            const modeBadge = data.mode === 'collated'
+                ? `<span class="ml-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-700">Collated</span>`
+                : `<span class="ml-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-gray-100 text-gray-600">Detailed</span>`;
             const receiptAction = isPaid
                 ? `<button onclick="generateReceiptPDF('${data.receiptId}')" class="text-green-600 hover:text-green-800 mr-2">Receipt PDF</button>`
                 : `<button onclick="openReceiptModal('${docSnap.id}')" class="text-white bg-green-600 hover:bg-green-700 font-bold px-2 py-1 rounded mr-2">🧾 Receipt Invoice</button>`;
             tr.innerHTML = `
-                <td class="px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-900">${data.invoiceNo}</td>
+                <td class="px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-900">${data.invoiceNo}${modeBadge}</td>
                 <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500">${data.date}</td>
                 <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500">${data.clientName} / ${data.carPlate}</td>
                 <td class="px-3 py-2 whitespace-nowrap text-sm text-green-600 font-bold">KSh${(data.total ?? 0).toFixed(2)}</td>
@@ -2031,7 +2416,21 @@ function listenForInvoices() {
             `;
             invoicesTableBody.appendChild(tr);
         });
+        renderActiveJobsTable(); // keep "Invoiced" badges in sync with the live invoices list
     }, error => console.error("Error listening to invoices: ", error));
+}
+
+
+
+// Groups invoice line items into Labor / Parts / Consumables totals for the
+// collated PDF — each group becomes a single printed row, never the individual lines.
+function groupInvoiceItemsByCategory(items = []) {
+    const groups = { labor: 0, parts: 0, consumables: 0 };
+    items.forEach(item => {
+        const cat = groups.hasOwnProperty(item.category) ? item.category : defaultCategoryForType(item.costBasis);
+        groups[cat] = (groups[cat] || 0) + (item.amount ?? 0);
+    });
+    return groups;
 }
 
 async function generateInvoicePDF(invoiceId, clientPhone) {
@@ -2046,6 +2445,7 @@ async function generateInvoicePDF(invoiceId, clientPhone) {
         if (!docSnap.exists()) { alert("Invoice not found."); return; }
         const invoice  = docSnap.data();
         const branding = await getBranding();
+        const isCollated = invoice.mode === 'collated';
 
         // Managers may opt in to printing the profit margin on the PDF — off by default,
         // and never offered to non-managers (they can't see profit anyway).
@@ -2053,7 +2453,7 @@ async function generateInvoicePDF(invoiceId, clientPhone) {
             && confirm('Include your profit margin on this PDF? (Choose "Cancel" to keep the printed invoice client-facing only.)');
 
         const pdfDoc = new window.jspdf.jsPDF();
-        let y = drawPdfHeader(pdfDoc, branding, "INVOICE");
+        let y = drawPdfHeader(pdfDoc, branding, isCollated ? "INVOICE (SUMMARY)" : "INVOICE");
 
         pdfDoc.setFontSize(10); pdfDoc.setTextColor(60, 60, 60);
         pdfDoc.text(`Invoice No: ${invoice.invoiceNo}`, 14, y);
@@ -2062,19 +2462,52 @@ async function generateInvoicePDF(invoiceId, clientPhone) {
         pdfDoc.text(`Phone: ${invoice.clientPhone}`, 110, y); y += 6;
         pdfDoc.text(`Vehicle Plate: ${invoice.carPlate}`, 14, y); y += 8;
 
-        pdfDoc.autoTable({
-            startY: y,
-            head: [['Description', 'Qty', 'Unit Price (KSh)', 'Line Total (KSh)']],
-            body: invoice.items.map(item => [
+        // ── Line items table: every line (detailed) or grouped totals (collated) ──
+        const subtotal = invoice.subtotal ?? invoice.total ?? 0;
+        let bodyRows;
+        if (isCollated) {
+            const groups = groupInvoiceItemsByCategory(invoice.items || []);
+            const labels = { labor: '🔧 Labor', parts: '🔩 Parts', consumables: '🧴 Consumables' };
+            bodyRows = Object.entries(groups)
+                .filter(([, amount]) => amount > 0)
+                .map(([cat, amount]) => [labels[cat] || cat, `KSh${amount.toFixed(2)}`]);
+        } else {
+            bodyRows = (invoice.items || []).map(item => [
                 item.description,
                 (item.quantity ?? 0).toString(),
                 `KSh${(item.unitPrice ?? 0).toFixed(2)}`,
                 `KSh${(item.amount   ?? 0).toFixed(2)}`
-            ]),
-            foot: [['', '', 'Total', `KSh${(invoice.total ?? 0).toFixed(2)}`]],
+            ]);
+        }
+
+        pdfDoc.autoTable({
+            startY: y,
+            head: isCollated ? [['Category', 'Amount (KSh)']] : [['Description', 'Qty', 'Unit Price (KSh)', 'Line Total (KSh)']],
+            body: bodyRows,
             theme: 'grid', styles: { fontSize: 10 },
-            headStyles: { fillColor: hexToRgbArr(branding.primaryColor) },
-            footStyles: { fillColor: [230, 230, 255], textColor: [0, 0, 0], fontSize: 12, fontStyle: 'bold' }
+            headStyles: { fillColor: hexToRgbArr(branding.primaryColor) }
+        });
+
+        // ── Totals breakdown: Subtotal → Discount → VAT → Grand Total ──
+        const breakdownRows = [['Subtotal', `KSh${subtotal.toFixed(2)}`]];
+        if (invoice.discountEnabled && invoice.discountAmount > 0) {
+            const discountLabel = invoice.discountType === 'percent'
+                ? `Discount (${invoice.discountValue}%)`
+                : 'Discount';
+            breakdownRows.push([discountLabel, `-KSh${invoice.discountAmount.toFixed(2)}`]);
+        }
+        if (invoice.vatEnabled && invoice.vatRate > 0) {
+            breakdownRows.push([`VAT (${invoice.vatRate}%)`, `KSh${(invoice.vatAmount ?? 0).toFixed(2)}`]);
+        }
+
+        pdfDoc.autoTable({
+            startY: pdfDoc.autoTable.previous.finalY + 4,
+            body: breakdownRows,
+            foot: [['TOTAL', `KSh${(invoice.total ?? 0).toFixed(2)}`]],
+            theme: 'plain', styles: { fontSize: 10 },
+            footStyles: { fillColor: [230, 230, 255], textColor: [0, 0, 0], fontSize: 12, fontStyle: 'bold' },
+            margin: { left: 110 }, tableWidth: 86,
+            columnStyles: { 0: { fontStyle: 'normal' }, 1: { halign: 'right' } }
         });
 
         if (includeProfitOnPdf) {
@@ -2132,10 +2565,20 @@ function openReceiptModal(invoiceId) {
     getDoc(garageDoc(db, doc, 'invoices', invoiceId)).then(snap => {
         if (!snap.exists()) { alert('Invoice not found.'); return; }
         const inv = snap.data();
+        const subtotalRow = (inv.discountEnabled || inv.vatEnabled)
+            ? `<div class="flex justify-between text-xs text-gray-400"><span>Subtotal</span><span>KSh${(inv.subtotal ?? inv.total ?? 0).toFixed(2)}</span></div>`
+            : '';
+        const discountRow = (inv.discountEnabled && inv.discountAmount > 0)
+            ? `<div class="flex justify-between text-xs text-red-500"><span>Discount</span><span>-KSh${inv.discountAmount.toFixed(2)}</span></div>`
+            : '';
+        const vatRow = (inv.vatEnabled && inv.vatRate > 0)
+            ? `<div class="flex justify-between text-xs text-gray-500"><span>VAT (${inv.vatRate}%)</span><span>KSh${(inv.vatAmount ?? 0).toFixed(2)}</span></div>`
+            : '';
         receiptModalBody.innerHTML = `
             <div class="flex justify-between"><span class="text-gray-500">Invoice No.</span><span class="font-semibold">${inv.invoiceNo}</span></div>
             <div class="flex justify-between"><span class="text-gray-500">Client</span><span class="font-semibold">${inv.clientName}</span></div>
             <div class="flex justify-between"><span class="text-gray-500">Vehicle</span><span class="font-semibold">${inv.carPlate || 'N/A'}</span></div>
+            ${subtotalRow}${discountRow}${vatRow}
             <div class="flex justify-between text-base pt-2 border-t"><span class="font-bold text-indigo-700">Amount Due</span><span class="font-bold text-green-600">KSh${(inv.total ?? 0).toFixed(2)}</span></div>
         `;
         receiptModal.classList.remove('hidden');
@@ -2179,7 +2622,16 @@ receiptModalConfirm?.addEventListener('click', async () => {
                 invoiceId, invoiceNo: inv.invoiceNo,
                 clientName: inv.clientName, clientPhone: inv.clientPhone || '',
                 carPlate: inv.carPlate || 'N/A',
+                mode: inv.mode || 'detailed',
                 items: inv.items || [],
+                subtotal: inv.subtotal ?? inv.total ?? 0,
+                discountEnabled: inv.discountEnabled || false,
+                discountType: inv.discountType || 'percent',
+                discountValue: inv.discountValue || 0,
+                discountAmount: inv.discountAmount || 0,
+                vatEnabled: inv.vatEnabled || false,
+                vatRate: inv.vatRate || 0,
+                vatAmount: inv.vatAmount || 0,
                 total: inv.total ?? 0, totalCost: inv.totalCost ?? 0, totalProfit: inv.totalProfit ?? (inv.total ?? 0),
                 paymentMethod,
                 receivedBy: getSession().role,
@@ -2215,9 +2667,10 @@ async function generateReceiptPDF(receiptId) {
         if (!docSnap.exists()) { alert("Receipt not found."); return; }
         const receipt  = docSnap.data();
         const branding = await getBranding();
+        const isCollated = receipt.mode === 'collated';
 
         const pdfDoc = new window.jspdf.jsPDF();
-        let y = drawPdfHeader(pdfDoc, branding, "PAYMENT RECEIPT");
+        let y = drawPdfHeader(pdfDoc, branding, isCollated ? "PAYMENT RECEIPT (SUMMARY)" : "PAYMENT RECEIPT");
 
         pdfDoc.setFontSize(10); pdfDoc.setTextColor(60, 60, 60);
         pdfDoc.text(`Receipt No: ${receipt.receiptNo}`, 14, y);
@@ -2227,19 +2680,48 @@ async function generateReceiptPDF(receiptId) {
         pdfDoc.text(`Client: ${receipt.clientName}`, 14, y);
         pdfDoc.text(`Vehicle Plate: ${receipt.carPlate}`, 110, y); y += 8;
 
-        pdfDoc.autoTable({
-            startY: y,
-            head: [['Description', 'Qty', 'Unit Price (KSh)', 'Line Total (KSh)']],
-            body: (receipt.items || []).map(item => [
+        const subtotal = receipt.subtotal ?? receipt.total ?? 0;
+        let bodyRows;
+        if (isCollated) {
+            const groups = groupInvoiceItemsByCategory(receipt.items || []);
+            const labels = { labor: '🔧 Labor', parts: '🔩 Parts', consumables: '🧴 Consumables' };
+            bodyRows = Object.entries(groups)
+                .filter(([, amount]) => amount > 0)
+                .map(([cat, amount]) => [labels[cat] || cat, `KSh${amount.toFixed(2)}`]);
+        } else {
+            bodyRows = (receipt.items || []).map(item => [
                 item.description,
                 (item.quantity ?? 0).toString(),
                 `KSh${(item.unitPrice ?? 0).toFixed(2)}`,
                 `KSh${(item.amount   ?? 0).toFixed(2)}`
-            ]),
-            foot: [['', '', 'AMOUNT RECEIVED', `KSh${(receipt.total ?? 0).toFixed(2)}`]],
+            ]);
+        }
+
+        pdfDoc.autoTable({
+            startY: y,
+            head: isCollated ? [['Category', 'Amount (KSh)']] : [['Description', 'Qty', 'Unit Price (KSh)', 'Line Total (KSh)']],
+            body: bodyRows,
             theme: 'grid', styles: { fontSize: 10 },
-            headStyles: { fillColor: hexToRgbArr(branding.primaryColor) },
-            footStyles: { fillColor: [220, 252, 231], textColor: [0, 0, 0], fontSize: 12, fontStyle: 'bold' }
+            headStyles: { fillColor: hexToRgbArr(branding.primaryColor) }
+        });
+
+        const breakdownRows = [['Subtotal', `KSh${subtotal.toFixed(2)}`]];
+        if (receipt.discountEnabled && receipt.discountAmount > 0) {
+            const discountLabel = receipt.discountType === 'percent' ? `Discount (${receipt.discountValue}%)` : 'Discount';
+            breakdownRows.push([discountLabel, `-KSh${receipt.discountAmount.toFixed(2)}`]);
+        }
+        if (receipt.vatEnabled && receipt.vatRate > 0) {
+            breakdownRows.push([`VAT (${receipt.vatRate}%)`, `KSh${(receipt.vatAmount ?? 0).toFixed(2)}`]);
+        }
+
+        pdfDoc.autoTable({
+            startY: pdfDoc.autoTable.previous.finalY + 4,
+            body: breakdownRows,
+            foot: [['AMOUNT RECEIVED', `KSh${(receipt.total ?? 0).toFixed(2)}`]],
+            theme: 'plain', styles: { fontSize: 10 },
+            footStyles: { fillColor: [220, 252, 231], textColor: [0, 0, 0], fontSize: 12, fontStyle: 'bold' },
+            margin: { left: 110 }, tableWidth: 86,
+            columnStyles: { 0: { fontStyle: 'normal' }, 1: { halign: 'right' } }
         });
 
         pdfDoc.setFontSize(10); pdfDoc.setTextColor(80, 80, 80);
@@ -2447,6 +2929,7 @@ function setupBrandingTab() {
     }
 
     loadBrandingForm().then(updateBrandingPreview);
+    loadVatSettingsForm();
 }
 
 function updateBrandingPreview() {
@@ -2500,7 +2983,82 @@ document.addEventListener('DOMContentLoaded', () => {
     if (savePermBtn) {
         savePermBtn.addEventListener('click', saveRolePermissions);
     }
+
+    // --- NEW: VAT settings ---
+    document.getElementById('vat-settings-save-btn')?.addEventListener('click', saveVatSettings);
 });
+
+// =================================================================
+// 7c. VAT SETTINGS — garage-wide default, stored on the garage document
+// =================================================================
+// Stored directly on the garage doc (garages/{garageCode}) rather than
+// through garage-branding.js, since that module owns the logo/colour fields
+// only. Keeping VAT as its own small read/write keeps this self-contained.
+
+function getDefaultVatSettings() {
+    const garageData = window._garageData || {};
+    return {
+        enabledByDefault: garageData.vatSettings?.enabledByDefault ?? false,
+        rate: garageData.vatSettings?.rate ?? 16,
+        order: garageData.vatSettings?.order ?? 'after-discount'
+    };
+}
+
+function loadVatSettingsForm() {
+    const vat = getDefaultVatSettings();
+    const enabledEl = document.getElementById('settings-vat-enabled-default');
+    const rateEl    = document.getElementById('settings-vat-rate');
+    const orderEl   = document.getElementById('settings-vat-order');
+    if (enabledEl) enabledEl.checked = vat.enabledByDefault;
+    if (rateEl)    rateEl.value = vat.rate;
+    if (orderEl)   orderEl.value = vat.order;
+}
+
+async function saveVatSettings() {
+    const msg = document.getElementById('vat-settings-save-msg');
+    const garageCode = sessionStorage.getItem('garageCode');
+    if (!garageCode) {
+        if (msg) { msg.textContent = 'No garage session.'; msg.className = 'text-red-500 text-sm font-semibold mt-2'; }
+        return;
+    }
+
+    const enabledByDefault = document.getElementById('settings-vat-enabled-default')?.checked || false;
+    const rate  = parseFloat(document.getElementById('settings-vat-rate')?.value) || 0;
+    const order = document.getElementById('settings-vat-order')?.value || 'after-discount';
+
+    if (msg) { msg.textContent = 'Saving…'; msg.className = 'text-blue-500 text-sm font-semibold mt-2'; }
+    try {
+        const vatSettings = { enabledByDefault, rate, order };
+        await updateDoc(doc(db, 'garages', garageCode), { vatSettings });
+        // Keep the in-memory garage data fresh so new invoices pick this up immediately
+        window._garageData = { ...(window._garageData || {}), vatSettings };
+        if (msg) { msg.textContent = '✅ VAT settings saved.'; msg.className = 'text-green-600 text-sm font-semibold mt-2'; }
+        applyDefaultVatToInvoiceForm();
+    } catch (err) {
+        if (msg) { msg.textContent = `❌ ${err.message}`; msg.className = 'text-red-600 text-sm font-semibold mt-2'; }
+    }
+}
+window.saveVatSettings = saveVatSettings;
+
+// Pre-fills the invoice form's VAT checkbox/rate from the garage default —
+// called on boot and whenever a fresh invoice form is started.
+function applyDefaultVatToInvoiceForm() {
+    const vat = getDefaultVatSettings();
+    const enabledEl = document.getElementById('invoice-vat-enabled');
+    const rateEl     = document.getElementById('invoice-vat-rate');
+    const orderEl    = document.getElementById('invoice-vat-order');
+    const fieldsEl    = document.getElementById('invoice-vat-fields');
+    const tagEl       = document.getElementById('invoice-vat-default-tag');
+
+    if (enabledEl) enabledEl.checked = vat.enabledByDefault;
+    if (rateEl)    rateEl.value = vat.rate;
+    if (orderEl)   orderEl.value = vat.order;
+    if (fieldsEl)  fieldsEl.classList.toggle('hidden', !vat.enabledByDefault);
+    if (tagEl)     tagEl.textContent = vat.rate > 0 ? `(garage default: ${vat.rate}%)` : '';
+    calculateInvoiceTotals();
+}
+
+
 
 // =================================================================
 // 11. PIN MANAGEMENT (Manager only — in Garage Settings tab)
