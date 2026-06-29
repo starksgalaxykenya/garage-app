@@ -1809,6 +1809,15 @@ function renderActiveJobsTable() {
             ? `${planItems.length} item${planItems.length === 1 ? '' : 's'} (${planItems.filter(i => i.done).length} done)`
             : '<span class="text-gray-400">None logged</span>';
 
+        // Count approved requisitions for this car — match by carId or plate
+        const approvedForCar = _allRequisitions.filter(r =>
+            (r.carId === car.id || (r.plate && r.plate === car.plate)) &&
+            (r.status === 'approved' || r.status === 'one-time-ordered')
+        );
+        const approvedPartsNote = approvedForCar.length > 0
+            ? `<br><span class="text-xs font-semibold text-green-600">✅ ${approvedForCar.length} part${approvedForCar.length > 1 ? 's' : ''} approved — prices ready</span>`
+            : (planItems.some(i => i.parts) ? `<br><span class="text-xs text-amber-600">⚠ Parts not yet approved</span>` : '');
+
         const invoiced = carHasInvoice(car.id);
         const invoiceBadge = invoiced
             ? `<span class="px-2 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700">✅ Invoiced</span>`
@@ -1821,7 +1830,7 @@ function renderActiveJobsTable() {
                 <td class="px-4 py-3 text-sm font-medium">${escapeHtml(car.plate || 'N/A')}<br><span class="text-xs text-gray-500">${escapeHtml(car.make || '')} ${escapeHtml(car.model || '')} (${escapeHtml(String(car.year || 'N/A'))})</span></td>
                 <td class="px-4 py-3 text-sm">${escapeHtml(car.clientName || 'N/A')}<br><span class="text-xs text-gray-500">${escapeHtml(car.clientPhone || '')}</span></td>
                 <td class="px-4 py-3 text-sm"><span class="px-2 py-1 rounded-full text-xs font-bold ${statusBadgeCls}">${escapeHtml(car.status || '—')}</span></td>
-                <td class="px-4 py-3 text-sm">${planSummary}</td>
+                <td class="px-4 py-3 text-sm">${planSummary}${approvedPartsNote}</td>
                 <td class="px-4 py-3 text-sm">${invoiceBadge}</td>
                 <td class="px-4 py-3 text-sm">
                     <button onclick="startInvoiceFromCar('${car.id}')" class="text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-2 py-1 rounded">🧾 ${invoiced ? 'New Invoice' : 'Create Invoice'}</button>
@@ -1844,16 +1853,16 @@ document.getElementById('active-jobs-filter-completed')?.addEventListener('click
 });
 
 // ── Pull a car's details + repair plan into the invoice form ──
-window.startInvoiceFromCar = (carId) => {
+window.startInvoiceFromCar = async (carId) => {
     const car = allActiveJobCars.find(c => c.id === carId) || allCompletedJobCars.find(c => c.id === carId);
     if (!car) { alert('Could not find that job — it may have been removed.'); return; }
-    prefillInvoiceFromCar(car);
-    // Jump to the invoice tab/form so the manager lands on it immediately
     document.getElementById('tab-invoices')?.click();
+    await prefillInvoiceFromCar(car);
+    // Jump to the invoice tab/form so the manager lands on it immediately
     document.getElementById('invoice-creation-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 };
 
-function prefillInvoiceFromCar(car) {
+async function prefillInvoiceFromCar(car) {
     document.getElementById('invoice-client-name').value  = car.clientName || '';
     document.getElementById('invoice-client-phone').value = car.clientPhone || '';
     document.getElementById('invoice-car-plate').value    = car.plate || '';
@@ -1866,23 +1875,86 @@ function prefillInvoiceFromCar(car) {
     }
     document.getElementById('invoice-clear-source-btn')?.classList.remove('hidden');
 
-    // Rebuild the items list from the car's repair plan, one row per action item.
-    // Prices are left at 0 — the main app never captures pricing, so the manager
-    // fills them in here, which is the whole point of approving parts/labor centrally.
     const container = document.getElementById('invoice-items-container');
     container.innerHTML = '';
+
+    // Gather approved requisitions for this car — these have confirmed prices from inventory
+    // Match by carId (preferred) or plate (fallback for older requisitions)
+    const approvedReqs = _allRequisitions.filter(
+        r => (r.carId === car.id || (r.plate && r.plate === car.plate)) &&
+             (r.status === 'approved' || r.status === 'one-time-ordered')
+    );
+
+    // Build a lookup: partsText (lower) -> { partId, sellingPrice, qty } from approved reqs
+    // For "approved from stock" reqs the fulfillmentNote contains "N x PartName issued from stock".
+    // We also match parts from allPartsInventory by name for best-effort price autofill.
+    function findInventoryPriceByName(name) {
+        if (!name) return null;
+        const lc = name.toLowerCase().trim();
+        return allPartsInventory.find(p => p.name.toLowerCase().trim() === lc) || null;
+    }
+
     const planItems = (car.repairPlanItems || []).filter(i => !i.revoked && i.action);
 
-    if (planItems.length === 0) {
+    if (planItems.length === 0 && approvedReqs.length === 0) {
         addInvoiceItemRow();
         return;
     }
-    planItems.forEach(item => {
-        if (item.parts && item.parts.trim()) {
-            addInvoiceItemRow({ type: 'stock', category: 'parts', description: item.parts.trim() });
+
+    // First, add a row for every approved/ordered part requisition (with prices filled in)
+    const handledReqIds = new Set();
+    for (const req of approvedReqs) {
+        handledReqIds.add(req.id);
+        // Try to find the matching inventory part for this requisition
+        const inv = findInventoryPriceByName(req.partsText);
+        // For one-time-ordered, price info may be in ledger — extract from fulfillmentNote if possible
+        let sellingPrice = inv ? (inv.sellingPrice ?? 0) : 0;
+        let supplierPrice = inv ? (inv.supplierPrice ?? 0) : 0;
+        let partId = inv ? inv.id : null;
+        let qty = 1;
+
+        // Try to parse qty from fulfillmentNote (e.g. "2 x Brake Pads issued from stock")
+        const qtyMatch = (req.fulfillmentNote || '').match(/^(\d+)\s*x\s/i);
+        if (qtyMatch) qty = parseInt(qtyMatch[1]) || 1;
+
+        if (inv) {
+            // This is a stocked part — add as 'stock' row with the matching inventory item selected
+            addInvoiceItemRow({ type: 'stock', category: 'parts', description: req.partsText, partId, qty, sellingPrice });
+        } else {
+            // Outside / one-time-ordered part
+            addInvoiceItemRow({ type: 'outside', category: 'parts', description: req.partsText, qty, sellingPrice, supplierPrice });
         }
+    }
+
+    // Then, add labor rows from repair plan items (and parts rows for plan items NOT covered by an approved req)
+    planItems.forEach(item => {
+        // Parts from the plan that don't have an approved requisition yet
+        if (item.parts && item.parts.trim()) {
+            // Check if this part text was covered by an approved req already
+            const alreadyCovered = approvedReqs.some(r =>
+                (r.partsText || '').toLowerCase().includes(item.parts.toLowerCase()) ||
+                item.parts.toLowerCase().includes((r.partsText || '').toLowerCase())
+            );
+            if (!alreadyCovered) {
+                // Try to autofill price from inventory by name
+                const inv = findInventoryPriceByName(item.parts.trim());
+                if (inv) {
+                    addInvoiceItemRow({ type: 'stock', category: 'parts', description: item.parts.trim(), partId: inv.id, qty: 1, sellingPrice: inv.sellingPrice ?? 0 });
+                } else {
+                    addInvoiceItemRow({ type: 'outside', category: 'parts', description: item.parts.trim() });
+                }
+            }
+        }
+        // Always add a labor row for the job action
         addInvoiceItemRow({ type: 'labor', category: 'labor', description: item.action.trim() });
     });
+
+    // If we only had approved reqs but no plan items at all, that's fine — items were added above.
+    // If nothing was added at all, add a blank row.
+    const rows = container.querySelectorAll('.invoice-item-row');
+    if (rows.length === 0) addInvoiceItemRow();
+
+    calculateInvoiceTotals();
 }
 
 function clearInvoiceSourceCar() {
@@ -1953,12 +2025,12 @@ function renderInvoiceNotifications() {
     `).join('');
 }
 
-window.startInvoiceFromNotification = (notifId) => {
+window.startInvoiceFromNotification = async (notifId) => {
     const n = allInvoiceNotifications.find(x => x.id === notifId);
     if (!n) return;
     const car = allCompletedJobCars.find(c => c.id === n.carId) || allActiveJobCars.find(c => c.id === n.carId);
     if (car) {
-        prefillInvoiceFromCar(car);
+        await prefillInvoiceFromCar(car);
     } else {
         // Fall back to the notification's own snapshot of the job if the car
         // listener hasn't caught up yet (e.g. just-completed job).
@@ -2041,33 +2113,66 @@ function invoiceCategorySelectHtml(selectedCategory) {
 function addInvoiceItemRow(prefill = null) {
     const container = document.getElementById('invoice-items-container');
     const row = document.createElement('div');
-    row.className = 'invoice-item-row border border-gray-200 rounded-lg p-3 bg-gray-50 space-y-2';
     const initialType = prefill?.type || 'labor';
+    const initialCategory = prefill?.category || defaultCategoryForType(initialType);
+
+    // Auto-detect if this is a prefilled row (from a booked car) or a manual row
+    const isPrefilled = prefill !== null;
+
+    // Type badge colours
+    const typeBadgeColors = { labor: 'bg-blue-50 border-blue-200', stock: 'bg-green-50 border-green-200', outside: 'bg-orange-50 border-orange-200' };
+    row.className = `invoice-item-row border rounded-lg p-3 space-y-2 ${typeBadgeColors[initialType] || 'border-gray-200 bg-gray-50'}`;
     row.dataset.type = initialType;
-    row.dataset.category = prefill?.category || defaultCategoryForType(initialType);
-    row.innerHTML = `
-        <div class="flex gap-2 items-center">
-            <select class="invoice-item-type text-xs font-semibold p-1.5 border rounded-lg bg-white flex-grow">
-                <option value="labor">${INVOICE_ITEM_TYPE_LABELS.labor}</option>
-                <option value="stock">${INVOICE_ITEM_TYPE_LABELS.stock}</option>
-                <option value="outside">${INVOICE_ITEM_TYPE_LABELS.outside}</option>
-            </select>
-            ${invoiceCategorySelectHtml(row.dataset.category)}
-            <button type="button" onclick="this.closest('.invoice-item-row').remove(); calculateInvoiceTotals();" class="delete-item-btn p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded">✕</button>
-        </div>
-        <div class="invoice-item-fields"></div>
-    `;
-    container.appendChild(row);
-    row.querySelector('.invoice-item-type').value = initialType;
-    renderInvoiceItemFields(row, initialType, prefill);
-    row.querySelector('.invoice-item-type').addEventListener('change', (e) => {
-        row.dataset.category = defaultCategoryForType(e.target.value);
-        row.querySelector('.invoice-item-category').value = row.dataset.category;
-        renderInvoiceItemFields(row, e.target.value);
-    });
-    row.querySelector('.invoice-item-category').addEventListener('change', (e) => {
+    row.dataset.category = initialCategory;
+
+    // Simplified header: a compact type badge + category (collapsed by default for manual rows)
+    // For prefilled rows, show the type as a read-only badge; for manual rows, show a select.
+    const typeIconMap = { labor: '🔧', stock: '📦', outside: '🌍' };
+    const typeLabelShort = { labor: 'Labor', stock: 'Part (stock)', outside: 'Part / External' };
+
+    if (isPrefilled) {
+        // Prefilled: compact badge header, no need for a dropdown
+        row.innerHTML = `
+            <div class="flex gap-2 items-center">
+                <span class="invoice-item-type-badge text-xs font-bold px-2 py-1 rounded-full ${initialType === 'labor' ? 'bg-blue-100 text-blue-700' : initialType === 'stock' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}">${typeIconMap[initialType]} ${typeLabelShort[initialType]}</span>
+                <input type="hidden" class="invoice-item-type" value="${initialType}">
+                ${invoiceCategorySelectHtml(initialCategory)}
+                <button type="button" onclick="this.closest('.invoice-item-row').remove(); calculateInvoiceTotals();" class="delete-item-btn ml-auto p-1 text-red-400 hover:text-red-600 hover:bg-red-50 rounded text-xs">✕ Remove</button>
+            </div>
+            <div class="invoice-item-fields"></div>
+        `;
+    } else {
+        // Manual: show the type dropdown so the user can pick
+        row.innerHTML = `
+            <div class="flex gap-2 items-center flex-wrap">
+                <select class="invoice-item-type text-xs font-semibold p-1.5 border rounded-lg bg-white">
+                    <option value="labor">🔧 Labor</option>
+                    <option value="stock">📦 Part from stock</option>
+                    <option value="outside">🌍 Outside / pass-through</option>
+                </select>
+                ${invoiceCategorySelectHtml(initialCategory)}
+                <button type="button" onclick="this.closest('.invoice-item-row').remove(); calculateInvoiceTotals();" class="delete-item-btn ml-auto p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded text-xs">✕</button>
+            </div>
+            <div class="invoice-item-fields"></div>
+        `;
+        const typeSelect = row.querySelector('.invoice-item-type');
+        typeSelect.value = initialType;
+        typeSelect.addEventListener('change', (e) => {
+            const newType = e.target.value;
+            row.dataset.type = newType;
+            row.dataset.category = defaultCategoryForType(newType);
+            row.className = `invoice-item-row border rounded-lg p-3 space-y-2 ${typeBadgeColors[newType] || 'border-gray-200 bg-gray-50'}`;
+            row.querySelector('.invoice-item-category').value = row.dataset.category;
+            renderInvoiceItemFields(row, newType);
+        });
+    }
+
+    row.querySelector('.invoice-item-category')?.addEventListener('change', (e) => {
         row.dataset.category = e.target.value;
     });
+
+    container.appendChild(row);
+    renderInvoiceItemFields(row, initialType, prefill);
     calculateInvoiceTotals();
 }
 
@@ -2075,19 +2180,35 @@ function renderInvoiceItemFields(row, type, prefill = null) {
     row.dataset.type = type;
     const fieldsDiv = row.querySelector('.invoice-item-fields');
     const prefillDesc = prefill?.description ? escapeHtml(prefill.description).replace(/"/g, '&quot;') : '';
+    const prefillQty  = prefill?.qty ?? 1;
+    const prefillPrice = prefill?.sellingPrice != null ? parseFloat(prefill.sellingPrice).toFixed(2) : '0.00';
+    const prefillCost  = prefill?.supplierPrice != null ? parseFloat(prefill.supplierPrice).toFixed(2) : '0.00';
 
     if (type === 'stock') {
+        const stockOptions = buildStockPartOptionsHtml(prefill?.partId || '');
         fieldsDiv.innerHTML = `
-            <select class="invoice-item-stock-select w-full p-2 border rounded-lg text-sm">${buildStockPartOptionsHtml()}</select>
-            <div class="flex gap-2">
-                <input type="number" placeholder="Qty" value="1" min="1" class="invoice-item-qty p-2 border rounded-lg w-20 text-sm">
-                <input type="number" placeholder="Sell Price (KSh)" value="0.00" min="0" step="0.01" class="invoice-item-unit-price p-2 border rounded-lg flex-grow text-sm">
-                <input type="text" placeholder="Line Total" value="0.00" class="invoice-item-amount p-2 border rounded-lg w-32 bg-gray-100 text-sm font-semibold" readonly>
+            <select class="invoice-item-stock-select w-full p-2 border rounded-lg text-sm">${stockOptions}</select>
+            <div class="flex gap-2 items-center mt-1">
+                <label class="text-xs text-gray-500 whitespace-nowrap">Qty</label>
+                <input type="number" value="${prefillQty}" min="1" class="invoice-item-qty p-2 border rounded-lg w-20 text-sm text-center">
+                <label class="text-xs text-gray-500 whitespace-nowrap">Price (KSh)</label>
+                <input type="number" value="${prefillPrice}" min="0" step="0.01" class="invoice-item-unit-price p-2 border rounded-lg flex-grow text-sm">
+                <input type="text" value="${(prefillQty * parseFloat(prefillPrice)).toFixed(2)}" class="invoice-item-amount p-2 border rounded-lg w-28 bg-gray-100 text-sm font-semibold text-right" readonly>
             </div>
-            <p class="text-xs text-gray-400">Cost auto-filled from inventory · stock will be deducted on commit.${prefillDesc ? ` Suggested part: <strong>${prefillDesc}</strong>` : ''}</p>
+            ${prefillDesc ? `<p class="text-xs text-indigo-600 mt-0.5">📌 Approved part: <strong>${prefillDesc}</strong></p>` : '<p class="text-xs text-gray-400">Price auto-fills from inventory selection · stock deducted on commit</p>'}
         `;
         const select = fieldsDiv.querySelector('.invoice-item-stock-select');
         const priceInput = fieldsDiv.querySelector('.invoice-item-unit-price');
+
+        // If prefilled with a partId, ensure it's selected
+        if (prefill?.partId) {
+            // The option was already selected by buildStockPartOptionsHtml, just trigger price sync
+            const opt = select.options[select.selectedIndex];
+            if (opt && parseFloat(prefillPrice) === 0 && opt.dataset.price) {
+                priceInput.value = parseFloat(opt.dataset.price).toFixed(2);
+            }
+        }
+
         select.addEventListener('change', () => {
             const opt = select.options[select.selectedIndex];
             priceInput.value = opt.dataset.price ? parseFloat(opt.dataset.price).toFixed(2) : '0.00';
@@ -2095,21 +2216,27 @@ function renderInvoiceItemFields(row, type, prefill = null) {
         });
     } else if (type === 'outside') {
         fieldsDiv.innerHTML = `
-            <input type="text" placeholder="Description (e.g. Car Paint - 1L White)" value="${prefillDesc}" class="invoice-item-desc w-full p-2 border rounded-lg text-sm">
-            <div class="flex gap-2">
-                <input type="number" placeholder="Qty" value="1" min="1" class="invoice-item-qty p-2 border rounded-lg w-16 text-sm">
-                <input type="number" placeholder="Charged to client" value="0.00" min="0" step="0.01" class="invoice-item-unit-price p-2 border rounded-lg flex-grow text-sm">
-                <input type="number" placeholder="What it cost you" value="0.00" min="0" step="0.01" class="invoice-item-unit-cost p-2 border rounded-lg flex-grow text-sm border-orange-300">
+            <input type="text" placeholder="Description (e.g. Car Paint, sourced part)" value="${prefillDesc}" class="invoice-item-desc w-full p-2 border rounded-lg text-sm">
+            <div class="flex gap-2 items-center mt-1">
+                <label class="text-xs text-gray-500 whitespace-nowrap">Qty</label>
+                <input type="number" value="${prefillQty}" min="1" class="invoice-item-qty p-2 border rounded-lg w-20 text-sm text-center">
+                <label class="text-xs text-gray-500 whitespace-nowrap">Charged (KSh)</label>
+                <input type="number" value="${prefillPrice}" min="0" step="0.01" class="invoice-item-unit-price p-2 border rounded-lg flex-grow text-sm">
+                <label class="text-xs text-gray-500 whitespace-nowrap">Cost (KSh)</label>
+                <input type="number" value="${prefillCost}" min="0" step="0.01" class="invoice-item-unit-cost p-2 border rounded-lg w-28 text-sm border-orange-300">
             </div>
-            <p class="text-xs text-gray-400">"What it cost you" is the amount that isn't your profit — never printed on the invoice.</p>
+            <p class="text-xs text-gray-400 mt-0.5">Cost = what you paid (never printed). Profit = Charged − Cost.</p>
         `;
     } else {
+        // Labor
         fieldsDiv.innerHTML = `
-            <input type="text" placeholder="Description (e.g. Labor - Full Service)" value="${prefillDesc}" class="invoice-item-desc w-full p-2 border rounded-lg text-sm">
-            <div class="flex gap-2">
-                <input type="number" placeholder="Qty" value="1" min="1" class="invoice-item-qty p-2 border rounded-lg w-20 text-sm">
-                <input type="number" placeholder="Unit Price (KSh)" value="0.00" min="0" step="0.01" class="invoice-item-unit-price p-2 border rounded-lg flex-grow text-sm">
-                <input type="text" placeholder="Line Total" value="0.00" class="invoice-item-amount p-2 border rounded-lg w-32 bg-gray-100 text-sm font-semibold" readonly>
+            <input type="text" placeholder="Description (e.g. Full Service, Brake Job)" value="${prefillDesc}" class="invoice-item-desc w-full p-2 border rounded-lg text-sm">
+            <div class="flex gap-2 items-center mt-1">
+                <label class="text-xs text-gray-500 whitespace-nowrap">Qty</label>
+                <input type="number" value="${prefillQty}" min="1" class="invoice-item-qty p-2 border rounded-lg w-20 text-sm text-center">
+                <label class="text-xs text-gray-500 whitespace-nowrap">Rate (KSh)</label>
+                <input type="number" value="${prefillPrice}" min="0" step="0.01" class="invoice-item-unit-price p-2 border rounded-lg flex-grow text-sm">
+                <input type="text" value="${(prefillQty * parseFloat(prefillPrice)).toFixed(2)}" class="invoice-item-amount p-2 border rounded-lg w-28 bg-gray-100 text-sm font-semibold text-right" readonly>
             </div>
         `;
     }
