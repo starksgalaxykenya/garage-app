@@ -2669,7 +2669,7 @@ async function generateInvoicePDF(invoiceId, clientPhone) {
 
         drawPdfFooter(pdfDoc, branding);
 
-        if (confirm('Share summary via WhatsApp?')) {
+        if (clientPhone && clientPhone.trim() && confirm('Share summary via WhatsApp?')) {
             const message = `*${branding.garageName || 'Garage Manager PRO'} Invoice* (No. ${invoice.invoiceNo})\n\nDear ${invoice.clientName},\n\nYour invoice total: *KSh${(invoice.total ?? 0).toFixed(2)}*.\n\nThank you!`;
             window.open(`https://wa.me/${cleanPhoneNumber(clientPhone)}?text=${encodeURIComponent(message)}`, '_blank');
         }
@@ -3000,7 +3000,7 @@ async function generateQuotePDF(quoteId, clientPhone) {
 
         drawPdfFooter(pdfDoc, branding);
 
-        if (confirm('Share summary via WhatsApp?')) {
+        if (clientPhone && clientPhone.trim() && confirm('Share summary via WhatsApp?')) {
             const message = `*${branding.garageName || 'Garage Manager PRO'} Repair Quote* (No. ${quote.quoteNo})\n\nDear ${quote.clientName},\n\nYour repair quote for the ${quote.carMake} is *KSh${(quote.total ?? 0).toFixed(2)}* (Estimated).\n\nPlease reply to confirm.`;
             window.open(`https://wa.me/${cleanPhoneNumber(clientPhone)}?text=${encodeURIComponent(message)}`, '_blank');
         }
