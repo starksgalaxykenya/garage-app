@@ -1516,7 +1516,12 @@ window.openApproveFromStock = (reqId) => {
                 status: 'approved',
                 fulfillmentNote: `${qty} x ${part.name} issued from stock`,
                 fulfilledAt: serverTimestamp(),
-                fulfilledBy: `${getSession().role}@${getSession().garageCode}`
+                fulfilledBy: `${getSession().role}@${getSession().garageCode}`,
+                resolvedPartId: partId,
+                resolvedPartName: part.name,
+                resolvedQty: qty,
+                resolvedSellingPrice: part.sellingPrice ?? 0,
+                resolvedSupplierPrice: part.supplierPrice ?? 0
             });
             t.set(transRef, {
                 type: 'PART SALE', subtype: part.name, plate: req.plate,
@@ -1901,26 +1906,40 @@ async function prefillInvoiceFromCar(car) {
         return;
     }
 
-    // Add a row for every approved/ordered part requisition (with prices filled in from inventory)
+    // Add a row for every approved/ordered part requisition
+    // Priority: use resolvedPartId/resolvedSellingPrice saved at approval time (most reliable).
+    // Fallback: fuzzy name-match against allPartsInventory.
     for (const req of approvedReqs) {
-        const inv = findInventoryPriceByName(req.partsText);
-        let qty = 1;
-        // Parse qty from fulfillmentNote e.g. "2 x Brake Pads issued from stock"
-        const qtyMatch = (req.fulfillmentNote || '').match(/^(\d+)\s*x\s/i);
-        if (qtyMatch) qty = parseInt(qtyMatch[1]) || 1;
+        // qty: use resolvedQty saved at approval, or parse from fulfillmentNote, or default 1
+        let qty = req.resolvedQty || 1;
+        if (!req.resolvedQty) {
+            const qtyMatch = (req.fulfillmentNote || '').match(/^(\d+)\s*x\s/i);
+            if (qtyMatch) qty = parseInt(qtyMatch[1]) || 1;
+        }
 
-        if (inv) {
-            // Stocked part — partId drives the select; price comes from the option's data-price
-            // so we pass sellingPrice only as a hint; renderInvoiceItemFields always reads from
-            // the selected option after render to guarantee accuracy.
-            addInvoiceItemRow({ type: 'stock', category: 'parts', description: req.partsText, partId: inv.id, qty, sellingPrice: inv.sellingPrice ?? 0 });
+        if (req.resolvedPartId) {
+            // Approved from stock with saved fields — most reliable path
+            addInvoiceItemRow({
+                type: 'stock', category: 'parts',
+                description: req.resolvedPartName || req.partsText,
+                partId: req.resolvedPartId,
+                qty,
+                sellingPrice: req.resolvedSellingPrice ?? 0,
+                supplierPrice: req.resolvedSupplierPrice ?? 0
+            });
         } else {
-            // Outside / one-time-ordered part — no inventory match, leave price at 0 for manager to fill
-            addInvoiceItemRow({ type: 'outside', category: 'parts', description: req.partsText, qty, sellingPrice: 0, supplierPrice: 0 });
+            // Older requisition without saved fields — fall back to name match
+            const inv = findInventoryPriceByName(req.partsText);
+            if (inv) {
+                addInvoiceItemRow({ type: 'stock', category: 'parts', description: req.partsText, partId: inv.id, qty, sellingPrice: inv.sellingPrice ?? 0, supplierPrice: inv.supplierPrice ?? 0 });
+            } else {
+                // One-time order or unmatched — outside row, manager fills price
+                addInvoiceItemRow({ type: 'outside', category: 'parts', description: req.resolvedPartName || req.partsText, qty, sellingPrice: 0, supplierPrice: 0 });
+            }
         }
     }
 
-    // Add plan parts that don't have an approved requisition yet (price 0 — manager fills in)
+    // Add plan parts that have no approved requisition yet (price 0 — manager fills in)
     planItems.forEach(item => {
         if (item.parts && item.parts.trim()) {
             const alreadyCovered = approvedReqs.some(r =>
@@ -1936,10 +1955,10 @@ async function prefillInvoiceFromCar(car) {
                 }
             }
         }
-        // No automatic labor rows — the manager adds labor manually with the "+ Add Line Item" button
+        // No automatic labor rows — manager adds labor via '+ Add Line Item'
     });
 
-    // If nothing was added at all (no approved reqs, no plan items with parts), add one blank row
+    // If nothing was added at all, add one blank row
     const rows = container.querySelectorAll('.invoice-item-row');
     if (rows.length === 0) addInvoiceItemRow();
 
@@ -2189,11 +2208,18 @@ function renderInvoiceItemFields(row, type, prefill = null) {
         const select = fieldsDiv.querySelector('.invoice-item-stock-select');
         const priceInput = fieldsDiv.querySelector('.invoice-item-unit-price');
 
-        // Always sync price from the currently-selected option (whether prefilled or manually chosen)
+        // Sync price from the selected option's data-price attribute.
+        // If the option has no data-price (e.g. part out of stock / placeholder),
+        // fall back to the prefill.sellingPrice that was saved at approval time.
+        const prefillSellingPrice = prefill?.sellingPrice ?? 0;
         function syncPriceFromSelection() {
             const opt = select.options[select.selectedIndex];
-            if (opt && opt.dataset.price) {
-                priceInput.value = parseFloat(opt.dataset.price).toFixed(2);
+            const optPrice = opt ? parseFloat(opt.dataset.price ?? '') : NaN;
+            if (!isNaN(optPrice) && optPrice > 0) {
+                priceInput.value = optPrice.toFixed(2);
+            } else if (prefillSellingPrice > 0) {
+                // Option not found in dropdown (stock depleted) but we have the saved price
+                priceInput.value = prefillSellingPrice.toFixed(2);
             } else {
                 priceInput.value = '0.00';
             }
