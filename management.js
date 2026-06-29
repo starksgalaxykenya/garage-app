@@ -2001,6 +2001,7 @@ async function markCarAsInvoiced(carId, invoiceId, invoiceNo) {
 }
 
 
+const INVOICE_ITEM_TYPE_LABELS = {
     labor:   '🔧 Labor (100% profit)',
     stock:   '📦 Part from my stock',
     outside: '🌍 Outside / Pass-through (e.g. paint, sourced part)'
