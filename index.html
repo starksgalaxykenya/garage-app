@@ -1699,13 +1699,37 @@ _clientsUnsubscribe = null;   // ← add this line
         const carRef = garageDoc(db, doc, 'cars', carId);
         try {
             const snap = await getDoc(carRef);
-            const existing = snap.exists() ? (snap.data().statusHistory || []) : [];
+            const carData = snap.exists() ? snap.data() : {};
+            const existing = carData.statusHistory || [];
             await updateDoc(carRef, {
                 status: 'Completed',
                 completedAt: serverTimestamp(),
                 completedBy: `${getSession().role}@${getSession().garageCode}`,
                 statusHistory: [...existing, { status: 'Completed', timestamp: new Date().toISOString(), by: `${getSession().role}@${getSession().garageCode}`, note: 'Job marked complete' }]
             });
+
+            // NEW: Notify the Garage Management Console so the manager can invoice this job.
+            // This is a best-effort write — invoicing notification should never block
+            // the mechanic/admin from completing the job, so failures are only logged.
+            try {
+                await addDoc(garageCol(db, collection, 'notifications'), {
+                    type: 'invoice_needed',
+                    carId,
+                    plate: carData.plate || 'N/A',
+                    vehicle: `${carData.make || ''} ${carData.model || ''} (${carData.year || 'N/A'})`.trim(),
+                    clientName: carData.clientName || 'N/A',
+                    clientPhone: carData.clientPhone || '',
+                    assignedMechanic: carData.assignedMechanic || carData.servicePerson || 'N/A',
+                    jobType: carData.jobType || 'StandardRepair',
+                    status: 'unread',
+                    invoiced: false,
+                    createdAt: serverTimestamp(),
+                    createdBy: `${getSession().role}@${getSession().garageCode}`
+                });
+            } catch (notifyErr) {
+                console.error("Could not create invoicing notification:", notifyErr);
+            }
+
             alert("Job successfully moved to Completed list!");
             showSection('car-list'); // Refresh the active list
         } catch (error) {
