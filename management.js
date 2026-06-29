@@ -1901,42 +1901,33 @@ async function prefillInvoiceFromCar(car) {
         return;
     }
 
-    // First, add a row for every approved/ordered part requisition (with prices filled in)
-    const handledReqIds = new Set();
+    // Add a row for every approved/ordered part requisition (with prices filled in from inventory)
     for (const req of approvedReqs) {
-        handledReqIds.add(req.id);
-        // Try to find the matching inventory part for this requisition
         const inv = findInventoryPriceByName(req.partsText);
-        // For one-time-ordered, price info may be in ledger — extract from fulfillmentNote if possible
-        let sellingPrice = inv ? (inv.sellingPrice ?? 0) : 0;
-        let supplierPrice = inv ? (inv.supplierPrice ?? 0) : 0;
-        let partId = inv ? inv.id : null;
         let qty = 1;
-
-        // Try to parse qty from fulfillmentNote (e.g. "2 x Brake Pads issued from stock")
+        // Parse qty from fulfillmentNote e.g. "2 x Brake Pads issued from stock"
         const qtyMatch = (req.fulfillmentNote || '').match(/^(\d+)\s*x\s/i);
         if (qtyMatch) qty = parseInt(qtyMatch[1]) || 1;
 
         if (inv) {
-            // This is a stocked part — add as 'stock' row with the matching inventory item selected
-            addInvoiceItemRow({ type: 'stock', category: 'parts', description: req.partsText, partId, qty, sellingPrice });
+            // Stocked part — partId drives the select; price comes from the option's data-price
+            // so we pass sellingPrice only as a hint; renderInvoiceItemFields always reads from
+            // the selected option after render to guarantee accuracy.
+            addInvoiceItemRow({ type: 'stock', category: 'parts', description: req.partsText, partId: inv.id, qty, sellingPrice: inv.sellingPrice ?? 0 });
         } else {
-            // Outside / one-time-ordered part
-            addInvoiceItemRow({ type: 'outside', category: 'parts', description: req.partsText, qty, sellingPrice, supplierPrice });
+            // Outside / one-time-ordered part — no inventory match, leave price at 0 for manager to fill
+            addInvoiceItemRow({ type: 'outside', category: 'parts', description: req.partsText, qty, sellingPrice: 0, supplierPrice: 0 });
         }
     }
 
-    // Then, add labor rows from repair plan items (and parts rows for plan items NOT covered by an approved req)
+    // Add plan parts that don't have an approved requisition yet (price 0 — manager fills in)
     planItems.forEach(item => {
-        // Parts from the plan that don't have an approved requisition yet
         if (item.parts && item.parts.trim()) {
-            // Check if this part text was covered by an approved req already
             const alreadyCovered = approvedReqs.some(r =>
                 (r.partsText || '').toLowerCase().includes(item.parts.toLowerCase()) ||
                 item.parts.toLowerCase().includes((r.partsText || '').toLowerCase())
             );
             if (!alreadyCovered) {
-                // Try to autofill price from inventory by name
                 const inv = findInventoryPriceByName(item.parts.trim());
                 if (inv) {
                     addInvoiceItemRow({ type: 'stock', category: 'parts', description: item.parts.trim(), partId: inv.id, qty: 1, sellingPrice: inv.sellingPrice ?? 0 });
@@ -1945,12 +1936,10 @@ async function prefillInvoiceFromCar(car) {
                 }
             }
         }
-        // Always add a labor row for the job action
-        addInvoiceItemRow({ type: 'labor', category: 'labor', description: item.action.trim() });
+        // No automatic labor rows — the manager adds labor manually with the "+ Add Line Item" button
     });
 
-    // If we only had approved reqs but no plan items at all, that's fine — items were added above.
-    // If nothing was added at all, add a blank row.
+    // If nothing was added at all (no approved reqs, no plan items with parts), add one blank row
     const rows = container.querySelectorAll('.invoice-item-row');
     if (rows.length === 0) addInvoiceItemRow();
 
@@ -2192,28 +2181,28 @@ function renderInvoiceItemFields(row, type, prefill = null) {
                 <label class="text-xs text-gray-500 whitespace-nowrap">Qty</label>
                 <input type="number" value="${prefillQty}" min="1" class="invoice-item-qty p-2 border rounded-lg w-20 text-sm text-center">
                 <label class="text-xs text-gray-500 whitespace-nowrap">Price (KSh)</label>
-                <input type="number" value="${prefillPrice}" min="0" step="0.01" class="invoice-item-unit-price p-2 border rounded-lg flex-grow text-sm">
-                <input type="text" value="${(prefillQty * parseFloat(prefillPrice)).toFixed(2)}" class="invoice-item-amount p-2 border rounded-lg w-28 bg-gray-100 text-sm font-semibold text-right" readonly>
+                <input type="number" value="0.00" min="0" step="0.01" class="invoice-item-unit-price p-2 border rounded-lg flex-grow text-sm">
+                <input type="text" value="0.00" class="invoice-item-amount p-2 border rounded-lg w-28 bg-gray-100 text-sm font-semibold text-right" readonly>
             </div>
             ${prefillDesc ? `<p class="text-xs text-indigo-600 mt-0.5">📌 Approved part: <strong>${prefillDesc}</strong></p>` : '<p class="text-xs text-gray-400">Price auto-fills from inventory selection · stock deducted on commit</p>'}
         `;
         const select = fieldsDiv.querySelector('.invoice-item-stock-select');
         const priceInput = fieldsDiv.querySelector('.invoice-item-unit-price');
 
-        // If prefilled with a partId, ensure it's selected
-        if (prefill?.partId) {
-            // The option was already selected by buildStockPartOptionsHtml, just trigger price sync
+        // Always sync price from the currently-selected option (whether prefilled or manually chosen)
+        function syncPriceFromSelection() {
             const opt = select.options[select.selectedIndex];
-            if (opt && parseFloat(prefillPrice) === 0 && opt.dataset.price) {
+            if (opt && opt.dataset.price) {
                 priceInput.value = parseFloat(opt.dataset.price).toFixed(2);
+            } else {
+                priceInput.value = '0.00';
             }
+            calculateInvoiceTotals();
         }
 
-        select.addEventListener('change', () => {
-            const opt = select.options[select.selectedIndex];
-            priceInput.value = opt.dataset.price ? parseFloat(opt.dataset.price).toFixed(2) : '0.00';
-            calculateInvoiceTotals();
-        });
+        // Run immediately to set price for any pre-selected option (prefilled partId)
+        syncPriceFromSelection();
+        select.addEventListener('change', syncPriceFromSelection);
     } else if (type === 'outside') {
         fieldsDiv.innerHTML = `
             <input type="text" placeholder="Description (e.g. Car Paint, sourced part)" value="${prefillDesc}" class="invoice-item-desc w-full p-2 border rounded-lg text-sm">
