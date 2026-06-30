@@ -1334,6 +1334,27 @@ window.filterLedger = function () {
 
 let _allRequisitions    = [];
 let _allPendingInventory = [];
+let _reqFilter = 'pending'; // 'pending' | 'actioned' | 'rejected' | 'all'
+
+// Approved/one-time-ordered requisitions are considered "actioned" and move out of the
+// default pending view. Rejected ones are tracked separately (treated as the "revoked" bucket).
+window.setReqFilter = function (filter) {
+    _reqFilter = filter;
+    ['pending', 'actioned', 'rejected', 'all'].forEach(f => {
+        const btn = document.getElementById(`req-filter-${f}`);
+        if (!btn) return;
+        if (f === filter) {
+            btn.className = 'req-filter-btn text-xs font-bold px-3 py-1.5 rounded-full bg-yellow-500 text-white';
+            if (f !== 'pending') {
+                const colorMap = { actioned: 'bg-green-600', rejected: 'bg-red-600', all: 'bg-indigo-600' };
+                btn.className = `req-filter-btn text-xs font-bold px-3 py-1.5 rounded-full ${colorMap[f]} text-white`;
+            }
+        } else {
+            btn.className = 'req-filter-btn text-xs font-bold px-3 py-1.5 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200';
+        }
+    });
+    renderRequisitions();
+};
 
 function updateRequestsBadge() {
     const badge = document.getElementById('requests-badge');
@@ -1369,14 +1390,40 @@ function renderRequisitions() {
     const emptyMsg = document.getElementById('requisitions-empty-msg');
     if (!tbody) return;
 
-    if (_allRequisitions.length === 0) {
+    const searchTerm = (document.getElementById('req-search-plate')?.value || '').trim().toLowerCase();
+
+    // Status bucket filter:
+    //   pending   -> status === 'pending' (needs action)
+    //   actioned  -> status === 'approved' || 'one-time-ordered' (fulfilled, moved out of the way)
+    //   rejected  -> status === 'rejected' (the "revoked" bucket)
+    //   all       -> everything
+    let filtered = _allRequisitions;
+    if (_reqFilter === 'pending') {
+        filtered = filtered.filter(r => (r.status || 'pending') === 'pending');
+    } else if (_reqFilter === 'actioned') {
+        filtered = filtered.filter(r => r.status === 'approved' || r.status === 'one-time-ordered');
+    } else if (_reqFilter === 'rejected') {
+        filtered = filtered.filter(r => r.status === 'rejected');
+    }
+    // 'all' falls through with no filtering
+
+    if (searchTerm) {
+        filtered = filtered.filter(r => (r.plate || '').toLowerCase().includes(searchTerm));
+    }
+
+    if (filtered.length === 0) {
         tbody.innerHTML = '';
-        if (emptyMsg) emptyMsg.classList.remove('hidden');
+        if (emptyMsg) {
+            emptyMsg.textContent = searchTerm
+                ? `No requests match plate "${document.getElementById('req-search-plate').value}".`
+                : (_reqFilter === 'pending' ? 'No pending requests — all caught up.' : 'No requests in this view.');
+            emptyMsg.classList.remove('hidden');
+        }
         return;
     }
     if (emptyMsg) emptyMsg.classList.add('hidden');
 
-    tbody.innerHTML = _allRequisitions.map(r => {
+    tbody.innerHTML = filtered.map(r => {
         const badgeCls = REQ_STATUS_BADGE[r.status] || 'bg-gray-100 text-gray-700';
         const statusLabel = (r.status || 'pending').replace(/-/g, ' ');
         let actions = `<span class="text-xs text-gray-400">No action needed</span>`;
