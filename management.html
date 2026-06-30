@@ -643,11 +643,31 @@
 
             <!-- ====== PENDING REQUESTS TAB (Parts Requisitions + Inventory Approvals) ====== -->
             <div id="content-requests" class="tab-content hidden">
-                <h2 class="text-3xl font-bold text-gray-800 border-b pb-2 mb-6">🔔 Pending Requests</h2>
+                <h2 class="text-3xl font-bold text-gray-800 border-b pb-2 mb-4">🔔 Parts Requests</h2>
 
+                <!-- Search & Filter bar -->
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-4 flex flex-wrap gap-3 items-end">
+                    <div class="flex-1 min-w-[180px]">
+                        <label class="block text-xs font-semibold text-gray-500 mb-1">Search by Plate</label>
+                        <input id="req-search-plate" type="text" placeholder="e.g. KBZ 123A"
+                               oninput="renderRequisitions()"
+                               class="w-full p-2 border rounded-lg text-sm" />
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-500 mb-1">Status filter</label>
+                        <div class="flex gap-1">
+                            <button id="req-filter-pending" onclick="setReqFilter('pending')" class="req-filter-btn text-xs font-bold px-3 py-1.5 rounded-full bg-yellow-500 text-white">⏳ Pending</button>
+                            <button id="req-filter-actioned" onclick="setReqFilter('actioned')" class="req-filter-btn text-xs font-bold px-3 py-1.5 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200">✅ Past Actioned</button>
+                            <button id="req-filter-rejected" onclick="setReqFilter('rejected')" class="req-filter-btn text-xs font-bold px-3 py-1.5 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200">✖ Rejected / Revoked</button>
+                            <button id="req-filter-all" onclick="setReqFilter('all')" class="req-filter-btn text-xs font-bold px-3 py-1.5 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200">All</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Parts Requisitions table -->
                 <div class="bg-white p-6 rounded-xl shadow-lg mb-6">
                     <h3 class="text-xl font-semibold mb-1 text-indigo-700 border-b pb-2">🧾 Parts Requisitions (from Jobs)</h3>
-                    <p class="text-xs text-gray-500 mb-4">Parts mechanics/admins have listed against a car's repair plan. Approve from stock, or place a one-time special order for parts not held in the garage store.</p>
+                    <p class="text-xs text-gray-500 mb-4">Parts mechanics/admins have listed against a car's repair plan. Approve from stock, or place a one-time special order for parts not held in the garage store. Once a request is approved or rejected it moves out of this default view — use the filters above to find it again.</p>
                     <div class="overflow-x-auto">
                         <table class="min-w-full divide-y divide-gray-200 text-sm">
                             <thead class="bg-gray-50">
@@ -663,9 +683,10 @@
                             <tbody id="requisitions-table-body" class="bg-white divide-y divide-gray-200"></tbody>
                         </table>
                     </div>
-                    <p id="requisitions-empty-msg" class="text-center text-gray-400 py-4 hidden">No parts requisitions yet.</p>
+                    <p id="requisitions-empty-msg" class="text-center text-gray-400 py-4 hidden">No requests match your filter.</p>
                 </div>
 
+                <!-- Pending Inventory Approvals -->
                 <div class="bg-white p-6 rounded-xl shadow-lg">
                     <h3 class="text-xl font-semibold mb-1 text-indigo-700 border-b pb-2">📥 Pending Inventory Approvals</h3>
                     <p class="text-xs text-gray-500 mb-4">New parts logged with only a selling price. Set the buying/supplier price to approve into stock — the buying price stays hidden from the inventory view.</p>
@@ -690,7 +711,7 @@
 
             <!-- ── Generic Action Modal (Approve / One-Time Order / Reject / Set Buying Price) ── -->
             <div id="reqActionModal" class="fixed inset-0 bg-black/60 z-50 hidden items-center justify-center p-4">
-                <div class="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
+                <div class="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 max-h-[90vh] overflow-y-auto">
                     <h3 id="reqActionTitle" class="text-xl font-bold mb-4 text-indigo-700"></h3>
                     <div id="reqActionBody" class="space-y-3"></div>
                     <p id="reqActionMsg" class="text-sm mt-2"></p>
@@ -809,8 +830,9 @@
                     <p id="active-jobs-empty-msg" class="text-center text-gray-400 py-4 hidden">No booked cars found.</p>
                 </div>
 
-                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-                    <div class="lg:col-span-1 bg-white p-6 rounded-xl shadow-lg lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto">
+                <div id="invoice-split" class="flex-wrap" style="display:flex;gap:16px;align-items:flex-start;">
+                    <div id="invoice-form-panel" style="min-width:280px;max-width:90%;width:380px;min-height:400px;resize:both;overflow:auto;background:#fff;padding:1.5rem;border-radius:0.75rem;box-shadow:0 1px 8px rgba(0,0,0,.08);flex-shrink:0;">
+                        <p class="text-[11px] text-gray-400 mb-2 select-none">↘ Drag the bottom-right corner to resize this panel</p>
                         <h3 class="text-xl font-semibold mb-1 text-indigo-700 border-b pb-2">Generate Invoice</h3>
                         <p id="invoice-source-car-banner" class="hidden text-xs font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg p-2 mb-2 mt-2"></p>
                         <form id="invoice-creation-form" class="space-y-3 mt-3">
@@ -840,7 +862,7 @@
                                     <h4 class="font-semibold text-gray-700 text-sm">Line Items</h4>
                                     <span class="text-xs text-gray-400">Labor · Parts · External</span>
                                 </div>
-                                <div id="invoice-items-container" class="space-y-2 max-h-96 overflow-y-auto pr-1">
+                                <div id="invoice-items-container" class="space-y-2 pr-1">
                                 </div>
                                 <button type="button" onclick="addInvoiceItemRow()" class="w-full mt-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold text-sm py-2 rounded-lg border border-dashed border-indigo-300 transition"><i class="fas fa-plus mr-1"></i>Add Line Item</button>
                             </div>
@@ -902,8 +924,8 @@
                             <p class="text-xs text-gray-400 text-center pt-1">Saved as unpaid · won't reflect in Finance until receipted</p>
                             <button id="invoice-clear-source-btn" type="button" class="hidden w-full text-xs text-gray-400 hover:text-gray-600 underline">Clear linked job &amp; start blank</button>
                         </form>
-                    </div> 
-                    <div class="lg:col-span-2 bg-white p-6 rounded-xl shadow-lg">
+                    </div>
+                    <div id="invoice-list-panel" style="flex:1;min-width:0;min-height:400px;background:#fff;padding:1.5rem;border-radius:0.75rem;box-shadow:0 1px 8px rgba(0,0,0,.08);overflow:auto;resize:vertical;">
                         <h3 class="text-xl font-semibold mb-4 text-indigo-700 border-b pb-2">Past Invoices & Receipts</h3>
                         <div class="overflow-x-auto">
                             <table class="min-w-full divide-y divide-gray-200">
@@ -928,7 +950,7 @@
 
             <!-- ── Receipt Invoice Modal ── -->
             <div id="receiptModal" class="fixed inset-0 bg-black/60 z-50 hidden items-center justify-center p-4">
-                <div class="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
+                <div class="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 max-h-[90vh] overflow-y-auto">
                     <h3 class="text-xl font-bold mb-1 text-indigo-700">🧾 Receipt Invoice</h3>
                     <p class="text-sm text-gray-500 mb-4">Confirm payment to generate a receipt. This will reflect the amount in Finance.</p>
                     <div id="receiptModalBody" class="space-y-3 bg-gray-50 rounded-lg p-3 text-sm"></div>
