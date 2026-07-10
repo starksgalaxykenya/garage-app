@@ -108,7 +108,10 @@
                 🗑️ Deletion Requests
                 <span id="deletions-badge" class="hidden ml-1 bg-red-600 text-white text-xs font-bold rounded-full px-2 py-0.5">0</span>
             </button>
-            <button id="tab-accrual" class="tab-button">📊 Accrual & Car Profitability</button>
+            <button id="tab-accrual" class="tab-button flex items-center gap-1">
+                📊 Accrual & Car Profitability
+                <span id="expected-profit-badge" class="hidden ml-1 bg-amber-500 text-white text-xs font-bold rounded-full px-2 py-0.5">0</span>
+            </button>
             <button id="tab-branding" class="tab-button flex items-center gap-1">
                 <span>🎨</span> Garage Settings
             </button>
@@ -767,6 +770,29 @@
                     <em>vehicle checked in</em> — so a car that came in in January and was only invoiced in July still
                     shows its profit in January.
                 </p>
+
+                <!-- Set Expected Profit queue — cars are booked WITHOUT an expected profit
+                     target now; the manager sets it here (they have visibility into real
+                     parts/labor costs), which then drives the profitability alerts. -->
+                <div class="bg-white p-6 rounded-xl shadow-lg mb-6 border-l-4 border-amber-400">
+                    <h3 class="text-xl font-semibold mb-1 text-amber-700 border-b pb-2">💰 Set Expected Profit — New Bookings</h3>
+                    <p class="text-xs text-gray-500 mb-4">These jobs were just checked in and don't have a profit target yet. Set one so the app can warn staff if costs start eating into it.</p>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200 text-sm">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Vehicle / Plate</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Client</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Checked In</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Booked By</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="expected-profit-queue-body" class="bg-white divide-y divide-gray-200"></tbody>
+                        </table>
+                    </div>
+                    <p id="expected-profit-queue-empty-msg" class="text-center text-gray-400 py-4 hidden">Nothing waiting — every active job has a profit target set. 🎉</p>
+                </div>
 
                 <!-- Per-car profitability -->
                 <div class="bg-white p-6 rounded-xl shadow-lg mb-6">
