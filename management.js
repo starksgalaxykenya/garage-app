@@ -349,7 +349,7 @@ async function saveRolePermissions() {
     }
 }
 
-const ALL_TABS = ['tab-finance', 'tab-payroll', 'tab-inventory', 'tab-requests', 'tab-suppliers', 'tab-invoices', 'tab-quotes', 'tab-branding'];
+const ALL_TABS = ['tab-finance', 'tab-payroll', 'tab-inventory', 'tab-requests', 'tab-suppliers', 'tab-invoices', 'tab-quotes', 'tab-deletions', 'tab-accrual', 'tab-branding'];
 
 function applyRolePermissions(role) {
     // Manager always gets full access — never restrict
@@ -467,6 +467,7 @@ function grantManagementAccess(role) {
     listenForQuotes();
     listenForActiveJobCars();
     listenForInvoiceNotifications();
+    listenForDeletionRequests();
     applyDefaultVatToInvoiceForm();
     if (can('viewFinancials')) {
         listenForEmployees();
@@ -536,6 +537,10 @@ tabNav.addEventListener('click', (event) => {
         document.getElementById(targetId).classList.remove('hidden');
         if (targetId === 'content-finance') {
             document.getElementById('report-view-section').classList.add('hidden');
+        }
+        if (targetId === 'content-accrual') {
+            renderCarProfitability();
+            renderAccrualMonthlyTable();
         }
     }
 });
@@ -1827,12 +1832,14 @@ function listenForActiveJobCars() {
     onSnapshot(q, snapshot => {
         allActiveJobCars = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
         if (_activeJobsFilter === 'active') renderActiveJobsTable();
+        if (!document.getElementById('content-accrual')?.classList.contains('hidden')) renderCarProfitability();
     }, err => console.error('Active job cars listener error:', err));
 
     const qCompleted = query(getCarsRef(), where('status', '==', 'Completed'), orderBy('createdAt', 'desc'));
     onSnapshot(qCompleted, snapshot => {
         allCompletedJobCars = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
         if (_activeJobsFilter === 'completed') renderActiveJobsTable();
+        if (!document.getElementById('content-accrual')?.classList.contains('hidden')) renderCarProfitability();
     }, err => console.error('Completed job cars listener error:', err));
 }
 
@@ -2128,7 +2135,305 @@ async function markCarAsInvoiced(carId, invoiceId, invoiceNo) {
 }
 
 
-const INVOICE_ITEM_TYPE_LABELS = {
+// ── Completed-job deletion requests ("🗑️ Deletion Requests") ──
+// Mirrors the invoice_needed notification pattern: staff in the garage app
+// no longer delete completed job history directly — they raise a
+// 'deletion_request' notification here that a manager must approve.
+let allDeletionRequests = [];
+
+function listenForDeletionRequests() {
+    const q = query(getNotificationsRef(), where('type', '==', 'deletion_request'), orderBy('createdAt', 'desc'));
+    onSnapshot(q, snapshot => {
+        allDeletionRequests = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        renderDeletionRequests();
+    }, err => console.error('Deletion requests listener error:', err));
+}
+
+function renderDeletionRequests() {
+    const pendingBody = document.getElementById('deletion-requests-table-body');
+    const pendingEmpty = document.getElementById('deletion-requests-empty-msg');
+    const historyBody = document.getElementById('deletion-requests-history-body');
+    const historyEmpty = document.getElementById('deletion-requests-history-empty-msg');
+    const badge = document.getElementById('deletions-badge');
+    if (!pendingBody) return;
+
+    const pending = allDeletionRequests.filter(r => r.status === 'pending');
+    const actioned = allDeletionRequests.filter(r => r.status !== 'pending').slice(0, 25);
+
+    if (badge) {
+        if (pending.length > 0) { badge.textContent = String(pending.length); badge.classList.remove('hidden'); }
+        else badge.classList.add('hidden');
+    }
+
+    if (pending.length === 0) {
+        pendingBody.innerHTML = '';
+        if (pendingEmpty) pendingEmpty.classList.remove('hidden');
+    } else {
+        if (pendingEmpty) pendingEmpty.classList.add('hidden');
+        pendingBody.innerHTML = pending.map(r => {
+            const requestedOn = r.createdAt && typeof r.createdAt.toDate === 'function' ? new Date(r.createdAt.toDate()).toLocaleString() : 'Pending…';
+            return `
+            <tr class="hover:bg-gray-50 align-top">
+                <td class="px-4 py-3 text-sm font-medium">${escapeHtml(r.plate || 'N/A')}<br><span class="text-xs text-gray-500">${escapeHtml(r.vehicle || '')}</span></td>
+                <td class="px-4 py-3 text-sm">${escapeHtml(r.clientName || 'N/A')}<br><span class="text-xs text-gray-500">${escapeHtml(r.clientPhone || '')}</span></td>
+                <td class="px-4 py-3 text-sm">${escapeHtml(r.requestedBy || 'N/A')}</td>
+                <td class="px-4 py-3 text-sm text-gray-500">${requestedOn}</td>
+                <td class="px-4 py-3 text-sm">
+                    <div class="flex flex-col gap-1">
+                        <button onclick="approveDeletionRequest('${r.id}')" class="text-xs bg-red-600 hover:bg-red-700 text-white font-bold px-2 py-1 rounded">🗑️ Approve &amp; Delete</button>
+                        <button onclick="rejectDeletionRequest('${r.id}')" class="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold px-2 py-1 rounded">✖ Reject / Keep Job</button>
+                    </div>
+                </td>
+            </tr>`;
+        }).join('');
+    }
+
+    if (actioned.length === 0) {
+        historyBody.innerHTML = '';
+        if (historyEmpty) historyEmpty.classList.remove('hidden');
+    } else {
+        if (historyEmpty) historyEmpty.classList.add('hidden');
+        historyBody.innerHTML = actioned.map(r => {
+            const outcome = r.status === 'approved'
+                ? `<span class="px-2 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700">🗑️ Deleted</span>`
+                : `<span class="px-2 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700">✖ Rejected — kept</span>`;
+            return `
+            <tr class="hover:bg-gray-50">
+                <td class="px-4 py-3 text-sm font-medium">${escapeHtml(r.plate || 'N/A')} <span class="text-xs text-gray-500">${escapeHtml(r.vehicle || '')}</span></td>
+                <td class="px-4 py-3 text-sm">${outcome}</td>
+                <td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(r.resolvedBy || '—')}</td>
+            </tr>`;
+        }).join('');
+    }
+}
+
+window.approveDeletionRequest = async (requestId) => {
+    const req = allDeletionRequests.find(r => r.id === requestId);
+    if (!req) return;
+    if (!can('viewFinancials')) { alert('Only a manager can approve job deletions.'); return; }
+    if (!confirm(`Permanently delete the job history for ${req.plate || 'this vehicle'}? This cannot be undone.`)) return;
+
+    try {
+        // Delete the underlying car document (if it still exists), then resolve the request.
+        if (req.carId) {
+            await deleteDoc(garageDoc(db, doc, 'cars', req.carId)).catch(err => {
+                // Car may already be gone — that's fine, still resolve the request.
+                console.warn('Car doc already missing on delete approval:', err.message);
+            });
+        }
+        await updateDoc(garageDoc(db, doc, 'notifications', requestId), {
+            status: 'approved',
+            resolvedBy: `${getSession().role}@${getSession().garageCode}`,
+            resolvedAt: serverTimestamp()
+        });
+        alert('Job history deleted.');
+    } catch (err) {
+        console.error('Error approving deletion request:', err);
+        alert(`Could not delete job: ${err.message}`);
+    }
+};
+
+window.rejectDeletionRequest = async (requestId) => {
+    const req = allDeletionRequests.find(r => r.id === requestId);
+    if (!req) return;
+    if (!can('viewFinancials')) { alert('Only a manager can action deletion requests.'); return; }
+    if (!confirm(`Reject this deletion request and keep ${req.plate || 'this job'}'s history?`)) return;
+
+    try {
+        // Clear the "deletionRequested" flag on the car so staff can request again later if needed.
+        if (req.carId) {
+            await updateDoc(garageDoc(db, doc, 'cars', req.carId), {
+                deletionRequested: false, deletionRequestedAt: null, deletionRequestedBy: null
+            }).catch(err => console.warn('Could not clear deletionRequested flag (car may be gone):', err.message));
+        }
+        await updateDoc(garageDoc(db, doc, 'notifications', requestId), {
+            status: 'rejected',
+            resolvedBy: `${getSession().role}@${getSession().garageCode}`,
+            resolvedAt: serverTimestamp()
+        });
+    } catch (err) {
+        console.error('Error rejecting deletion request:', err);
+        alert(`Could not reject request: ${err.message}`);
+    }
+};
+
+// ── Accrual accounting & per-car profitability ──
+// Works entirely from the existing `cars` and `invoices` caches — no new
+// collections needed. Accrual period = the linked car's check-in
+// (createdAt) month; falls back to the invoice's own issue date when a job
+// has no linked car (e.g. a walk-in counter sale).
+function monthKeyFromDate(d) {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+function monthLabelFromKey(key) {
+    const [y, m] = key.split('-').map(Number);
+    return new Date(y, m - 1, 1).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+}
+function findCachedCar(carId) {
+    if (!carId) return null;
+    return allActiveJobCars.find(c => c.id === carId) || allCompletedJobCars.find(c => c.id === carId) || null;
+}
+function carIntakeDate(car) {
+    if (!car) return null;
+    if (car.createdAt && typeof car.createdAt.toDate === 'function') return car.createdAt.toDate();
+    if (car.createdAt) return new Date(car.createdAt);
+    return null;
+}
+// The accrual period an invoice's revenue/profit should be attributed to.
+function accrualMonthKeyForInvoice(inv) {
+    const car = findCachedCar(inv.sourceCarId);
+    const intake = carIntakeDate(car);
+    if (intake) return monthKeyFromDate(intake);
+    // No linked job (or car since deleted) — fall back to the invoice's own date.
+    if (inv.date) return inv.date.slice(0, 7);
+    return null;
+}
+// The cash-basis period — the month payment was actually receipted.
+function cashMonthKeyForInvoice(inv) {
+    if (inv.status !== 'paid') return null; // unpaid invoices haven't hit cash basis yet
+    if (inv.paidAt && typeof inv.paidAt.toDate === 'function') return monthKeyFromDate(inv.paidAt.toDate());
+    if (inv.date) return inv.date.slice(0, 7);
+    return null;
+}
+
+function renderAccrualMonthlyTable() {
+    const tbody = document.getElementById('accrual-monthly-table-body');
+    const emptyMsg = document.getElementById('accrual-monthly-empty-msg');
+    if (!tbody) return;
+    if (!can('viewFinancials')) {
+        tbody.innerHTML = `<tr><td colspan="5" class="px-4 py-6 text-center text-gray-400">🔒 Financial figures are hidden for your role.</td></tr>`;
+        if (emptyMsg) emptyMsg.classList.add('hidden');
+        return;
+    }
+
+    const months = {}; // key -> { accrualRevenue, accrualProfit, cashRevenue, cashProfit }
+    const ensure = (key) => months[key] || (months[key] = { accrualRevenue: 0, accrualProfit: 0, cashRevenue: 0, cashProfit: 0 });
+
+    allInvoices.forEach(inv => {
+        const aKey = accrualMonthKeyForInvoice(inv);
+        if (aKey) {
+            const m = ensure(aKey);
+            m.accrualRevenue += inv.total ?? 0;
+            m.accrualProfit += inv.totalProfit ?? (inv.total ?? 0);
+        }
+        const cKey = cashMonthKeyForInvoice(inv);
+        if (cKey) {
+            const m = ensure(cKey);
+            m.cashRevenue += inv.total ?? 0;
+            m.cashProfit += inv.totalProfit ?? (inv.total ?? 0);
+        }
+    });
+
+    const sortedKeys = Object.keys(months).sort().reverse();
+    if (sortedKeys.length === 0) {
+        tbody.innerHTML = '';
+        if (emptyMsg) emptyMsg.classList.remove('hidden');
+        return;
+    }
+    if (emptyMsg) emptyMsg.classList.add('hidden');
+
+    tbody.innerHTML = sortedKeys.map(key => {
+        const m = months[key];
+        const profitCls = (v) => v >= 0 ? 'text-indigo-600' : 'text-red-600';
+        return `
+            <tr class="hover:bg-gray-50">
+                <td class="px-4 py-3 text-sm font-medium">${monthLabelFromKey(key)}</td>
+                <td class="px-4 py-3 text-sm text-right">KSh${safeToFixed(m.accrualRevenue)}</td>
+                <td class="px-4 py-3 text-sm text-right font-semibold ${profitCls(m.accrualProfit)}">KSh${safeToFixed(m.accrualProfit)}</td>
+                <td class="px-4 py-3 text-sm text-right text-gray-500">KSh${safeToFixed(m.cashRevenue)}</td>
+                <td class="px-4 py-3 text-sm text-right font-semibold ${profitCls(m.cashProfit)}">KSh${safeToFixed(m.cashProfit)}</td>
+            </tr>`;
+    }).join('');
+}
+
+// Per-car profitability: expected profit (set at check-in) vs actual
+// invoiced cost/profit, plus a running-cost alert level.
+function computeCarProfitability(car) {
+    const carInvoices = allInvoices.filter(inv => inv.sourceCarId === car.id);
+    const actualRevenue = carInvoices.reduce((s, i) => s + (i.total ?? 0), 0);
+    const actualCost = carInvoices.reduce((s, i) => s + (i.totalCost ?? 0), 0);
+    const actualProfit = carInvoices.reduce((s, i) => s + (i.totalProfit ?? (i.total ?? 0)), 0);
+    const expectedProfit = car.expectedProfit || 0;
+
+    // Running-cost signal from the repair plan's own estimated costs
+    // (entered by staff at check-in / while adding repair items) —
+    // available even before any invoice exists.
+    const estCost = (car.repairPlanItems || []).filter(i => !i.revoked)
+        .reduce((s, i) => s + (parseFloat(i.estimatedCost) || 0), 0);
+
+    let alertLevel = 'ok';
+    if (expectedProfit > 0) {
+        // Once invoiced, judge against real numbers; before that, use the estimate.
+        const gauge = carInvoices.length > 0 ? actualCost : estCost;
+        const ratio = gauge / expectedProfit;
+        if (carInvoices.length > 0 && actualProfit < 0) alertLevel = 'danger';
+        else if (ratio >= 1) alertLevel = 'danger';
+        else if (ratio >= 0.7) alertLevel = 'warn';
+    }
+
+    const intake = carIntakeDate(car);
+    return { car, actualRevenue, actualCost, actualProfit, expectedProfit, estCost, alertLevel, invoiced: carInvoices.length > 0, intake };
+}
+
+function renderCarProfitability() {
+    const tbody = document.getElementById('car-profitability-table-body');
+    const emptyMsg = document.getElementById('car-profitability-empty-msg');
+    if (!tbody) return;
+    if (!can('viewFinancials')) {
+        tbody.innerHTML = `<tr><td colspan="6" class="px-4 py-6 text-center text-gray-400">🔒 Profitability figures are hidden for your role.</td></tr>`;
+        if (emptyMsg) emptyMsg.classList.add('hidden');
+        return;
+    }
+
+    const search = (document.getElementById('accrual-car-search')?.value || '').trim().toLowerCase();
+    const alertFilter = document.getElementById('accrual-car-alert-filter')?.value || 'all';
+
+    const allCars = [...allActiveJobCars, ...allCompletedJobCars].filter(c => c.jobType !== 'GeneralService');
+    let rows = allCars.map(computeCarProfitability);
+
+    if (search) {
+        rows = rows.filter(r => (r.car.plate || '').toLowerCase().includes(search) || (r.car.clientName || '').toLowerCase().includes(search));
+    }
+    if (alertFilter === 'danger') rows = rows.filter(r => r.alertLevel === 'danger');
+    if (alertFilter === 'warn') rows = rows.filter(r => r.alertLevel === 'warn');
+
+    // Most recently checked-in first
+    rows.sort((a, b) => (b.intake?.getTime() || 0) - (a.intake?.getTime() || 0));
+
+    if (rows.length === 0) {
+        tbody.innerHTML = '';
+        if (emptyMsg) emptyMsg.classList.remove('hidden');
+        return;
+    }
+    if (emptyMsg) emptyMsg.classList.add('hidden');
+
+    const ALERT_BADGE = {
+        ok:     '<span class="px-2 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700">🟢 On track</span>',
+        warn:   '<span class="px-2 py-1 rounded-full text-xs font-bold bg-orange-100 text-orange-700">🟠 Approaching loss</span>',
+        danger: '<span class="px-2 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700">🔴 Loss risk</span>'
+    };
+
+    tbody.innerHTML = rows.map(r => {
+        const monthLabel = r.intake ? r.intake.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }) : 'N/A';
+        const costCell = r.invoiced
+            ? `KSh${safeToFixed(r.actualCost)}`
+            : `<span class="text-gray-400">Est. KSh${safeToFixed(r.estCost)}</span>`;
+        const profitCell = r.invoiced
+            ? `<span class="font-semibold ${r.actualProfit >= 0 ? 'text-indigo-600' : 'text-red-600'}">KSh${safeToFixed(r.actualProfit)}</span>`
+            : `<span class="text-gray-400">Not yet invoiced</span>`;
+        return `
+            <tr class="hover:bg-gray-50 align-top">
+                <td class="px-4 py-3 text-sm font-medium">${escapeHtml(r.car.plate || 'N/A')}<br><span class="text-xs text-gray-500">${escapeHtml(r.car.make || '')} ${escapeHtml(r.car.model || '')}</span></td>
+                <td class="px-4 py-3 text-sm">${monthLabel}</td>
+                <td class="px-4 py-3 text-sm">${r.expectedProfit > 0 ? 'KSh' + safeToFixed(r.expectedProfit) : '<span class="text-gray-400">Not set</span>'}</td>
+                <td class="px-4 py-3 text-sm">${costCell}</td>
+                <td class="px-4 py-3 text-sm">${profitCell}</td>
+                <td class="px-4 py-3 text-sm">${ALERT_BADGE[r.alertLevel]}</td>
+            </tr>`;
+    }).join('');
+}
+
+
     labor:   '🔧 Labor (100% profit)',
     stock:   '📦 Part from my stock',
     outside: '🌍 Outside / Pass-through (e.g. paint, sourced part)'
@@ -2607,6 +2912,10 @@ function listenForInvoices() {
             invoicesTableBody.appendChild(tr);
         });
         renderActiveJobsTable(); // keep "Invoiced" badges in sync with the live invoices list
+        if (!document.getElementById('content-accrual')?.classList.contains('hidden')) {
+            renderCarProfitability();
+            renderAccrualMonthlyTable();
+        }
     }, error => console.error("Error listening to invoices: ", error));
 }
 
