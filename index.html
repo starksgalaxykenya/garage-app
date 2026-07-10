@@ -27,8 +27,18 @@
         @media print {
             body * { visibility: hidden; }
             #jobCardModal, #jobCardModal * { visibility: visible; }
-            #jobCardModal { position: absolute; left: 0; top: 0; width: 100%; }
+            #jobCardModal { position: absolute; left: 0; top: 0; width: 100%; background: #fff; }
+            #job-card-dialog { box-shadow: none !important; max-height: none !important; overflow: visible !important; width: 100% !important; max-width: 100% !important; padding: 8mm !important; margin: 0 !important; }
+            /* Only the compact, print-optimized job card is shown on paper —
+               the full interactive job card content stays on screen only. */
+            #job-card-content, #intake-checklist-panel, #job-photos-panel, .print\:hidden { display: none !important; }
+            #job-card-print-only { display: block !important; }
+            @page { size: A4; margin: 10mm; }
         }
+        #job-card-print-only { display: none; }
+        .print-checklist-item { display: flex; align-items: flex-start; gap: 6px; padding: 2px 0; border-bottom: 1px dashed #e5e7eb; font-size: 11.5px; }
+        .print-box { width: 11px; height: 11px; border: 1.5px solid #111827; border-radius: 2px; flex-shrink: 0; margin-top: 2px; }
+        .print-box.checked { background: #111827; }
         .service-table th { text-align: left; padding: 8px 12px; background-color: #eef2ff; }
         .service-table td { padding: 8px 12px; border-bottom: 1px solid #e5e7eb; }
         .checklist-row:hover { background: #f9fafb; }
@@ -267,6 +277,12 @@
                         <div>
                             <label for="delivery-date" class="block text-sm font-medium text-gray-700 mb-1">Estimated Delivery Date</label>
                             <input id="delivery-date" type="date" class="w-full p-3 border rounded-lg" />
+                        </div>
+                        <div>
+                            <label for="expected-profit" class="block text-sm font-medium text-gray-700 mb-1">💰 Expected Profit (KSh)</label>
+                            <input id="expected-profit" type="number" min="0" step="0.01" placeholder="e.g. 15000"
+                                   class="w-full p-3 border rounded-lg" />
+                            <p class="text-xs text-gray-400 mt-1">Target profit for this job. Used to warn you if parts/repair costs start eating into it.</p>
                         </div>
                     </div>
                 </fieldset>
@@ -733,6 +749,10 @@
                 </div>
                 <div id="job-card-content" class="space-y-4 text-gray-700">
                     </div>
+                <!-- PRINT-ONLY compact job card: car details, problems, error codes,
+                     a simple repair checklist, and parts — built to fit one page.
+                     Populated by buildPrintableJobCardHtml(); invisible on screen. -->
+                <div id="job-card-print-only"></div>
                 <!-- Intake Checklist Panel (hidden by default, toggled) -->
                 <div id="intake-checklist-panel" class="mt-4 border-t pt-4" style="display:none;"></div>
                 <!-- Photos Panel (hidden by default, toggled) -->
@@ -1494,7 +1514,12 @@ _clientsUnsubscribe = null;   // ← add this line
             assignedMechanic: document.getElementById('assigned-mechanic').value,
             dueDate: document.getElementById('due-date').value,
             deliveryDate: document.getElementById('delivery-date').value,
-            
+
+            // ACCRUAL / PROFITABILITY: the profit this job is expected to make.
+            // Attributed, for accounting purposes, to the month the car checked
+            // in (this document's createdAt) — not the month the job finishes.
+            expectedProfit: parseFloat(document.getElementById('expected-profit').value) || 0,
+
             // Repair Plan Details (for job card display)
             repairPlanItems: repairPlan, // Store as array for detailed view
             repairNotes: actionItems,    // Store as consolidated string for PDF/summary
@@ -1663,9 +1688,12 @@ _clientsUnsubscribe = null;   // ← add this line
         }
 
         const isActive = status !== 'Completed';
+        const deletionPending = !!car.deletionRequested;
         const actions = isActive ? 
             `<button onclick="markCarAsCompleted('${car.id}')" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-3 rounded transition duration-150 text-sm">Mark Complete</button>` :
-            `<button onclick="deleteCompletedCar('${car.id}')" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-3 rounded transition duration-150 text-sm">Delete History</button>`;
+            (deletionPending
+                ? `<button disabled title="Awaiting manager approval in the Garage Manager console" class="bg-gray-200 text-gray-500 font-bold py-2 px-3 rounded text-sm cursor-not-allowed">⏳ Deletion Pending Approval</button>`
+                : `<button onclick="deleteCompletedCar('${car.id}')" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-3 rounded transition duration-150 text-sm">Delete History</button>`);
             
         const viewReportBtn = `<button onclick="openDetailedReport('${car.id}')" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-3 rounded transition duration-150 text-sm">View Report</button>`;
 
@@ -1673,6 +1701,13 @@ _clientsUnsubscribe = null;   // ← add this line
         const completionBar = (car.jobType !== 'GeneralService' && car.repairPlanItems && car.repairPlanItems.length > 0)
             ? completionBarHtml(car.repairPlanItems, true)
             : '';
+
+        // Profitability alert — compares the running estimated cost of the
+        // repair plan's items against the Expected Profit set at intake.
+        // This is a lightweight, on-device signal (see the full accrual
+        // profitability report in the Garage Manager console for the
+        // authoritative version using actual invoiced costs).
+        const profitAlert = profitAlertHtml(car);
 
         card.innerHTML = `
             <div class="flex justify-between items-start mb-1">
@@ -1685,12 +1720,61 @@ _clientsUnsubscribe = null;   // ← add this line
             <p class="text-sm text-gray-600 mb-1">Due: ${car.deliveryDate || 'TBD'}</p>
             ${pipelineHtml}
             ${completionBar}
+            ${profitAlert}
             <div class="flex space-x-2 mt-3 flex-wrap gap-y-2">
                 ${actions}
                 ${viewReportBtn}
             </div>
         `;
         return card;
+    }
+
+    /**
+     * Builds a small profitability warning banner for a car card by comparing
+     * the estimated cost of its (non-revoked) repair plan items against the
+     * Expected Profit set when the car was checked in. This is a fast,
+     * client-side early-warning signal — the Garage Manager console has the
+     * authoritative per-car profitability report using real invoiced costs.
+     */
+    /**
+     * Renders an "Expected vs Estimated" profit box inside the job card
+     * detail view, using the same running-cost signal as the car card badge.
+     */
+    function renderJobCardProfitSummary(data) {
+        const items = (data.repairPlanItems || []).filter(i => !i.revoked);
+        const estCost = items.reduce((sum, i) => sum + (parseFloat(i.estimatedCost) || 0), 0);
+        const projected = data.expectedProfit - estCost;
+        const ratio = data.expectedProfit > 0 ? estCost / data.expectedProfit : 0;
+        const cls = ratio >= 1 ? 'bg-red-50 border-red-300 text-red-800' : ratio >= 0.7 ? 'bg-orange-50 border-orange-300 text-orange-800' : 'bg-green-50 border-green-300 text-green-800';
+        return `
+            <div class="mt-2 mb-2 p-3 border rounded-lg ${cls} print:hidden">
+                <p class="font-bold text-sm">💰 Profitability Tracker</p>
+                <div class="grid grid-cols-3 gap-2 mt-1 text-sm">
+                    <p><span class="font-semibold">Expected Profit:</span><br>KSh${data.expectedProfit.toLocaleString()}</p>
+                    <p><span class="font-semibold">Est. Cost So Far:</span><br>KSh${estCost.toLocaleString()}</p>
+                    <p><span class="font-semibold">Projected Profit:</span><br>KSh${projected.toLocaleString()}</p>
+                </div>
+                ${ratio >= 0.7 ? `<p class="text-xs font-semibold mt-1">${ratio >= 1 ? '🔴 Estimated costs have reached/exceeded the expected profit.' : '🟠 Approaching the loss zone — keep an eye on further parts/labor.'}</p>` : ''}
+            </div>`;
+    }
+
+    function profitAlertHtml(car) {
+        if (car.jobType === 'GeneralService' || !car.expectedProfit || car.expectedProfit <= 0) return '';
+        const items = (car.repairPlanItems || []).filter(i => !i.revoked);
+        const estCost = items.reduce((sum, i) => sum + (parseFloat(i.estimatedCost) || 0), 0);
+        if (estCost <= 0) return '';
+        const ratio = estCost / car.expectedProfit;
+        let cls = '', label = '';
+        if (ratio >= 1) {
+            cls = 'bg-red-50 border-red-300 text-red-700';
+            label = `🔴 Loss risk: estimated costs (KSh${estCost.toLocaleString()}) have reached or exceeded the expected profit (KSh${car.expectedProfit.toLocaleString()}).`;
+        } else if (ratio >= 0.7) {
+            cls = 'bg-orange-50 border-orange-300 text-orange-700';
+            label = `🟠 Approaching loss zone: estimated costs are KSh${estCost.toLocaleString()} of a KSh${car.expectedProfit.toLocaleString()} expected profit (${Math.round(ratio * 100)}%).`;
+        } else {
+            return `<p class="mt-2 text-xs text-green-600">🟢 On track — est. cost KSh${estCost.toLocaleString()} of KSh${car.expectedProfit.toLocaleString()} expected profit.</p>`;
+        }
+        return `<div class="mt-2 text-xs font-semibold border rounded-lg px-2 py-1.5 ${cls}">${label}</div>`;
     }
 
     // Function to mark a car as completed
@@ -1738,16 +1822,46 @@ _clientsUnsubscribe = null;   // ← add this line
         }
     }
 
-    // Function to delete a completed car entry
+    // Function to REQUEST deletion of a completed car entry. Deletion is no
+    // longer immediate — it raises a request that a manager must approve
+    // from the Garage Manager console (Pending Requests tab) before the
+    // job history is actually removed. This protects completed job
+    // history (and its financial trail) from accidental/unauthorized loss.
     async function deleteCompletedCar(carId) {
-        if (!confirm("WARNING: This will permanently delete the job from the system. Are you sure?")) return;
+        if (!confirm("This will send a deletion request to the Garage Manager for approval. The job will only be removed once approved. Continue?")) return;
         const carRef = garageDoc(db, doc, 'cars', carId);
         try {
-            await deleteDoc(carRef);
-            alert("Job history successfully deleted!");
+            const snap = await getDoc(carRef);
+            if (!snap.exists()) { alert("This job no longer exists."); return; }
+            const carData = snap.data();
+            if (carData.deletionRequested) {
+                alert("A deletion request for this job is already pending management approval.");
+                return;
+            }
+            const requestedBy = `${getSession().role}@${getSession().garageCode}`;
+            await addDoc(garageCol(db, collection, 'notifications'), {
+                type: 'deletion_request',
+                carId,
+                plate: carData.plate || 'N/A',
+                vehicle: `${carData.make || ''} ${carData.model || ''} (${carData.year || 'N/A'})`.trim(),
+                clientName: carData.clientName || 'N/A',
+                clientPhone: carData.clientPhone || '',
+                assignedMechanic: carData.assignedMechanic || carData.servicePerson || 'N/A',
+                jobType: carData.jobType || 'StandardRepair',
+                completedAt: carData.completedAt || null,
+                status: 'pending', // pending | approved | rejected
+                requestedBy,
+                createdAt: serverTimestamp()
+            });
+            await updateDoc(carRef, {
+                deletionRequested: true,
+                deletionRequestedAt: serverTimestamp(),
+                deletionRequestedBy: requestedBy
+            });
+            alert("Deletion request sent! A manager must approve it in the Garage Manager console before this job history is removed.");
         } catch (error) {
-            console.error("Error deleting document: ", error);
-            alert("Could not delete job history.");
+            console.error("Error requesting job deletion: ", error);
+            alert(`Could not send deletion request: ${error.message}`);
         }
     }
     
@@ -2423,7 +2537,7 @@ function lookupClientDetails(section) {
     }
 
     // MODIFICATION 3: New Repair Plan Card Functions
-    function addRepairPlanCard(initialAction = '', initialParts = '', initialDone = false, initialMechanic = '', initialNotes = '') {
+    function addRepairPlanCard(initialAction = '', initialParts = '', initialDone = false, initialMechanic = '', initialNotes = '', initialCost = '') {
         const container = document.getElementById('repair-plan-container');
         const card = document.createElement('div');
         card.className = 'repair-plan-card p-4 border border-pink-300 bg-pink-50 rounded-lg shadow-sm space-y-3';
@@ -2438,6 +2552,8 @@ function lookupClientDetails(section) {
                 class="repair-plan-action w-full p-2 border rounded-lg ${doneClass}" rows="2" required>${initialAction}</textarea>
             <input type="text" placeholder="Replacement Parts List (e.g., Head Gasket Set, 5L ATF, Oil Filter)" 
                 class="repair-plan-parts w-full p-2 border rounded-lg" value="${initialParts}" />
+            <input type="number" min="0" step="0.01" placeholder="Estimated cost of this item's parts/labor (KSh, optional)"
+                class="repair-plan-cost w-full p-2 border rounded-lg text-sm" value="${initialCost || ''}" />
             <div class="border-t border-pink-200 pt-3 mt-2">
                 <div class="flex items-center gap-3 flex-wrap">
                     <label class="flex items-center gap-2 cursor-pointer select-none">
@@ -2507,8 +2623,9 @@ function lookupClientDetails(section) {
             const done = card.querySelector('.repair-plan-done').checked;
             const mechanic = card.querySelector('.repair-plan-mechanic').value.trim();
             const completionNotes = card.querySelector('.repair-plan-completion-notes')?.value.trim() || '';
+            const estimatedCost = parseFloat(card.querySelector('.repair-plan-cost')?.value) || 0;
             if (action) {
-                items.push({ action, parts, done, completedBy: done ? mechanic : '', completionNotes: done ? completionNotes : '' });
+                items.push({ action, parts, done, completedBy: done ? mechanic : '', completionNotes: done ? completionNotes : '', estimatedCost });
             }
         });
         return items;
@@ -2626,12 +2743,114 @@ function lookupClientDetails(section) {
         }
     }
 
+    /**
+     * Builds the compact, one-page-friendly printable job card: car details,
+     * reported problems, error codes, a simple checklist of what's to be
+     * repaired, and the parts needed. This is ONLY shown on the physical
+     * printout (see @media print rules) — the interactive job card on
+     * screen is untouched and keeps every feature.
+     */
+    function buildPrintableJobCardHtml(data) {
+        const esc = (s) => (s == null ? '' : String(s)).replace(/[&<>]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[m] || m));
+        const today = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+
+        if (data.jobType === 'GeneralService') {
+            return `
+                <div style="font-family:Arial, sans-serif; color:#111;">
+                    <div style="text-align:center; border-bottom:2px solid #111; padding-bottom:6px; margin-bottom:8px;">
+                        <div style="font-size:18px; font-weight:800;">GENERAL SERVICE JOB CARD</div>
+                        <div style="font-size:10px; color:#555;">Printed: ${today}</div>
+                    </div>
+                    <table style="width:100%; font-size:12px; border-collapse:collapse; margin-bottom:8px;">
+                        <tr><td style="padding:2px 4px;"><b>Client:</b> ${esc(data.clientName)}</td><td style="padding:2px 4px;"><b>Phone:</b> ${esc(data.clientPhone)}</td></tr>
+                        <tr><td style="padding:2px 4px;"><b>Vehicle:</b> ${esc(data.make)} ${esc(data.model)} (${esc(data.plate)})</td><td style="padding:2px 4px;"><b>Service By:</b> ${esc(data.servicePerson || 'N/A')}</td></tr>
+                        <tr><td style="padding:2px 4px;"><b>Mileage:</b> ${esc(data.currentMileage)} KM</td><td style="padding:2px 4px;"><b>Next Service:</b> ${esc(data.nextServiceMileage)} KM</td></tr>
+                    </table>
+                    <div style="font-weight:700; font-size:12.5px; border-bottom:1px solid #111; margin-bottom:4px;">Service Summary / To Do</div>
+                    <div style="font-size:12px; white-space:pre-wrap; margin-bottom:14px;">${esc(data.diagnosticNotes) || 'N/A'}</div>
+                    <div style="display:flex; justify-content:space-between; margin-top:30px; font-size:11px;">
+                        <div style="width:45%; border-top:1px solid #111; padding-top:4px;">Mechanic Signature</div>
+                        <div style="width:45%; border-top:1px solid #111; padding-top:4px;">Client Signature</div>
+                    </div>
+                </div>`;
+        }
+
+        const items = (data.repairPlanItems || []).filter(i => !i.revoked);
+        const checklistHtml = items.length > 0
+            ? items.map(item => `
+                <div class="print-checklist-item">
+                    <div class="print-box ${item.done ? 'checked' : ''}"></div>
+                    <div>${esc(item.action)}${item.done ? ` — <i style="color:#555;">done${item.completedBy ? ' by ' + esc(item.completedBy) : ''}</i>` : ''}</div>
+                </div>`).join('')
+            : '<p style="font-size:11.5px; color:#777;">No repair plan items specified.</p>';
+
+        // Consolidated, de-duplicated parts list drawn from every repair item.
+        const partsSet = new Set();
+        items.forEach(i => (i.parts || '').split(/[,\n]/).map(p => p.trim()).filter(Boolean).forEach(p => partsSet.add(p)));
+        const partsHtml = partsSet.size > 0
+            ? [...partsSet].map(p => `<div class="print-checklist-item"><div class="print-box"></div><div>${esc(p)}</div></div>`).join('')
+            : '<p style="font-size:11.5px; color:#777;">No parts listed.</p>';
+
+        return `
+            <div style="font-family:Arial, sans-serif; color:#111;">
+                <div style="text-align:center; border-bottom:2px solid #111; padding-bottom:6px; margin-bottom:8px;">
+                    <div style="font-size:18px; font-weight:800;">JOB CARD</div>
+                    <div style="font-size:10px; color:#555;">Printed: ${today}</div>
+                </div>
+
+                <table style="width:100%; font-size:11.5px; border-collapse:collapse; margin-bottom:6px;">
+                    <tr>
+                        <td style="padding:2px 4px; width:50%;"><b>Plate:</b> ${esc(data.plate)}</td>
+                        <td style="padding:2px 4px;"><b>Client:</b> ${esc(data.clientName)}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding:2px 4px;"><b>Vehicle:</b> ${esc(data.make)} ${esc(data.model)} (${esc(data.year)})</td>
+                        <td style="padding:2px 4px;"><b>Phone:</b> ${esc(data.clientPhone)}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding:2px 4px;"><b>VIN:</b> ${esc(data.vin)}</td>
+                        <td style="padding:2px 4px;"><b>Mechanic:</b> ${esc(data.assignedMechanic)}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding:2px 4px;"><b>Color/Trans:</b> ${esc(data.color || 'N/A')} / ${esc(data.transmission || 'N/A')}</td>
+                        <td style="padding:2px 4px;"><b>Est. Delivery:</b> ${esc(data.deliveryDate || 'TBD')}</td>
+                    </tr>
+                </table>
+
+                <div style="font-weight:700; font-size:12px; border-bottom:1px solid #111; margin:6px 0 3px;">Reported Problem</div>
+                <div style="font-size:11.5px; white-space:pre-wrap; margin-bottom:4px;">${esc(data.reportedProblems) || 'N/A'}</div>
+
+                ${data.errorMeanings ? `
+                <div style="font-weight:700; font-size:12px; border-bottom:1px solid #111; margin:6px 0 3px;">Error Codes</div>
+                <div style="font-size:11px; white-space:pre-wrap; margin-bottom:4px;">${esc(data.errorMeanings)}</div>` : ''}
+
+                <div style="display:flex; gap:16px; margin-top:6px;">
+                    <div style="flex:1;">
+                        <div style="font-weight:700; font-size:12px; border-bottom:1px solid #111; margin-bottom:3px;">Repair Checklist</div>
+                        ${checklistHtml}
+                    </div>
+                    <div style="flex:1;">
+                        <div style="font-weight:700; font-size:12px; border-bottom:1px solid #111; margin-bottom:3px;">Parts Needed</div>
+                        ${partsHtml}
+                    </div>
+                </div>
+
+                <div style="display:flex; justify-content:space-between; margin-top:26px; font-size:11px;">
+                    <div style="width:45%; border-top:1px solid #111; padding-top:4px;">Mechanic Signature</div>
+                    <div style="width:45%; border-top:1px solid #111; padding-top:4px;">Client Signature</div>
+                </div>
+            </div>`;
+    }
+
     function renderJobCardContent(data, status) {
         window.currentJobCardData = data; // FIX: Set the global data on the window object for PDF/WhatsApp generation
         const jobCardContent = document.getElementById('job-card-content');
         const dialogEl = document.getElementById('job-card-dialog');
         const widthClasses = ['max-w-3xl', 'max-w-xl']; 
         dialogEl.classList.remove(...widthClasses);
+        // Build the compact print-only version alongside the full interactive one.
+        const printOnlyEl = document.getElementById('job-card-print-only');
+        if (printOnlyEl) printOnlyEl.innerHTML = buildPrintableJobCardHtml(data);
 
         // MODIFICATION 5 FIX: Handle General Service Job Type
         if (data.jobType === 'GeneralService') {
@@ -2730,6 +2949,7 @@ function lookupClientDetails(section) {
                 
                 <h3 class="text-xl font-bold text-pink-700 mt-4 border-b-2 pb-1">Repair Plan & Parts</h3>
                 ${data.repairPlanItems && data.repairPlanItems.length > 0 ? completionBarHtml(data.repairPlanItems, false) : ''}
+                ${data.expectedProfit > 0 ? renderJobCardProfitSummary(data) : ''}
                 ${repairPlanHtml}
 
                 <h3 class="text-xl font-bold text-indigo-700 mt-4 border-b-2 pb-1">Job Status & Schedule</h3>
