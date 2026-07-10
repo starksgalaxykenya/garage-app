@@ -541,6 +541,7 @@ tabNav.addEventListener('click', (event) => {
         if (targetId === 'content-accrual') {
             renderCarProfitability();
             renderAccrualMonthlyTable();
+            renderExpectedProfitQueue();
         }
     }
 });
@@ -1629,7 +1630,12 @@ window.openOneTimeOrder = (reqId) => {
             status: 'one-time-ordered',
             fulfillmentNote: `${qty} x ${name} — special order`,
             fulfilledAt: serverTimestamp(),
-            fulfilledBy: `${getSession().role}@${getSession().garageCode}`
+            fulfilledBy: `${getSession().role}@${getSession().garageCode}`,
+            resolvedPartId: null,
+            resolvedPartName: name,
+            resolvedQty: qty,
+            resolvedSellingPrice: price,
+            resolvedSupplierPrice: cost
         });
         batch.set(transRef, {
             type: 'ONE-TIME PART ORDER', subtype: name, plate: req.plate,
@@ -1832,6 +1838,7 @@ function listenForActiveJobCars() {
     onSnapshot(q, snapshot => {
         allActiveJobCars = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
         if (_activeJobsFilter === 'active') renderActiveJobsTable();
+        renderExpectedProfitQueue();
         if (!document.getElementById('content-accrual')?.classList.contains('hidden')) renderCarProfitability();
     }, err => console.error('Active job cars listener error:', err));
 
@@ -1839,6 +1846,7 @@ function listenForActiveJobCars() {
     onSnapshot(qCompleted, snapshot => {
         allCompletedJobCars = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
         if (_activeJobsFilter === 'completed') renderActiveJobsTable();
+        renderExpectedProfitQueue();
         if (!document.getElementById('content-accrual')?.classList.contains('hidden')) renderCarProfitability();
     }, err => console.error('Completed job cars listener error:', err));
 }
@@ -1972,14 +1980,29 @@ async function prefillInvoiceFromCar(car) {
         }
 
         if (req.resolvedPartId) {
-            // Approved from stock with saved fields — most reliable path
+            // Approved from stock — stock was already deducted and the money already
+            // booked to Finance at approval time (see openApproveFromStock). Mark
+            // prerecognized so the invoice doesn't deduct/book it a second time.
             addInvoiceItemRow({
                 type: 'stock', category: 'parts',
                 description: req.resolvedPartName || req.partsText,
                 partId: req.resolvedPartId,
                 qty,
                 sellingPrice: req.resolvedSellingPrice ?? 0,
-                supplierPrice: req.resolvedSupplierPrice ?? 0
+                supplierPrice: req.resolvedSupplierPrice ?? 0,
+                prerecognized: true
+            });
+        } else if (req.resolvedSellingPrice != null) {
+            // One-time special order — price/cost were locked in and already booked
+            // to Finance at approval time (see openOneTimeOrder). Carry that price
+            // over instead of leaving it at KSh0 for the manager to re-key.
+            addInvoiceItemRow({
+                type: 'outside', category: 'parts',
+                description: req.resolvedPartName || req.partsText,
+                qty,
+                sellingPrice: req.resolvedSellingPrice ?? 0,
+                supplierPrice: req.resolvedSupplierPrice ?? 0,
+                prerecognized: true
             });
         } else {
             // Older requisition without saved fields — fall back to name match
@@ -2346,8 +2369,73 @@ function renderAccrualMonthlyTable() {
     }).join('');
 }
 
-// Per-car profitability: expected profit (set at check-in) vs actual
-// invoiced cost/profit, plus a running-cost alert level.
+// Cars booked without an Expected Profit target yet — the manager sets it
+// here instead of at booking time (booking staff don't have full visibility
+// into real parts/labor costs). Drives the profitability alerts everywhere else.
+function renderExpectedProfitQueue() {
+    const tbody = document.getElementById('expected-profit-queue-body');
+    const emptyMsg = document.getElementById('expected-profit-queue-empty-msg');
+    const badge = document.getElementById('expected-profit-badge');
+    if (!tbody) return;
+
+    const pending = [...allActiveJobCars, ...allCompletedJobCars]
+        .filter(c => c.jobType !== 'GeneralService' && !c.expectedProfitSet)
+        .sort((a, b) => {
+            const ta = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : 0;
+            const tb = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : 0;
+            return tb - ta;
+        });
+
+    if (badge) {
+        if (pending.length > 0) { badge.textContent = String(pending.length); badge.classList.remove('hidden'); }
+        else badge.classList.add('hidden');
+    }
+
+    if (pending.length === 0) {
+        tbody.innerHTML = '';
+        if (emptyMsg) emptyMsg.classList.remove('hidden');
+        return;
+    }
+    if (emptyMsg) emptyMsg.classList.add('hidden');
+
+    tbody.innerHTML = pending.map(car => {
+        const checkedIn = car.createdAt?.toDate ? car.createdAt.toDate().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A';
+        return `
+            <tr class="hover:bg-gray-50">
+                <td class="px-4 py-3 text-sm font-medium">${escapeHtml(car.plate || 'N/A')}<br><span class="text-xs text-gray-500">${escapeHtml(car.make || '')} ${escapeHtml(car.model || '')}</span></td>
+                <td class="px-4 py-3 text-sm">${escapeHtml(car.clientName || 'N/A')}</td>
+                <td class="px-4 py-3 text-sm text-gray-500">${checkedIn}</td>
+                <td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(car.assignedMechanic || car.createdBy || 'N/A')}</td>
+                <td class="px-4 py-3 text-sm">
+                    <button onclick="openSetExpectedProfit('${car.id}')" class="text-xs bg-amber-500 hover:bg-amber-600 text-white font-bold px-3 py-1.5 rounded">💰 Set Profit</button>
+                </td>
+            </tr>`;
+    }).join('');
+}
+
+window.openSetExpectedProfit = (carId) => {
+    const car = findCachedCar(carId);
+    if (!car) { alert('This job could not be found — it may have been deleted.'); return; }
+    if (!can('viewFinancials')) { alert('Only a manager can set profit targets.'); return; }
+
+    openReqModal(`Set Expected Profit — ${car.plate || 'N/A'}`, `
+        <p class="text-sm text-gray-600">${escapeHtml(car.make || '')} ${escapeHtml(car.model || '')} — ${escapeHtml(car.clientName || 'N/A')}</p>
+        <label class="block text-sm font-medium text-gray-700 mt-2">Expected Profit (KSh)</label>
+        <input id="expectedProfitInput" type="number" min="0" step="0.01" placeholder="e.g. 15000" class="w-full p-2 border rounded-lg" autofocus>
+        <p class="text-xs text-gray-500">This becomes the target this job is measured against — staff will see cost/loss warnings as parts and repairs are added.</p>
+    `, async () => {
+        const value = parseFloat(document.getElementById('expectedProfitInput').value);
+        if (isNaN(value) || value < 0) throw new Error('Please enter a valid, non-negative amount.');
+        await updateDoc(garageDoc(db, doc, 'cars', carId), {
+            expectedProfit: value,
+            expectedProfitSet: true,
+            expectedProfitSetBy: `${getSession().role}@${getSession().garageCode}`,
+            expectedProfitSetAt: serverTimestamp()
+        });
+    });
+};
+
+
 function computeCarProfitability(car) {
     const carInvoices = allInvoices.filter(inv => inv.sourceCarId === car.id);
     const actualRevenue = carInvoices.reduce((s, i) => s + (i.total ?? 0), 0);
@@ -2484,6 +2572,12 @@ function addInvoiceItemRow(prefill = null) {
     row.className = `invoice-item-row border rounded-lg p-3 space-y-2 ${typeBadgeColors[initialType] || 'border-gray-200 bg-gray-50'}`;
     row.dataset.type = initialType;
     row.dataset.category = initialCategory;
+    // Parts that were already deducted from stock AND already booked to Finance
+    // when a manager approved the parts requisition (see openApproveFromStock /
+    // openOneTimeOrder) must NOT be deducted or booked a second time here.
+    // They still appear on the invoice so the client is billed correctly —
+    // we just net their amount back out when the invoice is receipted.
+    row.dataset.prerecognized = prefill?.prerecognized ? 'true' : 'false';
 
     // Simplified header: a compact type badge + category (collapsed by default for manual rows)
     // For prefilled rows, show the type as a read-only badge; for manual rows, show a select.
@@ -2555,7 +2649,7 @@ function renderInvoiceItemFields(row, type, prefill = null) {
                 <input type="number" value="0.00" min="0" step="0.01" class="invoice-item-unit-price p-2 border rounded-lg flex-grow text-sm">
                 <input type="text" value="0.00" class="invoice-item-amount p-2 border rounded-lg w-28 bg-gray-100 text-sm font-semibold text-right" readonly>
             </div>
-            ${prefillDesc ? `<p class="text-xs text-indigo-600 mt-0.5">📌 Approved part: <strong>${prefillDesc}</strong></p>` : '<p class="text-xs text-gray-400">Price auto-fills from inventory selection · stock deducted on commit</p>'}
+            ${prefillDesc ? `<p class="text-xs text-indigo-600 mt-0.5">📌 Approved part: <strong>${prefillDesc}</strong>${prefill?.prerecognized ? ' — already issued from stock &amp; booked to Finance at approval; won\'t be deducted or booked again.' : ''}</p>` : '<p class="text-xs text-gray-400">Price auto-fills from inventory selection · stock deducted on commit</p>'}
         `;
         const select = fieldsDiv.querySelector('.invoice-item-stock-select');
         const priceInput = fieldsDiv.querySelector('.invoice-item-unit-price');
@@ -2592,7 +2686,7 @@ function renderInvoiceItemFields(row, type, prefill = null) {
                 <label class="text-xs text-gray-500 whitespace-nowrap">Cost (KSh)</label>
                 <input type="number" value="${prefillCost}" min="0" step="0.01" class="invoice-item-unit-cost p-2 border rounded-lg w-28 text-sm border-orange-300">
             </div>
-            <p class="text-xs text-gray-400 mt-0.5">Cost = what you paid (never printed). Profit = Charged − Cost.</p>
+            <p class="text-xs text-gray-400 mt-0.5">Cost = what you paid (never printed). Profit = Charged − Cost.${prefill?.prerecognized ? ' <span class="text-indigo-600">📌 Already booked to Finance at approval; won\'t be booked again.</span>' : ''}</p>
         `;
     } else {
         // Labor
@@ -2752,11 +2846,17 @@ invoiceCreationForm.addEventListener('submit', async (e) => {
     const items = [];
     const stockDeductions = []; // { partId, partName, qty, costPerUnit, sellPerUnit }
     let totalCost = 0;
+    // Sum of amounts already deducted/booked to Finance at requisition-approval
+    // time (see openApproveFromStock / openOneTimeOrder). Netted out at receipt
+    // time so the same money isn't counted twice in the cash ledger.
+    let preRecognizedIncome = 0;
+    let preRecognizedCost = 0;
 
     const rows = document.querySelectorAll('#invoice-items-container .invoice-item-row');
     for (const row of rows) {
         const type     = row.dataset.type;
         const category = row.dataset.category || defaultCategoryForType(type);
+        const prerecognized = row.dataset.prerecognized === 'true';
         const qty  = parseFloat(row.querySelector('.invoice-item-qty')?.value) || 0;
         const unitPrice = parseFloat(row.querySelector('.invoice-item-unit-price')?.value) || 0;
         const lineTotal = qty * unitPrice;
@@ -2770,15 +2870,26 @@ invoiceCreationForm.addEventListener('submit', async (e) => {
             const partName = opt.dataset.name;
             const stock    = parseInt(opt.dataset.stock) || 0;
             const cost     = parseFloat(opt.dataset.cost) || 0;
-            if (qty > stock) { alert(`Cannot use ${qty} x ${partName} — only ${stock} in stock.`); return; }
-            items.push({ description: partName, quantity: qty, unitPrice, amount: lineTotal, costBasis: 'stock', category });
-            stockDeductions.push({ partId, partName, qty, costPerUnit: cost, sellPerUnit: unitPrice });
+            if (!prerecognized && qty > stock) { alert(`Cannot use ${qty} x ${partName} — only ${stock} in stock.`); return; }
+            items.push({ description: partName, quantity: qty, unitPrice, amount: lineTotal, costBasis: 'stock', category, prerecognized });
             totalCost += cost * qty;
+            if (prerecognized) {
+                // Already left the shelf and already booked when the requisition was approved.
+                preRecognizedIncome += lineTotal;
+                preRecognizedCost += cost * qty;
+            } else {
+                stockDeductions.push({ partId, partName, qty, costPerUnit: cost, sellPerUnit: unitPrice });
+            }
         } else if (type === 'outside') {
             const desc = row.querySelector('.invoice-item-desc')?.value || 'Item';
             const unitCost = parseFloat(row.querySelector('.invoice-item-unit-cost')?.value) || 0;
-            items.push({ description: desc, quantity: qty, unitPrice, amount: lineTotal, costBasis: 'outside', unitCost, category });
+            items.push({ description: desc, quantity: qty, unitPrice, amount: lineTotal, costBasis: 'outside', unitCost, category, prerecognized });
             totalCost += unitCost * qty;
+            if (prerecognized) {
+                // One-time special order already booked to Finance at approval time.
+                preRecognizedIncome += lineTotal;
+                preRecognizedCost += unitCost * qty;
+            }
         } else {
             const desc = row.querySelector('.invoice-item-desc')?.value || 'Labor';
             items.push({ description: desc, quantity: qty, unitPrice, amount: lineTotal, costBasis: 'labor', category });
@@ -2814,6 +2925,10 @@ invoiceCreationForm.addEventListener('submit', async (e) => {
         vatAmount: breakdown.vatAmount,
         total: breakdown.grandTotal,
         totalCost, totalProfit,
+        // Portion of the above already booked to Finance when parts were approved
+        // (see openApproveFromStock / openOneTimeOrder). Used at receipt time to
+        // avoid booking the same money twice in the cash ledger.
+        preRecognizedIncome, preRecognizedCost,
         status: 'unpaid', receiptId: null,
         date: getUTCDateString(), timestamp: serverTimestamp()
     };
@@ -3139,12 +3254,25 @@ receiptModalConfirm?.addEventListener('click', async () => {
 
             transaction.set(receiptRef, receipt);
             transaction.update(invoiceRef, { status: 'paid', receiptId: receiptRef.id, paymentMethod, paidAt: serverTimestamp() });
-            transaction.set(transRef, {
-                type: 'JOB', subtype: 'Invoice/Receipt', plate: inv.carPlate || 'N/A',
-                description: `Receipt #${receipt.receiptNo} for Invoice #${inv.invoiceNo} — ${inv.clientName} (${paymentMethod})`,
-                income: inv.total ?? 0, expense: inv.totalCost ?? 0, profit: inv.totalProfit ?? (inv.total ?? 0),
-                timestamp: serverTimestamp(), isJob: true, date: getUTCDateString()
-            });
+
+            // Net out any portion of this invoice that was already booked to Finance
+            // when its parts were approved (openApproveFromStock / openOneTimeOrder) —
+            // otherwise that money would be counted twice in the cash ledger.
+            const preIncome = inv.preRecognizedIncome ?? 0;
+            const preCost   = inv.preRecognizedCost ?? 0;
+            const netIncome = (inv.total ?? 0) - preIncome;
+            const netCost   = (inv.totalCost ?? 0) - preCost;
+            const netProfit = netIncome - netCost;
+
+            if (netIncome > 0 || netCost > 0) {
+                transaction.set(transRef, {
+                    type: 'JOB', subtype: 'Invoice/Receipt', plate: inv.carPlate || 'N/A',
+                    description: `Receipt #${receipt.receiptNo} for Invoice #${inv.invoiceNo} — ${inv.clientName} (${paymentMethod})` +
+                        (preIncome > 0 ? ` [KSh${preIncome.toFixed(2)} of this was already booked at parts-approval time]` : ''),
+                    income: netIncome, expense: netCost, profit: netProfit,
+                    timestamp: serverTimestamp(), isJob: true, date: getUTCDateString()
+                });
+            }
         });
 
         closeReceiptModal();
