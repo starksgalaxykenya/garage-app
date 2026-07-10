@@ -278,12 +278,6 @@
                             <label for="delivery-date" class="block text-sm font-medium text-gray-700 mb-1">Estimated Delivery Date</label>
                             <input id="delivery-date" type="date" class="w-full p-3 border rounded-lg" />
                         </div>
-                        <div>
-                            <label for="expected-profit" class="block text-sm font-medium text-gray-700 mb-1">💰 Expected Profit (KSh)</label>
-                            <input id="expected-profit" type="number" min="0" step="0.01" placeholder="e.g. 15000"
-                                   class="w-full p-3 border rounded-lg" />
-                            <p class="text-xs text-gray-400 mt-1">Target profit for this job. Used to warn you if parts/repair costs start eating into it.</p>
-                        </div>
                     </div>
                 </fieldset>
                 
@@ -1515,10 +1509,13 @@ _clientsUnsubscribe = null;   // ← add this line
             dueDate: document.getElementById('due-date').value,
             deliveryDate: document.getElementById('delivery-date').value,
 
-            // ACCRUAL / PROFITABILITY: the profit this job is expected to make.
-            // Attributed, for accounting purposes, to the month the car checked
-            // in (this document's createdAt) — not the month the job finishes.
-            expectedProfit: parseFloat(document.getElementById('expected-profit').value) || 0,
+            // ACCRUAL / PROFITABILITY: Expected Profit is no longer set at booking —
+            // it's set by the Garage Manager from the console (see the "💰 Set
+            // Expected Profit" queue), who has visibility into true parts/labor
+            // costs. Attributed, for accounting purposes, to the month the car
+            // checked in (this document's createdAt) — not the month the job finishes.
+            expectedProfit: 0,
+            expectedProfitSet: false,
 
             // Repair Plan Details (for job card display)
             repairPlanItems: repairPlan, // Store as array for detailed view
@@ -1551,6 +1548,10 @@ _clientsUnsubscribe = null;   // ← add this line
 
         try {
             const docRef = await addDoc(garageCol(db, collection, 'cars'), carData);
+
+            // No separate notification doc needed here — the Garage Manager console
+            // watches the cars collection live and lists any job missing an
+            // Expected Profit target in its "💰 Set Expected Profit" queue.
 
             // Push any parts listed in the repair plan to the Manager as requisitions.
             await submitPartsRequisitions(
@@ -1741,6 +1742,10 @@ _clientsUnsubscribe = null;   // ← add this line
      * detail view, using the same running-cost signal as the car card badge.
      */
     function renderJobCardProfitSummary(data) {
+        if (!data.expectedProfitSet) {
+            return `<div class="mt-2 mb-2 p-3 border rounded-lg bg-gray-50 border-gray-200 text-gray-500 text-xs italic print:hidden">⏳ Awaiting manager to set an expected profit target for this job (Garage Manager console).</div>`;
+        }
+        if (!data.expectedProfit || data.expectedProfit <= 0) return '';
         const items = (data.repairPlanItems || []).filter(i => !i.revoked);
         const estCost = items.reduce((sum, i) => sum + (parseFloat(i.estimatedCost) || 0), 0);
         const projected = data.expectedProfit - estCost;
@@ -1759,7 +1764,11 @@ _clientsUnsubscribe = null;   // ← add this line
     }
 
     function profitAlertHtml(car) {
-        if (car.jobType === 'GeneralService' || !car.expectedProfit || car.expectedProfit <= 0) return '';
+        if (car.jobType === 'GeneralService') return '';
+        if (!car.expectedProfitSet) {
+            return `<p class="mt-2 text-xs text-gray-400 italic">⏳ Awaiting manager to set an expected profit target for this job.</p>`;
+        }
+        if (!car.expectedProfit || car.expectedProfit <= 0) return '';
         const items = (car.repairPlanItems || []).filter(i => !i.revoked);
         const estCost = items.reduce((sum, i) => sum + (parseFloat(i.estimatedCost) || 0), 0);
         if (estCost <= 0) return '';
@@ -2949,7 +2958,7 @@ function lookupClientDetails(section) {
                 
                 <h3 class="text-xl font-bold text-pink-700 mt-4 border-b-2 pb-1">Repair Plan & Parts</h3>
                 ${data.repairPlanItems && data.repairPlanItems.length > 0 ? completionBarHtml(data.repairPlanItems, false) : ''}
-                ${data.expectedProfit > 0 ? renderJobCardProfitSummary(data) : ''}
+                ${data.jobType !== 'GeneralService' ? renderJobCardProfitSummary(data) : ''}
                 ${repairPlanHtml}
 
                 <h3 class="text-xl font-bold text-indigo-700 mt-4 border-b-2 pb-1">Job Status & Schedule</h3>
